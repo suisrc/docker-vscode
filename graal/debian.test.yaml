@@ -1,0 +1,30 @@
+# docker-compose -f test.yaml build
+# git config --global user.name "suisrc"
+# git config --global user.email "z@suisrc.cn"
+# git clone -b  <分支> <版本库的网址> <本地目录名>
+# GIT_REPO_URLS <版本库的网址>|<分支>|<本地目录名>
+# rm -rf .git && git init # 清除git并且重新初始化git
+version: "3.7"
+services:
+  graalvm-dev:
+    build:
+      context: ./
+      dockerfile: Dockerfile
+      args:
+        MAVEN_URL: http://172.17.0.1:9010/github/apache-maven-3.6.2-bin.tar.gz
+    image: suisrc/vscode:graalvm-dev-v0.0.001
+    container_name: graalvm-dev
+    environment:
+    - GIT_USER_NAME=suisrc
+    - GIT_USER_EMAIL=z@suisrc.cn
+    - GIT_REPO_URLS=https://gitee.com/ncr/test-quarkus.git||.
+    - TZ=Asia/Shanghai
+    - PASSWORD=123456
+    volumes:
+    - E:\docker\project\test\quarkus:/home/project
+    - /var/run/docker.sock:/var/run/docker.sock:ro
+    - E:\resource\maven\repo:/root/.m2/repository
+    ports:
+      - 7779:7779
+      - 8080:8080
+    restart: unless-stopped

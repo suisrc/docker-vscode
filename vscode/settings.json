@@ -1,0 +1,13 @@
+{
+    "terminal.integrated.shell.linux": "/bin/zsh",
+    "terminal.integrated.fontFamily": "等距更纱黑体 SC",
+    "terminal.integrated.scrollback": 10000,
+    "git.ignoreLegacyWarning": true,
+    "git.enableSmartCommit": true,
+    "editor.renderWhitespace": "all",
+    "editor.suggestSelection": "first",
+    "editor.fontFamily": "\"等距更纱黑体 SC\", Consolas, 'Courier New', monospace",
+    "editor.fontSize": 16,
+    "editor.fontLigatures": true,
+    "explorer.confirmDelete": false
+}
