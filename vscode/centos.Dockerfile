@@ -1,4 +1,4 @@
-FROM centos:7.7.1908
+FROM centos:7
 # args
 ARG CODE_URL
 ARG CODE_RELEASE

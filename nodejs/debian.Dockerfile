@@ -1,12 +1,5 @@
-# https://github.com/suisrc/docker-code-server/blob/master/debian.Dockerfile
-# https://github.com/nodejs/docker-node/blob/master/12/stretch/Dockerfile
-# 
-# https://github.com/suisrc/docker-code-server/releases
-# 
-# https://hub.docker.com/_/node
-# https://hub.docker.com/r/suisrc/vscode
-# FROM node:12-stretch
-FROM suisrc/vscode:1.43.2-3.1.1-debian9
+# FROM suisrc/vscode:debian
+FROM docker.pkg.github.com/suisrc/docker-vscode/vscode:debian
 
 ENV NODE_VERSION 12.16.2
 ENV YARN_VERSION 1.22.4

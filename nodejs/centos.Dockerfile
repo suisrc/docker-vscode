@@ -1,4 +1,5 @@
-FROM suisrc/vscode:1.43.2-3.1.1-centos7
+#FROM suisrc/vscode:centos
+FROM docker.pkg.github.com/suisrc/docker-vscode/vscode:centos
 
 ENV NODE_VERSION 12.16.2
 ENV YARN_VERSION 1.22.4
