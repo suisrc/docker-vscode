@@ -183,6 +183,8 @@ jobs:
 
       - name: Build image
         run: |
+          REGISTRY_URL=docker.pkg.github.com
+          echo "${{ secrets.GITHUB_TOKEN }}" | docker login $REGISTRY_URL -u ${{ github.actor }} --password-stdin
           docker build ./graal --file ./graal/centos.Dockerfile --tag image
 
       - name: Push docker image
@@ -209,6 +211,8 @@ jobs:
 
       - name: Build image
         run: |
+          REGISTRY_URL=docker.pkg.github.com
+          echo "${{ secrets.GITHUB_TOKEN }}" | docker login $REGISTRY_URL -u ${{ github.actor }} --password-stdin
           docker build ./graal --file ./graal/debian.Dockerfile --tag image
 
       - name: Push docker image
@@ -236,6 +240,8 @@ jobs:
 
       - name: Build image
         run: |
+          REGISTRY_URL=docker.pkg.github.com
+          echo "${{ secrets.GITHUB_TOKEN }}" | docker login $REGISTRY_URL -u ${{ github.actor }} --password-stdin
           docker build ./java --file ./java/centos.Dockerfile --tag image
 
       - name: Push docker image
@@ -262,6 +268,8 @@ jobs:
 
       - name: Build image
         run: |
+          REGISTRY_URL=docker.pkg.github.com
+          echo "${{ secrets.GITHUB_TOKEN }}" | docker login $REGISTRY_URL -u ${{ github.actor }} --password-stdin
           docker build ./java --file ./java/debian.Dockerfile --tag image
 
       - name: Push docker image
@@ -289,6 +297,8 @@ jobs:
 
       - name: Build image
         run: |
+          REGISTRY_URL=docker.pkg.github.com
+          echo "${{ secrets.GITHUB_TOKEN }}" | docker login $REGISTRY_URL -u ${{ github.actor }} --password-stdin
           docker build ./nodejs --file ./nodejs/centos.Dockerfile --tag image
 
       - name: Push docker image
@@ -315,6 +325,8 @@ jobs:
 
       - name: Build image
         run: |
+          REGISTRY_URL=docker.pkg.github.com
+          echo "${{ secrets.GITHUB_TOKEN }}" | docker login $REGISTRY_URL -u ${{ github.actor }} --password-stdin
           docker build ./nodejs --file ./nodejs/debian.Dockerfile --tag image
 
       - name: Push docker image
