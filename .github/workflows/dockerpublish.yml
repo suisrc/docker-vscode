@@ -57,7 +57,7 @@ jobs:
           IMAGE_ID=$(echo $IMAGE_ID | tr '[A-Z]' '[a-z]')
           echo IMAGE_ID=$IMAGE_ID
 
-          VERSON=${{ github.job }}
+          VERSON=$(echo "${{ github.job }}")
           echo VERSION=$VERSION
 
           docker tag image $IMAGE_ID:$VERSION
@@ -135,7 +135,7 @@ jobs:
           IMAGE_ID=$(echo $IMAGE_ID | tr '[A-Z]' '[a-z]')
           echo IMAGE_ID=$IMAGE_ID
 
-          VERSON=${{ github.job }}
+          VERSON=$(echo "${{ github.job }}")
           echo VERSION=$VERSION
 
           docker tag image $IMAGE_ID:$VERSION
