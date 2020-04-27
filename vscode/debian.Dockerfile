@@ -103,7 +103,11 @@ ENV LC_ALL=zh_CN.UTF-8 \
 COPY entrypoint.sh /usr/local/bin/
 
 # worksapce
-RUN mkdir -p /home/project && chmod +x /usr/local/bin/entrypoint.sh
+# 测试过程中发现，如果使用root账户，会导致程序部分插件没有访问User/文件夹的权限
+RUN mkdir -p /home/project && \
+    chmod +x /usr/local/bin/entrypoint.sh &&\
+    mkdir -p /root/.local/share/code-server/User/globalStorage
+
 WORKDIR  /home/project
 #VOLUME [ "/home/project" ]
 
