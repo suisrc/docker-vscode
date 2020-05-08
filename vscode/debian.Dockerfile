@@ -114,6 +114,6 @@ WORKDIR  /home/project
 # code-server start
 EXPOSE 7000
 ENTRYPOINT ["dumb-init", "entrypoint.sh"]
-CMD [ "code-server", "--host", "0.0.0.0", "--port", "7000", "--disable-telemetry", "--disable-updates", "/home/project"]
+CMD [ "code-server", "--host", "--bind-addr", "0.0.0.0:7000", "--disable-telemetry", "--disable-updates", "/home/project"]
 
 
