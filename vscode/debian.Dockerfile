@@ -33,8 +33,8 @@ RUN echo "**** update linux ****" && \
     fi &&\
     apt-get update && \
     apt-get install --no-install-recommends -y \
-        dumb-init sudo ca-certificates curl git jq net-tools zsh \
-        vim p7zip nano fontconfig ntpdate locales && \
+        dumb-init sudo ca-certificates curl git jq net-tools zsh vim p7zip nano fontconfig ntpdate locales dpkg \
+        gcc build-essential libz-dev zlib1g-dev &&\
     rm -rf /tmp/* /var/tmp/* /var/lib/apt/lists/*
 
 # fonts

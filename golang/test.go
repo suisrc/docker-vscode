@@ -1,8 +1,9 @@
 /**
-go mod init test
-go mod download
-go run test.go
-go build
+ * iris
+ * go mod init test
+ * go mod download
+ * go run test.go
+ * go build
 */
 
 package main

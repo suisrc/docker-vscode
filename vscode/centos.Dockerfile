@@ -33,8 +33,21 @@ RUN echo "**** update linux ****" && \
         echo "" >> /etc/yum.repos.d/kubernetes.repo; \
     fi &&\
     yum clean all && yum makecache && yum update -y &&\
-    yum install -y sudo curl git jq net-tools zsh p7zip nano fontconfig ntpdate && \
+    yum install -y sudo curl git jq net-tools zsh p7zip nano fontconfig ntpdate dpkg \
+                gcc glibc-devel zlib-devel libstdc++-static make && \
     rm -rf /tmp/* /var/tmp/* /var/cache/yum
+
+# sqlite版本低, 无法使用django(python框架，为后面扩展)
+RUN curl -L https://www.sqlite.org/2020/sqlite-autoconf-3310100.tar.gz -o sqlite-autoconf.tar.gz &&\
+    mkdir sqlite-autoconf &&\
+    tar -zxvf sqlite-autoconf.tar.gz -C sqlite-autoconf --strip-components=1 &&\
+    cd sqlite-autoconf && ./configure --prefix=/usr/local && make && make install &&\
+    cd .. && rm -rf sqlite-autoconf &&\
+    mv /usr/bin/sqlite3  /usr/bin/sqlite3_old &&\
+    ln -s /usr/local/bin/sqlite3   /usr/bin/sqlite3 &&\
+    echo "/usr/local/lib" > /etc/ld.so.conf.d/sqlite3.conf &&\
+    ldconfig &&\
+    sqlite3 -version
 
 # fonts
 RUN echo "**** install sarasa-gothic ****" && \

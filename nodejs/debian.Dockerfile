@@ -4,12 +4,6 @@ FROM docker.pkg.github.com/suisrc/docker-vscode/vscode:debian
 ENV NODE_VERSION 12.16.2
 ENV YARN_VERSION 1.22.4
 
-RUN echo "**** update linux ****" && \
-    apt-get update && \
-    apt-get install --no-install-recommends -y \
-        dpkg &&\
-    rm -rf /tmp/* /var/tmp/* /var/lib/apt/lists/*
-
 # nodejs
 RUN echo "**** install nodejs ****" &&\
     ARCH= && dpkgArch="$(dpkg --print-architecture)" \
@@ -36,23 +30,8 @@ RUN echo "**** install nodejs ****" &&\
     node --version &&\
     npm  --version
 
-# yarn
-RUN echo "**** install yarn ****" &&\
-    set -ex &&\
-    curl -fsSLO --compressed "https://yarnpkg.com/downloads/$YARN_VERSION/yarn-v$YARN_VERSION.tar.gz" &&\
-    #curl -fsSLO --compressed "https://yarnpkg.com/downloads/$YARN_VERSION/yarn-v$YARN_VERSION.tar.gz.asc" &&\
-    #gpg --batch --verify yarn-v$YARN_VERSION.tar.gz.asc yarn-v$YARN_VERSION.tar.gz &&\
-    mkdir -p /opt &&\
-    tar -xzf yarn-v$YARN_VERSION.tar.gz -C /opt/ &&\
-    ln -s /opt/yarn-v$YARN_VERSION/bin/yarn /usr/local/bin/yarn &&\
-    ln -s /opt/yarn-v$YARN_VERSION/bin/yarnpkg /usr/local/bin/yarnpkg &&\
-    #rm yarn-v$YARN_VERSION.tar.gz.asc yarn-v$YARN_VERSION.tar.gz &&\
-    rm yarn-v$YARN_VERSION.tar.gz &&\
-    # smoke test
-    yarn --version
-
-# config aliyun npm registry
-RUN npm install --production -g cnpm --registry=https://registry.npm.taobao.org &&\
+# config china npm and aliyun yarn
+RUN npm install -g cnpm yarn tyarn &&\
     npm config set registry https://registry.npm.taobao.org --global &&\
     npm config set disturl https://npm.taobao.org/dist --global
 

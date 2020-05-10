@@ -4,9 +4,6 @@ FROM docker.pkg.github.com/suisrc/docker-vscode/vscode:centos
 ARG GO_VER=1.14.2
 ARG GO_URL=https://dl.google.com/go/go${GO_VER}.linux-amd64.tar.gz
 
-RUN yum update -y && yum install -y gcc libz-dev && \
-    rm -rf /tmp/* /var/tmp/* /var/cache/yum
-
 # install golang
 RUN curl -fSL --compressed  $GO_URL | tar -xz -C /usr/local
 

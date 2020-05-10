@@ -8,9 +8,6 @@ ARG GRAALVM_URL
 ARG MAVEN_RELEASE=3.6.3
 ARG MAVEN_URL
 
-RUN yum update -y && yum install -y gcc libz-dev && \
-     rm -rf /tmp/* /var/tmp/* /var/cache/yum
-
 # install oracle graalvm-ce 
 RUN echo "**** install graalvm-ce ****" &&\
     set -eux &&\

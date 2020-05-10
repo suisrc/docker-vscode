@@ -12,9 +12,6 @@ ARG GRAALVM_URL
 ARG MAVEN_RELEASE=3.6.3
 ARG MAVEN_URL
 
-RUN apt-get update && apt-get install -y gcc libz-dev && \
-    apt-get autoremove -y && apt-get clean && rm -rf /tmp/* /var/tmp/* /var/lib/apt/lists/*
-
 # install oracle graalvm-ce 
 RUN echo "**** install graalvm-ce ****" &&\
     set -eux &&\

@@ -1,14 +1,7 @@
 #FROM suisrc/vscode:centos
 FROM docker.pkg.github.com/suisrc/docker-vscode/vscode:centos
 
-ENV NODE_VERSION 12.16.2
-ENV YARN_VERSION 1.22.4
-
-RUN echo "**** update linux ****" && \
-    yum clean all && yum makecache && yum update -y &&\
-    yum install -y \
-        dpkg &&\
-    rm -rf /tmp/* /var/tmp/* /var/cache/yum  
+ENV NODE_VERSION 12.16.3
 
 # nodejs
 RUN echo "**** install nodejs ****" &&\
@@ -31,20 +24,8 @@ RUN echo "**** install nodejs ****" &&\
     node --version &&\
     npm  --version
 
-# yarn
-RUN echo "**** install yarn ****" &&\
-    set -ex &&\
-    curl -fsSLO --compressed "https://yarnpkg.com/downloads/$YARN_VERSION/yarn-v$YARN_VERSION.tar.gz" &&\
-    mkdir -p /opt &&\
-    tar -xzf yarn-v$YARN_VERSION.tar.gz -C /opt/ &&\
-    ln -s /opt/yarn-v$YARN_VERSION/bin/yarn /usr/local/bin/yarn &&\
-    ln -s /opt/yarn-v$YARN_VERSION/bin/yarnpkg /usr/local/bin/yarnpkg &&\
-    rm yarn-v$YARN_VERSION.tar.gz &&\
-    # smoke test
-    yarn --version
-
-# config aliyun npm registry
-RUN npm install --production -g cnpm --registry=https://registry.npm.taobao.org &&\
+# config china npm and aliyun yarn
+RUN npm install -g cnpm yarn tyarn &&\
     npm config set registry https://registry.npm.taobao.org --global &&\
     npm config set disturl https://npm.taobao.org/dist --global
 

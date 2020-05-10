@@ -4,9 +4,6 @@ FROM docker.pkg.github.com/suisrc/docker-vscode/vscode:debian
 ARG GO_VER=1.14.2
 ARG GO_URL=https://dl.google.com/go/go${GO_VER}.linux-amd64.tar.gz
 
-RUN apt-get update && apt-get install -y gcc libz-dev && \
-    apt-get autoremove -y && apt-get clean && rm -rf /tmp/* /var/tmp/* /var/lib/apt/lists/*
-
 # install golang
 RUN curl -fSL --compressed  $GO_URL | tar -xz -C /usr/local
 

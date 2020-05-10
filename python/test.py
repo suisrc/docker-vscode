@@ -1,5 +1,5 @@
 # -*- coding: UTF-8 -*-
-#
+# django
 # django-admin startproject demo
 # py manage.py migrate
 # py manage.py runserver 5000

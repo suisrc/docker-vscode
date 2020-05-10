@@ -1,7 +1,7 @@
 #FROM suisrc/vscode:1.44.2-01-centos
 FROM docker.pkg.github.com/suisrc/docker-vscode/vscode:debian
 
-RUN apt-get update && apt-get install -y gcc libz-dev python3 python3-pip &&\
+RUN apt-get update && apt-get install -y python3 python3-pip &&\
     ln -s /usr/bin/python3 /usr/local/bin/py &&\
     apt-get autoremove -y && apt-get clean && rm -rf /tmp/* /var/tmp/* /var/lib/apt/lists/*
 
