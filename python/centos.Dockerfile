@@ -1,7 +1,7 @@
 #FROM suisrc/vscode:centos
 FROM docker.pkg.github.com/suisrc/docker-vscode/vscode:centos
 
-RUN yum update -y && yum install -y gcc libz-dev python3 &&\
+RUN yum update -y && yum install -y make gcc libz-dev python3 &&\
     ln -s /usr/bin/python3 /usr/local/bin/py &&\
     rm -rf /tmp/* /var/tmp/* /var/cache/yum
 

@@ -10,7 +10,7 @@ RUN apt-get update && apt-get install -y gcc libz-dev && \
 # install golang
 RUN curl -fSL --compressed  $GO_URL | tar -xz -C /usr/local
 
-ENV $PATH=/usr/local/go/bin:$PATH
+ENV PATH=/usr/local/go/bin:$PATH
 ENV GOPATH=/root/go
 ENV GOPROXY=
 
@@ -38,7 +38,7 @@ RUN go get -u github.com/mdempsky/gocode &&\
     go get -u golang.org/x/tools/gopls &&\
     go get -u golang.org/x/tools/cmd/guru &&\
     go get -u golang.org/x/tools/cmd/gorename &&\
-    go get -v github.com/derekparker/delve/cmd/dlv
+    go get -v github.com/go-delve/delve/cmd/dlv
 
 # vscode extension
 RUN code-server --install-extension ms-vscode.go
