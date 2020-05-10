@@ -1,4 +1,4 @@
-#FROM suisrc/vscode:1.44.2-01-centos
+#FROM suisrc/vscode:centos
 FROM docker.pkg.github.com/suisrc/docker-vscode/vscode:centos
 
 ARG GO_VER=1.14.2
