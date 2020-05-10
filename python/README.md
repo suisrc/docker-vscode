@@ -5,6 +5,7 @@ ms-python.python
 # yum install -y make zlib-devel bzip2-devel openssl-devel ncurses-devel sqlite-devel readline-devel tk-devel gdbm-devel db4-devel libpcap-devel xz-devel
 # 安装python3, 没有离线安装，make方式安装过于麻烦
 yum install -y python3
+apt install -y python3 python3-pip
 
 ln -s /usr/bin/python3 /usr/local/bin/py
 pip3 install --user pylint

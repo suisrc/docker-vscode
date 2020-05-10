@@ -173,6 +173,7 @@ jobs:
           docker tag image $IMAGE_ID:$VERSION
           docker push $IMAGE_ID:$VERSION
 
+############################################################################################################################
   centos-graal:
     if: startsWith(github.ref, 'refs/tags/v')
     needs: centos
@@ -184,8 +185,13 @@ jobs:
       - name: Build image
         run: |
           REGISTRY_URL=docker.pkg.github.com
+          DOCKER_DIR=${{ github.job }}
+          DOCKER_DIR=${DOCKER_DIR##*-}
+          DOCKER_BOS=${{ github.job }}
+          DOCKER_BOS=${DOCKER_BOS%%-*}
+
           echo "${{ secrets.GITHUB_TOKEN }}" | docker login $REGISTRY_URL -u ${{ github.actor }} --password-stdin
-          docker build ./graal --file ./graal/centos.Dockerfile --tag image
+          docker build ./$DOCKER_DIR --file ./$DOCKER_DIR/$DOCKER_BOS.Dockerfile --tag image
 
       - name: Push docker image
         run: |
@@ -212,8 +218,13 @@ jobs:
       - name: Build image
         run: |
           REGISTRY_URL=docker.pkg.github.com
+          DOCKER_DIR=${{ github.job }}
+          DOCKER_DIR=${DOCKER_DIR##*-}
+          DOCKER_BOS=${{ github.job }}
+          DOCKER_BOS=${DOCKER_BOS%%-*}
+
           echo "${{ secrets.GITHUB_TOKEN }}" | docker login $REGISTRY_URL -u ${{ github.actor }} --password-stdin
-          docker build ./graal --file ./graal/debian.Dockerfile --tag image
+          docker build ./$DOCKER_DIR --file ./$DOCKER_DIR/$DOCKER_BOS.Dockerfile --tag image
 
       - name: Push docker image
         run: |
@@ -230,6 +241,7 @@ jobs:
           docker tag image $IMAGE_ID:$VERSION
           docker push $IMAGE_ID:$VERSION
 
+############################################################################################################################
   centos-java:
     needs: centos
     runs-on: ubuntu-latest
@@ -241,8 +253,13 @@ jobs:
       - name: Build image
         run: |
           REGISTRY_URL=docker.pkg.github.com
+          DOCKER_DIR=${{ github.job }}
+          DOCKER_DIR=${DOCKER_DIR##*-}
+          DOCKER_BOS=${{ github.job }}
+          DOCKER_BOS=${DOCKER_BOS%%-*}
+
           echo "${{ secrets.GITHUB_TOKEN }}" | docker login $REGISTRY_URL -u ${{ github.actor }} --password-stdin
-          docker build ./java --file ./java/centos.Dockerfile --tag image
+          docker build ./$DOCKER_DIR --file ./$DOCKER_DIR/$DOCKER_BOS.Dockerfile --tag image
 
       - name: Push docker image
         run: |
@@ -269,8 +286,13 @@ jobs:
       - name: Build image
         run: |
           REGISTRY_URL=docker.pkg.github.com
+          DOCKER_DIR=${{ github.job }}
+          DOCKER_DIR=${DOCKER_DIR##*-}
+          DOCKER_BOS=${{ github.job }}
+          DOCKER_BOS=${DOCKER_BOS%%-*}
+
           echo "${{ secrets.GITHUB_TOKEN }}" | docker login $REGISTRY_URL -u ${{ github.actor }} --password-stdin
-          docker build ./java --file ./java/debian.Dockerfile --tag image
+          docker build ./$DOCKER_DIR --file ./$DOCKER_DIR/$DOCKER_BOS.Dockerfile --tag image
 
       - name: Push docker image
         run: |
@@ -287,6 +309,7 @@ jobs:
           docker tag image $IMAGE_ID:$VERSION
           docker push $IMAGE_ID:$VERSION
 
+############################################################################################################################
   centos-nodejs:
     if: startsWith(github.ref, 'refs/tags/v')
     needs: centos
@@ -298,8 +321,13 @@ jobs:
       - name: Build image
         run: |
           REGISTRY_URL=docker.pkg.github.com
+          DOCKER_DIR=${{ github.job }}
+          DOCKER_DIR=${DOCKER_DIR##*-}
+          DOCKER_BOS=${{ github.job }}
+          DOCKER_BOS=${DOCKER_BOS%%-*}
+
           echo "${{ secrets.GITHUB_TOKEN }}" | docker login $REGISTRY_URL -u ${{ github.actor }} --password-stdin
-          docker build ./nodejs --file ./nodejs/centos.Dockerfile --tag image
+          docker build ./$DOCKER_DIR --file ./$DOCKER_DIR/$DOCKER_BOS.Dockerfile --tag image
 
       - name: Push docker image
         run: |
@@ -326,8 +354,13 @@ jobs:
       - name: Build image
         run: |
           REGISTRY_URL=docker.pkg.github.com
+          DOCKER_DIR=${{ github.job }}
+          DOCKER_DIR=${DOCKER_DIR##*-}
+          DOCKER_BOS=${{ github.job }}
+          DOCKER_BOS=${DOCKER_BOS%%-*}
+
           echo "${{ secrets.GITHUB_TOKEN }}" | docker login $REGISTRY_URL -u ${{ github.actor }} --password-stdin
-          docker build ./nodejs --file ./nodejs/debian.Dockerfile --tag image
+          docker build ./$DOCKER_DIR --file ./$DOCKER_DIR/$DOCKER_BOS.Dockerfile --tag image
 
       - name: Push docker image
         run: |
@@ -343,4 +376,142 @@ jobs:
 
           docker tag image $IMAGE_ID:$VERSION
           docker push $IMAGE_ID:$VERSION
+
+############################################################################################################################
+  centos-python:
+    if: startsWith(github.ref, 'refs/tags/v')
+    needs: centos
+    runs-on: ubuntu-latest
+
+    steps:
+      - uses: actions/checkout@v2
+
+      - name: Build image
+        run: |
+          REGISTRY_URL=docker.pkg.github.com
+          DOCKER_DIR=${{ github.job }}
+          DOCKER_DIR=${DOCKER_DIR##*-}
+          DOCKER_BOS=${{ github.job }}
+          DOCKER_BOS=${DOCKER_BOS%%-*}
+
+          echo "${{ secrets.GITHUB_TOKEN }}" | docker login $REGISTRY_URL -u ${{ github.actor }} --password-stdin
+          docker build ./$DOCKER_DIR --file ./$DOCKER_DIR/$DOCKER_BOS.Dockerfile --tag image
+
+      - name: Push docker image
+        run: |
+          REGISTRY_URL=docker.io
+          echo "${{ secrets.DOCKER_TOKEN }}" | docker login $REGISTRY_URL -u ${{ secrets.DOCKER_USER }} --password-stdin
+
+          IMAGE_ID=$REGISTRY_URL/$DOCKER_IMAGE_NAME
+          echo IMAGE_ID=$IMAGE_ID
+
+          VERSION=$(echo "${{ github.ref }}" | sed -e 's,.*/\(.*\),\1,')-${{ github.job }}
+          [[ "${{ github.ref }}" == "refs/tags/"* ]] && VERSION=$(echo $VERSION | sed -e 's/^v//')
+          echo VERSION=$VERSION
+
+          docker tag image $IMAGE_ID:$VERSION
+          docker push $IMAGE_ID:$VERSION
+  debian-python:
+    if: startsWith(github.ref, 'refs/tags/v')
+    needs: debian
+    runs-on: ubuntu-latest
+
+    steps:
+      - uses: actions/checkout@v2
+
+      - name: Build image
+        run: |
+          REGISTRY_URL=docker.pkg.github.com
+          DOCKER_DIR=${{ github.job }}
+          DOCKER_DIR=${DOCKER_DIR##*-}
+          DOCKER_BOS=${{ github.job }}
+          DOCKER_BOS=${DOCKER_BOS%%-*}
+
+          echo "${{ secrets.GITHUB_TOKEN }}" | docker login $REGISTRY_URL -u ${{ github.actor }} --password-stdin
+          docker build ./$DOCKER_DIR --file ./$DOCKER_DIR/$DOCKER_BOS.Dockerfile --tag image
+
+      - name: Push docker image
+        run: |
+          REGISTRY_URL=docker.io
+          echo "${{ secrets.DOCKER_TOKEN }}" | docker login $REGISTRY_URL -u ${{ secrets.DOCKER_USER }} --password-stdin
+
+          IMAGE_ID=$REGISTRY_URL/$DOCKER_IMAGE_NAME
+          echo IMAGE_ID=$IMAGE_ID
+
+          VERSION=$(echo "${{ github.ref }}" | sed -e 's,.*/\(.*\),\1,')-${{ github.job }}
+          [[ "${{ github.ref }}" == "refs/tags/"* ]] && VERSION=$(echo $VERSION | sed -e 's/^v//')
+          echo VERSION=$VERSION
+
+          docker tag image $IMAGE_ID:$VERSION
+          docker push $IMAGE_ID:$VERSION
+
+############################################################################################################################
+  centos-golang:
+    if: startsWith(github.ref, 'refs/tags/v')
+    needs: centos
+    runs-on: ubuntu-latest
+
+    steps:
+      - uses: actions/checkout@v2
+
+      - name: Build image
+        run: |
+          REGISTRY_URL=docker.pkg.github.com
+          DOCKER_DIR=${{ github.job }}
+          DOCKER_DIR=${DOCKER_DIR##*-}
+          DOCKER_BOS=${{ github.job }}
+          DOCKER_BOS=${DOCKER_BOS%%-*}
+
+          echo "${{ secrets.GITHUB_TOKEN }}" | docker login $REGISTRY_URL -u ${{ github.actor }} --password-stdin
+          docker build ./$DOCKER_DIR --file ./$DOCKER_DIR/$DOCKER_BOS.Dockerfile --tag image
+
+      - name: Push docker image
+        run: |
+          REGISTRY_URL=docker.io
+          echo "${{ secrets.DOCKER_TOKEN }}" | docker login $REGISTRY_URL -u ${{ secrets.DOCKER_USER }} --password-stdin
+
+          IMAGE_ID=$REGISTRY_URL/$DOCKER_IMAGE_NAME
+          echo IMAGE_ID=$IMAGE_ID
+
+          VERSION=$(echo "${{ github.ref }}" | sed -e 's,.*/\(.*\),\1,')-${{ github.job }}
+          [[ "${{ github.ref }}" == "refs/tags/"* ]] && VERSION=$(echo $VERSION | sed -e 's/^v//')
+          echo VERSION=$VERSION
+
+          docker tag image $IMAGE_ID:$VERSION
+          docker push $IMAGE_ID:$VERSION
+  debian-golang:
+    if: startsWith(github.ref, 'refs/tags/v')
+    needs: debian
+    runs-on: ubuntu-latest
+
+    steps:
+      - uses: actions/checkout@v2
+
+      - name: Build image
+        run: |
+          REGISTRY_URL=docker.pkg.github.com
+          DOCKER_DIR=${{ github.job }}
+          DOCKER_DIR=${DOCKER_DIR##*-}
+          DOCKER_BOS=${{ github.job }}
+          DOCKER_BOS=${DOCKER_BOS%%-*}
+
+          echo "${{ secrets.GITHUB_TOKEN }}" | docker login $REGISTRY_URL -u ${{ github.actor }} --password-stdin
+          docker build ./$DOCKER_DIR --file ./$DOCKER_DIR/$DOCKER_BOS.Dockerfile --tag image
+
+      - name: Push docker image
+        run: |
+          REGISTRY_URL=docker.io
+          echo "${{ secrets.DOCKER_TOKEN }}" | docker login $REGISTRY_URL -u ${{ secrets.DOCKER_USER }} --password-stdin
+
+          IMAGE_ID=$REGISTRY_URL/$DOCKER_IMAGE_NAME
+          echo IMAGE_ID=$IMAGE_ID
+
+          VERSION=$(echo "${{ github.ref }}" | sed -e 's,.*/\(.*\),\1,')-${{ github.job }}
+          [[ "${{ github.ref }}" == "refs/tags/"* ]] && VERSION=$(echo $VERSION | sed -e 's/^v//')
+          echo VERSION=$VERSION
+
+          docker tag image $IMAGE_ID:$VERSION
+          docker push $IMAGE_ID:$VERSION
+
+
 

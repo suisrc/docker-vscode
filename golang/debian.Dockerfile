@@ -8,9 +8,9 @@ RUN apt-get update && apt-get install -y gcc libz-dev && \
     apt-get autoremove -y && apt-get clean && rm -rf /tmp/* /var/tmp/* /var/lib/apt/lists/*
 
 # install golang
-RUN curl -fsSL --compressed  $GO_URL | tar -xz -C /usr/local
+RUN curl -fSL --compressed  $GO_URL | tar -xz -C /usr/local
 
-ENV PATH=/usr/local/go/bin:$PATH
+ENV $PATH=/usr/local/go/bin:$PATH
 ENV GOPATH=/root/go
 ENV GOPROXY=
 

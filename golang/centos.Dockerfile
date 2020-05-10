@@ -8,7 +8,7 @@ RUN yum update -y && yum install -y gcc libz-dev && \
     rm -rf /tmp/* /var/tmp/* /var/cache/yum
 
 # install golang
-RUN curl -fsSL --compressed  $GO_URL | tar -xz -C /usr/local
+RUN curl -fSL --compressed  $GO_URL | tar -xz -C /usr/local
 
 ENV PATH=/usr/local/go/bin:$PATH
 ENV GOPATH=/root/go
