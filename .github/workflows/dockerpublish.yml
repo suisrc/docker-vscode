@@ -380,7 +380,7 @@ jobs:
 ############################################################################################################################
   centos-python:
     if: startsWith(github.ref, 'refs/tags/v')
-    #needs: centos
+    needs: centos
     runs-on: ubuntu-latest
 
     steps:
@@ -413,7 +413,7 @@ jobs:
           docker push $IMAGE_ID:$VERSION
   debian-python:
     if: startsWith(github.ref, 'refs/tags/v')
-    #needs: debian
+    needs: debian
     runs-on: ubuntu-latest
 
     steps:
@@ -448,7 +448,7 @@ jobs:
 ############################################################################################################################
   centos-golang:
     if: startsWith(github.ref, 'refs/tags/v')
-    #needs: centos
+    needs: centos
     runs-on: ubuntu-latest
 
     steps:
@@ -481,7 +481,7 @@ jobs:
           docker push $IMAGE_ID:$VERSION
   debian-golang:
     if: startsWith(github.ref, 'refs/tags/v')
-    #needs: debian
+    needs: debian
     runs-on: ubuntu-latest
 
     steps:
