@@ -37,8 +37,7 @@ RUN go get -u github.com/mdempsky/gocode &&\
     go get -u golang.org/x/tools/cmd/goimports &&\
     go get -u golang.org/x/tools/gopls &&\
     go get -u golang.org/x/tools/cmd/guru &&\
-    go get -u golang.org/x/tools/cmd/gorename &&\
-    ; exit 0
+    go get -u golang.org/x/tools/cmd/gorename; exit 0
 
 # vscode extension
 RUN code-server --install-extension ms-vscode.go
