@@ -72,6 +72,21 @@ jobs:
           docker tag image $IMAGE_ID:$VERSION
           docker push $IMAGE_ID:$VERSION
 
+      - name: Push aliyun image
+        run: |
+          REGISTRY_URL=registry.cn-beijing.aliyuncs.com
+          echo "${{ secrets.ALIYUN_TOKEN }}" | docker login $REGISTRY_URL -u ${{ secrets.ALIYUN_USER }} --password-stdin
+
+          IMAGE_ID=$REGISTRY_URL/$DOCKER_IMAGE_NAME
+          echo IMAGE_ID=$IMAGE_ID
+
+          VERSION=$(echo "${{ github.ref }}" | sed -e 's,.*/\(.*\),\1,')-${{ github.job }}
+          [[ "${{ github.ref }}" == "refs/tags/"* ]] && VERSION=$(echo $VERSION | sed -e 's/^v//')
+          echo VERSION=$VERSION
+
+          docker tag image $IMAGE_ID:$VERSION
+          docker push $IMAGE_ID:$VERSION
+
   centos:
     runs-on: ubuntu-latest
 
@@ -159,6 +174,21 @@ jobs:
           docker tag image $IMAGE_ID:$VERSION
           docker push $IMAGE_ID:$VERSION
 
+      - name: Push aliyun image
+        run: |
+          REGISTRY_URL=registry.cn-beijing.aliyuncs.com
+          echo "${{ secrets.ALIYUN_TOKEN }}" | docker login $REGISTRY_URL -u ${{ secrets.ALIYUN_USER }} --password-stdin
+
+          IMAGE_ID=$REGISTRY_URL/$DOCKER_IMAGE_NAME
+          echo IMAGE_ID=$IMAGE_ID
+
+          VERSION=$(echo "${{ github.ref }}" | sed -e 's,.*/\(.*\),\1,')-${{ github.job }}
+          [[ "${{ github.ref }}" == "refs/tags/"* ]] && VERSION=$(echo $VERSION | sed -e 's/^v//')
+          echo VERSION=$VERSION
+
+          docker tag image $IMAGE_ID:$VERSION
+          docker push $IMAGE_ID:$VERSION
+
   debian:
     runs-on: ubuntu-latest
 
@@ -233,6 +263,21 @@ jobs:
           docker tag image $IMAGE_ID:$VERSION
           docker push $IMAGE_ID:$VERSION
 
+      - name: Push aliyun image
+        run: |
+          REGISTRY_URL=registry.cn-beijing.aliyuncs.com
+          echo "${{ secrets.ALIYUN_TOKEN }}" | docker login $REGISTRY_URL -u ${{ secrets.ALIYUN_USER }} --password-stdin
+
+          IMAGE_ID=$REGISTRY_URL/$DOCKER_IMAGE_NAME
+          echo IMAGE_ID=$IMAGE_ID
+
+          VERSION=$(echo "${{ github.ref }}" | sed -e 's,.*/\(.*\),\1,')-${{ github.job }}
+          [[ "${{ github.ref }}" == "refs/tags/"* ]] && VERSION=$(echo $VERSION | sed -e 's/^v//')
+          echo VERSION=$VERSION
+
+          docker tag image $IMAGE_ID:$VERSION
+          docker push $IMAGE_ID:$VERSION
+
 ############################################################################################################################
   centos-graal:
     if: startsWith(github.ref, 'refs/tags/v')
@@ -267,6 +312,21 @@ jobs:
 
           docker tag image $IMAGE_ID:$VERSION
           docker push $IMAGE_ID:$VERSION
+
+      - name: Push aliyun image
+        run: |
+          REGISTRY_URL=registry.cn-beijing.aliyuncs.com
+          echo "${{ secrets.ALIYUN_TOKEN }}" | docker login $REGISTRY_URL -u ${{ secrets.ALIYUN_USER }} --password-stdin
+
+          IMAGE_ID=$REGISTRY_URL/$DOCKER_IMAGE_NAME
+          echo IMAGE_ID=$IMAGE_ID
+
+          VERSION=$(echo "${{ github.ref }}" | sed -e 's,.*/\(.*\),\1,')-${{ github.job }}
+          [[ "${{ github.ref }}" == "refs/tags/"* ]] && VERSION=$(echo $VERSION | sed -e 's/^v//')
+          echo VERSION=$VERSION
+
+          docker tag image $IMAGE_ID:$VERSION
+          docker push $IMAGE_ID:$VERSION
   debian-graal:
     if: startsWith(github.ref, 'refs/tags/v')
     needs: debian
@@ -290,6 +350,21 @@ jobs:
         run: |
           REGISTRY_URL=docker.io
           echo "${{ secrets.DOCKER_TOKEN }}" | docker login $REGISTRY_URL -u ${{ secrets.DOCKER_USER }} --password-stdin
+
+          IMAGE_ID=$REGISTRY_URL/$DOCKER_IMAGE_NAME
+          echo IMAGE_ID=$IMAGE_ID
+
+          VERSION=$(echo "${{ github.ref }}" | sed -e 's,.*/\(.*\),\1,')-${{ github.job }}
+          [[ "${{ github.ref }}" == "refs/tags/"* ]] && VERSION=$(echo $VERSION | sed -e 's/^v//')
+          echo VERSION=$VERSION
+
+          docker tag image $IMAGE_ID:$VERSION
+          docker push $IMAGE_ID:$VERSION
+
+      - name: Push aliyun image
+        run: |
+          REGISTRY_URL=registry.cn-beijing.aliyuncs.com
+          echo "${{ secrets.ALIYUN_TOKEN }}" | docker login $REGISTRY_URL -u ${{ secrets.ALIYUN_USER }} --password-stdin
 
           IMAGE_ID=$REGISTRY_URL/$DOCKER_IMAGE_NAME
           echo IMAGE_ID=$IMAGE_ID
@@ -335,6 +410,21 @@ jobs:
 
           docker tag image $IMAGE_ID:$VERSION
           docker push $IMAGE_ID:$VERSION
+
+      - name: Push aliyun image
+        run: |
+          REGISTRY_URL=registry.cn-beijing.aliyuncs.com
+          echo "${{ secrets.ALIYUN_TOKEN }}" | docker login $REGISTRY_URL -u ${{ secrets.ALIYUN_USER }} --password-stdin
+
+          IMAGE_ID=$REGISTRY_URL/$DOCKER_IMAGE_NAME
+          echo IMAGE_ID=$IMAGE_ID
+
+          VERSION=$(echo "${{ github.ref }}" | sed -e 's,.*/\(.*\),\1,')-${{ github.job }}
+          [[ "${{ github.ref }}" == "refs/tags/"* ]] && VERSION=$(echo $VERSION | sed -e 's/^v//')
+          echo VERSION=$VERSION
+
+          docker tag image $IMAGE_ID:$VERSION
+          docker push $IMAGE_ID:$VERSION
   debian-java:
     if: startsWith(github.ref, 'refs/tags/v')
     needs: debian
@@ -358,6 +448,21 @@ jobs:
         run: |
           REGISTRY_URL=docker.io
           echo "${{ secrets.DOCKER_TOKEN }}" | docker login $REGISTRY_URL -u ${{ secrets.DOCKER_USER }} --password-stdin
+
+          IMAGE_ID=$REGISTRY_URL/$DOCKER_IMAGE_NAME
+          echo IMAGE_ID=$IMAGE_ID
+
+          VERSION=$(echo "${{ github.ref }}" | sed -e 's,.*/\(.*\),\1,')-${{ github.job }}
+          [[ "${{ github.ref }}" == "refs/tags/"* ]] && VERSION=$(echo $VERSION | sed -e 's/^v//')
+          echo VERSION=$VERSION
+
+          docker tag image $IMAGE_ID:$VERSION
+          docker push $IMAGE_ID:$VERSION
+
+      - name: Push aliyun image
+        run: |
+          REGISTRY_URL=registry.cn-beijing.aliyuncs.com
+          echo "${{ secrets.ALIYUN_TOKEN }}" | docker login $REGISTRY_URL -u ${{ secrets.ALIYUN_USER }} --password-stdin
 
           IMAGE_ID=$REGISTRY_URL/$DOCKER_IMAGE_NAME
           echo IMAGE_ID=$IMAGE_ID
@@ -403,6 +508,21 @@ jobs:
 
           docker tag image $IMAGE_ID:$VERSION
           docker push $IMAGE_ID:$VERSION
+
+      - name: Push aliyun image
+        run: |
+          REGISTRY_URL=registry.cn-beijing.aliyuncs.com
+          echo "${{ secrets.ALIYUN_TOKEN }}" | docker login $REGISTRY_URL -u ${{ secrets.ALIYUN_USER }} --password-stdin
+
+          IMAGE_ID=$REGISTRY_URL/$DOCKER_IMAGE_NAME
+          echo IMAGE_ID=$IMAGE_ID
+
+          VERSION=$(echo "${{ github.ref }}" | sed -e 's,.*/\(.*\),\1,')-${{ github.job }}
+          [[ "${{ github.ref }}" == "refs/tags/"* ]] && VERSION=$(echo $VERSION | sed -e 's/^v//')
+          echo VERSION=$VERSION
+
+          docker tag image $IMAGE_ID:$VERSION
+          docker push $IMAGE_ID:$VERSION
   debian-nodejs:
     if: startsWith(github.ref, 'refs/tags/v')
     needs: debian
@@ -426,6 +546,21 @@ jobs:
         run: |
           REGISTRY_URL=docker.io
           echo "${{ secrets.DOCKER_TOKEN }}" | docker login $REGISTRY_URL -u ${{ secrets.DOCKER_USER }} --password-stdin
+
+          IMAGE_ID=$REGISTRY_URL/$DOCKER_IMAGE_NAME
+          echo IMAGE_ID=$IMAGE_ID
+
+          VERSION=$(echo "${{ github.ref }}" | sed -e 's,.*/\(.*\),\1,')-${{ github.job }}
+          [[ "${{ github.ref }}" == "refs/tags/"* ]] && VERSION=$(echo $VERSION | sed -e 's/^v//')
+          echo VERSION=$VERSION
+
+          docker tag image $IMAGE_ID:$VERSION
+          docker push $IMAGE_ID:$VERSION
+
+      - name: Push aliyun image
+        run: |
+          REGISTRY_URL=registry.cn-beijing.aliyuncs.com
+          echo "${{ secrets.ALIYUN_TOKEN }}" | docker login $REGISTRY_URL -u ${{ secrets.ALIYUN_USER }} --password-stdin
 
           IMAGE_ID=$REGISTRY_URL/$DOCKER_IMAGE_NAME
           echo IMAGE_ID=$IMAGE_ID
@@ -471,6 +606,21 @@ jobs:
 
           docker tag image $IMAGE_ID:$VERSION
           docker push $IMAGE_ID:$VERSION
+
+      - name: Push aliyun image
+        run: |
+          REGISTRY_URL=registry.cn-beijing.aliyuncs.com
+          echo "${{ secrets.ALIYUN_TOKEN }}" | docker login $REGISTRY_URL -u ${{ secrets.ALIYUN_USER }} --password-stdin
+
+          IMAGE_ID=$REGISTRY_URL/$DOCKER_IMAGE_NAME
+          echo IMAGE_ID=$IMAGE_ID
+
+          VERSION=$(echo "${{ github.ref }}" | sed -e 's,.*/\(.*\),\1,')-${{ github.job }}
+          [[ "${{ github.ref }}" == "refs/tags/"* ]] && VERSION=$(echo $VERSION | sed -e 's/^v//')
+          echo VERSION=$VERSION
+
+          docker tag image $IMAGE_ID:$VERSION
+          docker push $IMAGE_ID:$VERSION
   debian-python:
     if: startsWith(github.ref, 'refs/tags/v')
     needs: debian
@@ -494,6 +644,21 @@ jobs:
         run: |
           REGISTRY_URL=docker.io
           echo "${{ secrets.DOCKER_TOKEN }}" | docker login $REGISTRY_URL -u ${{ secrets.DOCKER_USER }} --password-stdin
+
+          IMAGE_ID=$REGISTRY_URL/$DOCKER_IMAGE_NAME
+          echo IMAGE_ID=$IMAGE_ID
+
+          VERSION=$(echo "${{ github.ref }}" | sed -e 's,.*/\(.*\),\1,')-${{ github.job }}
+          [[ "${{ github.ref }}" == "refs/tags/"* ]] && VERSION=$(echo $VERSION | sed -e 's/^v//')
+          echo VERSION=$VERSION
+
+          docker tag image $IMAGE_ID:$VERSION
+          docker push $IMAGE_ID:$VERSION
+
+      - name: Push aliyun image
+        run: |
+          REGISTRY_URL=registry.cn-beijing.aliyuncs.com
+          echo "${{ secrets.ALIYUN_TOKEN }}" | docker login $REGISTRY_URL -u ${{ secrets.ALIYUN_USER }} --password-stdin
 
           IMAGE_ID=$REGISTRY_URL/$DOCKER_IMAGE_NAME
           echo IMAGE_ID=$IMAGE_ID
@@ -539,6 +704,21 @@ jobs:
 
           docker tag image $IMAGE_ID:$VERSION
           docker push $IMAGE_ID:$VERSION
+
+      - name: Push aliyun image
+        run: |
+          REGISTRY_URL=registry.cn-beijing.aliyuncs.com
+          echo "${{ secrets.ALIYUN_TOKEN }}" | docker login $REGISTRY_URL -u ${{ secrets.ALIYUN_USER }} --password-stdin
+
+          IMAGE_ID=$REGISTRY_URL/$DOCKER_IMAGE_NAME
+          echo IMAGE_ID=$IMAGE_ID
+
+          VERSION=$(echo "${{ github.ref }}" | sed -e 's,.*/\(.*\),\1,')-${{ github.job }}
+          [[ "${{ github.ref }}" == "refs/tags/"* ]] && VERSION=$(echo $VERSION | sed -e 's/^v//')
+          echo VERSION=$VERSION
+
+          docker tag image $IMAGE_ID:$VERSION
+          docker push $IMAGE_ID:$VERSION
   debian-golang:
     if: startsWith(github.ref, 'refs/tags/v')
     needs: debian
@@ -562,6 +742,21 @@ jobs:
         run: |
           REGISTRY_URL=docker.io
           echo "${{ secrets.DOCKER_TOKEN }}" | docker login $REGISTRY_URL -u ${{ secrets.DOCKER_USER }} --password-stdin
+
+          IMAGE_ID=$REGISTRY_URL/$DOCKER_IMAGE_NAME
+          echo IMAGE_ID=$IMAGE_ID
+
+          VERSION=$(echo "${{ github.ref }}" | sed -e 's,.*/\(.*\),\1,')-${{ github.job }}
+          [[ "${{ github.ref }}" == "refs/tags/"* ]] && VERSION=$(echo $VERSION | sed -e 's/^v//')
+          echo VERSION=$VERSION
+
+          docker tag image $IMAGE_ID:$VERSION
+          docker push $IMAGE_ID:$VERSION
+
+      - name: Push aliyun image
+        run: |
+          REGISTRY_URL=registry.cn-beijing.aliyuncs.com
+          echo "${{ secrets.ALIYUN_TOKEN }}" | docker login $REGISTRY_URL -u ${{ secrets.ALIYUN_USER }} --password-stdin
 
           IMAGE_ID=$REGISTRY_URL/$DOCKER_IMAGE_NAME
           echo IMAGE_ID=$IMAGE_ID
