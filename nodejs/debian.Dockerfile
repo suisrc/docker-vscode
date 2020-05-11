@@ -36,4 +36,4 @@ RUN npm install -g cnpm yarn tyarn &&\
     npm config set disturl https://npm.taobao.org/dist --global
 
 # 增加开发环境测试用例
-COPY *.js /home/test
+COPY *.js /home/test/

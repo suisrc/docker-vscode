@@ -14,4 +14,4 @@ RUN pip3 install --user pylint &&\
 RUN code-server --install-extension ms-python.python
 
 # 增加开发环境测试用例
-COPY *.py /home/test
+COPY *.py /home/test/
