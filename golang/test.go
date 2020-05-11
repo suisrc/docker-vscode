@@ -1,4 +1,13 @@
 /**
+ * hello world
+package main
+
+import "fmt"
+
+func main() {
+    fmt.Println("hello world")
+}
+
  * iris
  * go mod init test
  * go mod download
