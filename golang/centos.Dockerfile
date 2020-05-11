@@ -38,3 +38,6 @@ RUN go get -u github.com/mdempsky/gocode &&\
 
 # vscode extension
 RUN code-server --install-extension ms-vscode.go
+
+# 增加开发环境测试用例
+COPY *.go /home/test

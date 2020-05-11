@@ -54,3 +54,6 @@ RUN echo "**** install code-server extension ****" && \
     code-server --install-extension redhat.vscode-xml &&\
     code-server --install-extension vscjava.vscode-java-pack
 
+# 增加开发环境测试用例
+COPY *.java /home/test
+
