@@ -6,13 +6,16 @@ on:
     branches:
       - fix-master
 env:
-  DOCKER_VERSION: 1.44.2-11
+  DOCKER_VERSION: 1.44.2-13
   GITHUB_IMAGE_NAME: vscode
   DOCKER_IMAGE_NAME: suisrc/vscode
 
+#          VERSION=DOCKER_VERSION-${{ github.job }}
+#          echo VERSION=$VERSION
 jobs:
 ###########################################################################################
-  centos-graal:
+
+  centos:
     runs-on: ubuntu-latest
 
     steps:
@@ -20,81 +23,18 @@ jobs:
 
       - name: Build image
         run: |
-          REGISTRY_URL=docker.pkg.github.com
-          DOCKER_DIR=${{ github.job }}
-          DOCKER_DIR=${DOCKER_DIR##*-}
-          DOCKER_BOS=${{ github.job }}
-          DOCKER_BOS=${DOCKER_BOS%%-*}
+          docker build ./vscode --file ./vscode/centos.Dockerfile --tag image
 
-          echo "${{ secrets.GITHUB_TOKEN }}" | docker login $REGISTRY_URL -u ${{ github.actor }} --password-stdin
-          docker build ./$DOCKER_DIR --file ./$DOCKER_DIR/$DOCKER_BOS.Dockerfile --tag image
-
-      - name: Push docker image
-        run: |
-          REGISTRY_URL=docker.io
-          echo "${{ secrets.DOCKER_TOKEN }}" | docker login $REGISTRY_URL -u ${{ secrets.DOCKER_USER }} --password-stdin
-
-          IMAGE_ID=$REGISTRY_URL/$DOCKER_IMAGE_NAME
-          echo IMAGE_ID=$IMAGE_ID
-
-          VERSION=DOCKER_VERSION-${{ github.job }}
-          echo VERSION=$VERSION
-
-          docker tag image $IMAGE_ID:$VERSION
-          docker push $IMAGE_ID:$VERSION
-
-      - name: Push aliyun image
-        run: |
-          REGISTRY_URL=registry.cn-beijing.aliyuncs.com
-          echo "${{ secrets.ALIYUN_TOKEN }}" | docker login $REGISTRY_URL -u ${{ secrets.ALIYUN_USER }} --password-stdin
-
-          IMAGE_ID=$REGISTRY_URL/$DOCKER_IMAGE_NAME
-          echo IMAGE_ID=$IMAGE_ID
-
-          VERSION=DOCKER_VERSION-${{ github.job }}
-          echo VERSION=$VERSION
-
-          docker tag image $IMAGE_ID:$VERSION
-          docker push $IMAGE_ID:$VERSION
-
-      - name: Push quay image
-        run: |
-          REGISTRY_URL=quay.io
-          echo "${{ secrets.QUAY_TOKEN }}" | docker login $REGISTRY_URL -u ${{ secrets.QUAY_USER }} --password-stdin
-
-          IMAGE_ID=$REGISTRY_URL/$DOCKER_IMAGE_NAME
-          echo IMAGE_ID=$IMAGE_ID
-
-          VERSION=DOCKER_VERSION-${{ github.job }}
-          echo VERSION=$VERSION
-
-          docker tag image $IMAGE_ID:$VERSION
-          docker push $IMAGE_ID:$VERSION
-
-###########################################################################################
-  debian-graal:
-    runs-on: ubuntu-latest
-
-    steps:
-      - uses: actions/checkout@v2
-
-      - name: Build image
+      - name: Push github image
         run: |
           REGISTRY_URL=docker.pkg.github.com
-          DOCKER_DIR=${{ github.job }}
-          DOCKER_DIR=${DOCKER_DIR##*-}
-          DOCKER_BOS=${{ github.job }}
-          DOCKER_BOS=${DOCKER_BOS%%-*}
-
           echo "${{ secrets.GITHUB_TOKEN }}" | docker login $REGISTRY_URL -u ${{ github.actor }} --password-stdin
-          docker build ./$DOCKER_DIR --file ./$DOCKER_DIR/$DOCKER_BOS.Dockerfile --tag image
 
-      - name: Push docker image
-        run: |
-          REGISTRY_URL=docker.io
-          echo "${{ secrets.DOCKER_TOKEN }}" | docker login $REGISTRY_URL -u ${{ secrets.DOCKER_USER }} --password-stdin
+          IMAGE_ID=$REGISTRY_URL/${{ github.repository }}/$GITHUB_IMAGE_NAME
+          #IMAGE_ID=$REGISTRY_URL/$DOCKER_IMAGE_NAME
 
-          IMAGE_ID=$REGISTRY_URL/$DOCKER_IMAGE_NAME
+          # Change all uppercase to lowercase
+          IMAGE_ID=$(echo $IMAGE_ID | tr '[A-Z]' '[a-z]')
           echo IMAGE_ID=$IMAGE_ID
 
           VERSION=DOCKER_VERSION-${{ github.job }}
@@ -102,63 +42,3 @@ jobs:
 
           docker tag image $IMAGE_ID:$VERSION
           docker push $IMAGE_ID:$VERSION
-
-###########################################################################################
-  centos-graal-jdk11:
-    runs-on: ubuntu-latest
-
-    steps:
-      - uses: actions/checkout@v2
-
-      - name: Build image
-        run: |
-          REGISTRY_URL=docker.pkg.github.com
-          DOCKER_DIR=graal
-          DOCKER_BOS=centos-jdk11
-
-          echo "${{ secrets.GITHUB_TOKEN }}" | docker login $REGISTRY_URL -u ${{ github.actor }} --password-stdin
-          docker build ./$DOCKER_DIR --file ./$DOCKER_DIR/$DOCKER_BOS.Dockerfile --tag image
-
-      - name: Push docker image
-        run: |
-          REGISTRY_URL=docker.io
-          echo "${{ secrets.DOCKER_TOKEN }}" | docker login $REGISTRY_URL -u ${{ secrets.DOCKER_USER }} --password-stdin
-
-          IMAGE_ID=$REGISTRY_URL/$DOCKER_IMAGE_NAME
-          echo IMAGE_ID=$IMAGE_ID
-
-          VERSION=DOCKER_VERSION-${{ github.job }}
-          echo VERSION=$VERSION
-
-          docker tag image $IMAGE_ID:$VERSION
-          docker push $IMAGE_ID:$VERSION
-
-      - name: Push aliyun image
-        run: |
-          REGISTRY_URL=registry.cn-beijing.aliyuncs.com
-          echo "${{ secrets.ALIYUN_TOKEN }}" | docker login $REGISTRY_URL -u ${{ secrets.ALIYUN_USER }} --password-stdin
-
-          IMAGE_ID=$REGISTRY_URL/$DOCKER_IMAGE_NAME
-          echo IMAGE_ID=$IMAGE_ID
-
-          VERSION=DOCKER_VERSION-${{ github.job }}
-          echo VERSION=$VERSION
-
-          docker tag image $IMAGE_ID:$VERSION
-          docker push $IMAGE_ID:$VERSION
-
-      - name: Push quay image
-        run: |
-          REGISTRY_URL=quay.io
-          echo "${{ secrets.QUAY_TOKEN }}" | docker login $REGISTRY_URL -u ${{ secrets.QUAY_USER }} --password-stdin
-
-          IMAGE_ID=$REGISTRY_URL/$DOCKER_IMAGE_NAME
-          echo IMAGE_ID=$IMAGE_ID
-
-          VERSION=DOCKER_VERSION-${{ github.job }}
-          echo VERSION=$VERSION
-
-          docker tag image $IMAGE_ID:$VERSION
-          docker push $IMAGE_ID:$VERSION
-
-
