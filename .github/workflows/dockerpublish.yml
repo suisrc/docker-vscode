@@ -1,5 +1,5 @@
 # github ci
-# 从1.44.2-11之后，aliyun和quay只提供centos版本，可以从docker.io下载debian版本
+# 从1.44.2-11之后，aliyun只提供centos版本，可以从docker.io下载debian版本
 # 精简版使用debian系统
 name: Docker
 
