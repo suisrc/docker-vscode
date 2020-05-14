@@ -24,7 +24,7 @@ RUN echo "**** install graalvm-ce ****" &&\
     fi &&\
     mkdir -p /graalvm &&\
     #curl `#--fail --silent --location --retry 3` -fSL ${GRAALVM_URL} | tar -zxC /graalvm --strip-components=1 &&\
-    curl -fsSL --compressed ${GRAALVM_URL} -o graalvm-ce.tar.gz &&\
+    curl -fsL --compressed ${GRAALVM_URL} -o graalvm-ce.tar.gz &&\
     tar -xzf graalvm-ce.tar.gz -C /graalvm --strip-components=1 &&\
     rm -f graalvm-ce.tar.gz
 
