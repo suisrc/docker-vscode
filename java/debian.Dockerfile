@@ -17,8 +17,6 @@ RUN echo "**** install AdoptOpenJDK ****" &&\
         fi && \
         JAVA_URL=$(curl -sX GET "https://api.github.com/repos/AdoptOpenJDK/openjdk8-binaries/releases/tags/${JAVA_RELEASE}" \
             | jq -r 'first(.assets[] | select(.browser_download_url | contains("jdk_x64_linux_") and endswith(".tar.gz") ) | .browser_download_url)'); \
-        # jdk8u252-b09.1 not has linux package
-        # JAVA_URL="https://github.com/AdoptOpenJDK/openjdk8-binaries/releases/download/jdk8u252-b09/OpenJDK8U-jdk_x64_linux_hotspot_8u252b09.tar.gz"; \
     fi &&\
     mkdir -p /usr/lib/jvm/java-1.8-adopt &&\
     curl -L ${JAVA_URL} -o /tmp/adopt-open-jdk.tar.gz &&\
