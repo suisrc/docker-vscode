@@ -34,7 +34,7 @@ RUN echo "**** update linux ****" && \
     fi &&\
     yum clean all && yum makecache && yum update -y &&\
     yum install -y sudo curl git jq net-tools zsh p7zip nano fontconfig ntpdate dpkg \
-                gcc glibc-devel zlib-devel libstdc++-static make && \
+                gcc glibc-devel zlib-devel libstdc++-static gcc-c++ make && \
     rm -rf /tmp/* /var/tmp/* /var/cache/yum
 
 # sqlite版本低, 无法使用django(python框架，为后面扩展)
