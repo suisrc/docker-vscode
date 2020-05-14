@@ -32,7 +32,9 @@ RUN echo "**** update linux ****" && \
         echo "gpgkey=${LINUX_MIRRORS}/kubernetes/yum/doc/yum-key.gpg ${LINUX_MIRRORS}/kubernetes/yum/doc/rpm-package-key.gpg" >> /etc/yum.repos.d/kubernetes.repo &&\
         echo "" >> /etc/yum.repos.d/kubernetes.repo; \
     fi &&\
+    yum install -y  https://centos7.iuscommunity.org/ius-release.rpm &&\
     yum clean all && yum makecache && yum update -y &&\
+    yum remove  -y git && yum install -y git222 &&\
     yum install -y sudo curl git jq net-tools zsh p7zip nano fontconfig ntpdate dpkg \
                 gcc glibc-devel zlib-devel libstdc++-static gcc-c++ make && \
     rm -rf /tmp/* /var/tmp/* /var/cache/yum
