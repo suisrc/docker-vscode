@@ -2,7 +2,7 @@
 FROM docker.pkg.github.com/suisrc/docker-vscode/vscode:centos
 
 # args
-ARG GRAALVM_RELEASE='vm-20.0.0'
+ARG GRAALVM_RELEASE=vm-20.0.0
 ARG JAVA_RELEASE=java11
 ARG GRAALVM_URL
 
@@ -12,7 +12,7 @@ ARG MAVEN_URL
 # install oracle graalvm-ce 
 RUN echo "**** install graalvm-ce ****" &&\
     set -eux &&\
-    if [ -z ${GRAALVM_RELEASE+x} ]; then \
+    if [ -z ${GRAALVM_URL+x} ]; then \
         if [ -z ${GRAALVM_RELEASE+x} ]; then \
             GRAALVM_RELEASE=$(curl -sX GET "https://api.github.com/repos/graalvm/graalvm-ce-builds/releases/latest" \
             | awk '/tag_name/{print $4;exit}' FS='[""]'); \
