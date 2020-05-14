@@ -5,6 +5,9 @@
  * tyarn
  * tyarn start
  * 
+ * tyarn add @umijs/preset-ui -D
+ * HOST=0.0.0.0 UMI_UI_PORT=3001
+ * 
  * eggjs
  * mkdir test2 && cd test2
  * cnpm init egg --type=simple

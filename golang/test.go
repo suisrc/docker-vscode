@@ -3,11 +3,17 @@
  * go run test.go
  * go build
  */
+package main
+
+import "fmt"
+
+func main() {
+	fmt.Println("Hello, 世界")
+}
 /**
  * gin
  * https://gin-gonic.com/zh-cn/docs/quickstart/
  * https://github.com/gin-gonic/gin
- */
  package main
 
  import "github.com/gin-gonic/gin"
@@ -22,6 +28,7 @@
 	 })
 	 r.Run() // 监听并在 0.0.0.0:8080 上启动服务
  }
+ */
  
  /**
   * iris
