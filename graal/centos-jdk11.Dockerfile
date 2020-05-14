@@ -3,6 +3,7 @@ FROM docker.pkg.github.com/suisrc/docker-vscode/vscode:centos
 
 # args
 ARG GRAALVM_RELEASE=vm-20.0.0
+ARG JAVA_RELEASE=java11
 ARG GRAALVM_URL
 
 ARG MAVEN_RELEASE=3.6.3
@@ -16,8 +17,10 @@ RUN echo "**** install graalvm-ce ****" &&\
             GRAALVM_RELEASE=$(curl -sX GET "https://api.github.com/repos/graalvm/graalvm-ce-builds/releases/latest" \
             | awk '/tag_name/{print $4;exit}' FS='[""]'); \
         fi && \
-        GRAALVM_URL=$(curl -sX GET "https://api.github.com/repos/graalvm/graalvm-ce-builds/releases/tags/${GRAALVM_RELEASE}" \
-            | jq -r '.assets[] | select(.browser_download_url | contains("graalvm-ce-java11-linux")) | .browser_download_url'); \
+        GRAALVM_URL="https://github.com/graalvm/graalvm-ce-builds/releases/download/${GRAALVM_RELEASE}/graalvm-ce-${JAVA_RELEASE}-linux-amd64-${GRAALVM_RELEASE##*-}.tar.gz"; \
+        #GRAALVM_URL=$(curl -sX GET "https://api.github.com/repos/graalvm/graalvm-ce-builds/releases/tags/${GRAALVM_RELEASE}" \
+        #    | jq -r '.assets[] | select(.browser_download_url | contains("graalvm-ce-java11-linux-amd64")) | .browser_download_url'); \
+        # https://github.com/graalvm/graalvm-ce-builds/releases/download/vm-20.0.0/graalvm-ce-java11-linux-amd64-20.0.0.tar.gz
     fi &&\
     mkdir -p /graalvm &&\
     #curl `#--fail --silent --location --retry 3` -fSL ${GRAALVM_URL} | tar -zxC /graalvm --strip-components=1 &&\
