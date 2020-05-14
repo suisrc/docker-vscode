@@ -16,6 +16,7 @@ LABEL maintainer="suisrc@outlook.com"
 
 ENV container docker
 # linux and softs
+COPY RPM-GPG-KEY-* /etc/pki/rpm-gpg/
 RUN echo "**** update linux ****" && \
     if [ ! -z ${LINUX_MIRRORS+x} ]; then \
         mv /etc/yum.repos.d/CentOS-Base.repo /etc/yum.repos.d/CentOS-Base.repo.bak &&\
