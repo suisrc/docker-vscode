@@ -7,7 +7,7 @@ RUN apt-get update && apt-get install -y python3 python3-pip &&\
 
 # python extension
 RUN pip3 install --user pylint &&\
-    pip3 install --user django &&\
+    pip3 install --user django
     #ln -s /root/.local/bin/django-admin /usr/local/bin/django-admin
 
 # vscode extension
