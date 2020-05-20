@@ -15,7 +15,7 @@ ARG MAVEN_RELEASE=3.6.3
 ARG MAVEN_URL=https://downloads.apache.org/maven/maven-3/${MAVEN_RELEASE}/binaries/apache-maven-${MAVEN_RELEASE}-bin.tar.gz
 
 # install python
-RUN curl -fSL --compressed  $PY_URL -o python-autoconf.tar.gz &&\
+RUN curl -fSL  $PY_URL -o python-autoconf.tar.gz &&\
     mddir python-autoconf && mkdir -p /usr/local/python3 &&\
     tar -zxvf python-autoconf.tar.gz -C python-autoconf --strip-components=1 &&\
     cd python-autoconf &&\
@@ -37,7 +37,7 @@ RUN pip3 install --user pylint &&\
 # ENV PATH=/root/.local/bin:$PATH
 
 # install golang
-RUN curl -fSL --compressed $GO_URL | tar -xz -C /usr/local
+RUN curl -fSL $GO_URL | tar -xz -C /usr/local
 
 ENV PATH=/usr/local/go/bin:$PATH
 ENV GOPATH=/root/go
@@ -69,8 +69,7 @@ RUN go get -u github.com/mdempsky/gocode &&\
     go get -u golang.org/x/tools/cmd/gorename; exit 0
 
 # install oracle graalvm-ce 
-RUN echo "**** install graalvm-ce ****" &&\
-    set -eux &&\
+RUN set -eux &&\
     if [ -z ${GRAALVM_URL+x} ]; then \
         if [ -z ${GRAALVM_RELEASE+x} ]; then \
             GRAALVM_RELEASE=$(curl -sX GET "https://api.github.com/repos/graalvm/graalvm-ce-builds/releases/latest" \
@@ -82,10 +81,8 @@ RUN echo "**** install graalvm-ce ****" &&\
         # https://github.com/graalvm/graalvm-ce-builds/releases/download/vm-20.0.0/graalvm-ce-java11-linux-amd64-20.0.0.tar.gz
     fi &&\
     mkdir -p /graalvm &&\
-    #curl `#--fail --silent --location --retry 3` -fSL ${GRAALVM_URL} | tar -zxC /graalvm --strip-components=1 &&\
-    curl -fsL --compressed ${GRAALVM_URL} -o graalvm-ce.tar.gz &&\
-    tar -xzf graalvm-ce.tar.gz -C /graalvm --strip-components=1 &&\
-    rm -f graalvm-ce.tar.gz
+    #curl `#--fail --silent --location --retry 3` -fSL ${GRAALVM_URL} | tar -zxC /graalvm --strip-components=1
+    curl -fSL ${GRAALVM_URL} | tar -xzC /graalvm --strip-components=1
 
 ENV PATH=/graalvm/bin:$PATH
 RUN gu install native-image

@@ -284,10 +284,10 @@ jobs:
           docker tag image $IMAGE_ID:$VERSION
           docker push $IMAGE_ID:$VERSION
 
-      - name: Push aliyun image
+      - name: Push quay image
         run: |
-          REGISTRY_URL=registry.cn-beijing.aliyuncs.com
-          echo "${{ secrets.ALIYUN_TOKEN }}" | docker login $REGISTRY_URL -u ${{ secrets.ALIYUN_USER }} --password-stdin
+          REGISTRY_URL=quay.io
+          echo "${{ secrets.QUAY_TOKEN }}" | docker login $REGISTRY_URL -u ${{ secrets.QUAY_USER }} --password-stdin
 
           IMAGE_ID=$REGISTRY_URL/$DOCKER_IMAGE_NAME
           echo IMAGE_ID=$IMAGE_ID
@@ -299,10 +299,10 @@ jobs:
           docker tag image $IMAGE_ID:$VERSION
           docker push $IMAGE_ID:$VERSION
 
-      - name: Push quay image
+      - name: Push aliyun image
         run: |
-          REGISTRY_URL=quay.io
-          echo "${{ secrets.QUAY_TOKEN }}" | docker login $REGISTRY_URL -u ${{ secrets.QUAY_USER }} --password-stdin
+          REGISTRY_URL=registry.cn-beijing.aliyuncs.com
+          echo "${{ secrets.ALIYUN_TOKEN }}" | docker login $REGISTRY_URL -u ${{ secrets.ALIYUN_USER }} --password-stdin
 
           IMAGE_ID=$REGISTRY_URL/$DOCKER_IMAGE_NAME
           echo IMAGE_ID=$IMAGE_ID
@@ -382,10 +382,10 @@ jobs:
           docker tag image $IMAGE_ID:$VERSION
           docker push $IMAGE_ID:$VERSION
 
-      - name: Push aliyun image
+      - name: Push quay image
         run: |
-          REGISTRY_URL=registry.cn-beijing.aliyuncs.com
-          echo "${{ secrets.ALIYUN_TOKEN }}" | docker login $REGISTRY_URL -u ${{ secrets.ALIYUN_USER }} --password-stdin
+          REGISTRY_URL=quay.io
+          echo "${{ secrets.QUAY_TOKEN }}" | docker login $REGISTRY_URL -u ${{ secrets.QUAY_USER }} --password-stdin
 
           IMAGE_ID=$REGISTRY_URL/$DOCKER_IMAGE_NAME
           echo IMAGE_ID=$IMAGE_ID
@@ -397,10 +397,10 @@ jobs:
           docker tag image $IMAGE_ID:$VERSION
           docker push $IMAGE_ID:$VERSION
 
-      - name: Push quay image
+      - name: Push aliyun image
         run: |
-          REGISTRY_URL=quay.io
-          echo "${{ secrets.QUAY_TOKEN }}" | docker login $REGISTRY_URL -u ${{ secrets.QUAY_USER }} --password-stdin
+          REGISTRY_URL=registry.cn-beijing.aliyuncs.com
+          echo "${{ secrets.ALIYUN_TOKEN }}" | docker login $REGISTRY_URL -u ${{ secrets.ALIYUN_USER }} --password-stdin
 
           IMAGE_ID=$REGISTRY_URL/$DOCKER_IMAGE_NAME
           echo IMAGE_ID=$IMAGE_ID
@@ -480,10 +480,10 @@ jobs:
           docker tag image $IMAGE_ID:$VERSION
           docker push $IMAGE_ID:$VERSION
 
-      - name: Push aliyun image
+      - name: Push quay image
         run: |
-          REGISTRY_URL=registry.cn-beijing.aliyuncs.com
-          echo "${{ secrets.ALIYUN_TOKEN }}" | docker login $REGISTRY_URL -u ${{ secrets.ALIYUN_USER }} --password-stdin
+          REGISTRY_URL=quay.io
+          echo "${{ secrets.QUAY_TOKEN }}" | docker login $REGISTRY_URL -u ${{ secrets.QUAY_USER }} --password-stdin
 
           IMAGE_ID=$REGISTRY_URL/$DOCKER_IMAGE_NAME
           echo IMAGE_ID=$IMAGE_ID
@@ -495,10 +495,10 @@ jobs:
           docker tag image $IMAGE_ID:$VERSION
           docker push $IMAGE_ID:$VERSION
 
-      - name: Push quay image
+      - name: Push aliyun image
         run: |
-          REGISTRY_URL=quay.io
-          echo "${{ secrets.QUAY_TOKEN }}" | docker login $REGISTRY_URL -u ${{ secrets.QUAY_USER }} --password-stdin
+          REGISTRY_URL=registry.cn-beijing.aliyuncs.com
+          echo "${{ secrets.ALIYUN_TOKEN }}" | docker login $REGISTRY_URL -u ${{ secrets.ALIYUN_USER }} --password-stdin
 
           IMAGE_ID=$REGISTRY_URL/$DOCKER_IMAGE_NAME
           echo IMAGE_ID=$IMAGE_ID
@@ -578,10 +578,10 @@ jobs:
           docker tag image $IMAGE_ID:$VERSION
           docker push $IMAGE_ID:$VERSION
 
-      - name: Push aliyun image
+      - name: Push quay image
         run: |
-          REGISTRY_URL=registry.cn-beijing.aliyuncs.com
-          echo "${{ secrets.ALIYUN_TOKEN }}" | docker login $REGISTRY_URL -u ${{ secrets.ALIYUN_USER }} --password-stdin
+          REGISTRY_URL=quay.io
+          echo "${{ secrets.QUAY_TOKEN }}" | docker login $REGISTRY_URL -u ${{ secrets.QUAY_USER }} --password-stdin
 
           IMAGE_ID=$REGISTRY_URL/$DOCKER_IMAGE_NAME
           echo IMAGE_ID=$IMAGE_ID
@@ -593,10 +593,10 @@ jobs:
           docker tag image $IMAGE_ID:$VERSION
           docker push $IMAGE_ID:$VERSION
 
-      - name: Push quay image
+      - name: Push aliyun image
         run: |
-          REGISTRY_URL=quay.io
-          echo "${{ secrets.QUAY_TOKEN }}" | docker login $REGISTRY_URL -u ${{ secrets.QUAY_USER }} --password-stdin
+          REGISTRY_URL=registry.cn-beijing.aliyuncs.com
+          echo "${{ secrets.ALIYUN_TOKEN }}" | docker login $REGISTRY_URL -u ${{ secrets.ALIYUN_USER }} --password-stdin
 
           IMAGE_ID=$REGISTRY_URL/$DOCKER_IMAGE_NAME
           echo IMAGE_ID=$IMAGE_ID
@@ -676,10 +676,10 @@ jobs:
           docker tag image $IMAGE_ID:$VERSION
           docker push $IMAGE_ID:$VERSION
 
-      - name: Push aliyun image
+      - name: Push quay image
         run: |
-          REGISTRY_URL=registry.cn-beijing.aliyuncs.com
-          echo "${{ secrets.ALIYUN_TOKEN }}" | docker login $REGISTRY_URL -u ${{ secrets.ALIYUN_USER }} --password-stdin
+          REGISTRY_URL=quay.io
+          echo "${{ secrets.QUAY_TOKEN }}" | docker login $REGISTRY_URL -u ${{ secrets.QUAY_USER }} --password-stdin
 
           IMAGE_ID=$REGISTRY_URL/$DOCKER_IMAGE_NAME
           echo IMAGE_ID=$IMAGE_ID
@@ -691,10 +691,10 @@ jobs:
           docker tag image $IMAGE_ID:$VERSION
           docker push $IMAGE_ID:$VERSION
 
-      - name: Push quay image
+      - name: Push aliyun image
         run: |
-          REGISTRY_URL=quay.io
-          echo "${{ secrets.QUAY_TOKEN }}" | docker login $REGISTRY_URL -u ${{ secrets.QUAY_USER }} --password-stdin
+          REGISTRY_URL=registry.cn-beijing.aliyuncs.com
+          echo "${{ secrets.ALIYUN_TOKEN }}" | docker login $REGISTRY_URL -u ${{ secrets.ALIYUN_USER }} --password-stdin
 
           IMAGE_ID=$REGISTRY_URL/$DOCKER_IMAGE_NAME
           echo IMAGE_ID=$IMAGE_ID
@@ -740,6 +740,71 @@ jobs:
           docker push $IMAGE_ID:$VERSION
 
 ############################################################################################################################
+# all-in-one, 提供js, java, python, golang支持, 暂时只提供JDK11版本
+  centos-one:
+    if: startsWith(github.ref, 'refs/tags/v')
+    needs: centos
+    runs-on: ubuntu-latest
+
+    steps:
+      - uses: actions/checkout@v2
+
+      - name: Build image
+        run: |
+          REGISTRY_URL=docker.pkg.github.com
+          DOCKER_DIR=${{ github.job }}
+          DOCKER_DIR=${DOCKER_DIR##*-}
+          DOCKER_BOS=${{ github.job }}
+          DOCKER_BOS=${DOCKER_BOS%%-*}
+
+          echo "${{ secrets.GITHUB_TOKEN }}" | docker login $REGISTRY_URL -u ${{ github.actor }} --password-stdin
+          docker build ./$DOCKER_DIR --file ./$DOCKER_DIR/$DOCKER_BOS.Dockerfile --tag image
+
+      - name: Push docker image
+        run: |
+          REGISTRY_URL=docker.io
+          echo "${{ secrets.DOCKER_TOKEN }}" | docker login $REGISTRY_URL -u ${{ secrets.DOCKER_USER }} --password-stdin
+
+          IMAGE_ID=$REGISTRY_URL/$DOCKER_IMAGE_NAME
+          echo IMAGE_ID=$IMAGE_ID
+
+          VERSION=$(echo "${{ github.ref }}" | sed -e 's,.*/\(.*\),\1,')-${{ github.job }}
+          [[ "${{ github.ref }}" == "refs/tags/"* ]] && VERSION=$(echo $VERSION | sed -e 's/^v//')
+          echo VERSION=$VERSION
+
+          docker tag image $IMAGE_ID:$VERSION
+          docker push $IMAGE_ID:$VERSION
+
+      - name: Push quay image
+        run: |
+          REGISTRY_URL=quay.io
+          echo "${{ secrets.QUAY_TOKEN }}" | docker login $REGISTRY_URL -u ${{ secrets.QUAY_USER }} --password-stdin
+
+          IMAGE_ID=$REGISTRY_URL/$DOCKER_IMAGE_NAME
+          echo IMAGE_ID=$IMAGE_ID
+
+          VERSION=$(echo "${{ github.ref }}" | sed -e 's,.*/\(.*\),\1,')-${{ github.job }}
+          [[ "${{ github.ref }}" == "refs/tags/"* ]] && VERSION=$(echo $VERSION | sed -e 's/^v//')
+          echo VERSION=$VERSION
+
+          docker tag image $IMAGE_ID:$VERSION
+          docker push $IMAGE_ID:$VERSION
+
+      - name: Push aliyun image
+        run: |
+          REGISTRY_URL=registry.cn-beijing.aliyuncs.com
+          echo "${{ secrets.ALIYUN_TOKEN }}" | docker login $REGISTRY_URL -u ${{ secrets.ALIYUN_USER }} --password-stdin
+
+          IMAGE_ID=$REGISTRY_URL/$DOCKER_IMAGE_NAME
+          echo IMAGE_ID=$IMAGE_ID
+
+          VERSION=$(echo "${{ github.ref }}" | sed -e 's,.*/\(.*\),\1,')-${{ github.job }}
+          [[ "${{ github.ref }}" == "refs/tags/"* ]] && VERSION=$(echo $VERSION | sed -e 's/^v//')
+          echo VERSION=$VERSION
+
+          docker tag image $IMAGE_ID:$VERSION
+          docker push $IMAGE_ID:$VERSION
+############################################################################################################################
 # JDK11只提供centos版本
   centos-graal-jdk11:
     if: startsWith(github.ref, 'refs/tags/v')
@@ -773,10 +838,10 @@ jobs:
           docker tag image $IMAGE_ID:$VERSION
           docker push $IMAGE_ID:$VERSION
 
-      - name: Push aliyun image
+      - name: Push quay image
         run: |
-          REGISTRY_URL=registry.cn-beijing.aliyuncs.com
-          echo "${{ secrets.ALIYUN_TOKEN }}" | docker login $REGISTRY_URL -u ${{ secrets.ALIYUN_USER }} --password-stdin
+          REGISTRY_URL=quay.io
+          echo "${{ secrets.QUAY_TOKEN }}" | docker login $REGISTRY_URL -u ${{ secrets.QUAY_USER }} --password-stdin
 
           IMAGE_ID=$REGISTRY_URL/$DOCKER_IMAGE_NAME
           echo IMAGE_ID=$IMAGE_ID
@@ -788,10 +853,10 @@ jobs:
           docker tag image $IMAGE_ID:$VERSION
           docker push $IMAGE_ID:$VERSION
 
-      - name: Push quay image
+      - name: Push aliyun image
         run: |
-          REGISTRY_URL=quay.io
-          echo "${{ secrets.QUAY_TOKEN }}" | docker login $REGISTRY_URL -u ${{ secrets.QUAY_USER }} --password-stdin
+          REGISTRY_URL=registry.cn-beijing.aliyuncs.com
+          echo "${{ secrets.ALIYUN_TOKEN }}" | docker login $REGISTRY_URL -u ${{ secrets.ALIYUN_USER }} --password-stdin
 
           IMAGE_ID=$REGISTRY_URL/$DOCKER_IMAGE_NAME
           echo IMAGE_ID=$IMAGE_ID
@@ -834,10 +899,10 @@ jobs:
           docker tag image $IMAGE_ID:$VERSION
           docker push $IMAGE_ID:$VERSION
 
-      - name: Push aliyun image
+      - name: Push quay image
         run: |
-          REGISTRY_URL=registry.cn-beijing.aliyuncs.com
-          echo "${{ secrets.ALIYUN_TOKEN }}" | docker login $REGISTRY_URL -u ${{ secrets.ALIYUN_USER }} --password-stdin
+          REGISTRY_URL=quay.io
+          echo "${{ secrets.QUAY_TOKEN }}" | docker login $REGISTRY_URL -u ${{ secrets.QUAY_USER }} --password-stdin
 
           IMAGE_ID=$REGISTRY_URL/$DOCKER_IMAGE_NAME
           echo IMAGE_ID=$IMAGE_ID
@@ -849,10 +914,10 @@ jobs:
           docker tag image $IMAGE_ID:$VERSION
           docker push $IMAGE_ID:$VERSION
 
-      - name: Push quay image
+      - name: Push aliyun image
         run: |
-          REGISTRY_URL=quay.io
-          echo "${{ secrets.QUAY_TOKEN }}" | docker login $REGISTRY_URL -u ${{ secrets.QUAY_USER }} --password-stdin
+          REGISTRY_URL=registry.cn-beijing.aliyuncs.com
+          echo "${{ secrets.ALIYUN_TOKEN }}" | docker login $REGISTRY_URL -u ${{ secrets.ALIYUN_USER }} --password-stdin
 
           IMAGE_ID=$REGISTRY_URL/$DOCKER_IMAGE_NAME
           echo IMAGE_ID=$IMAGE_ID
