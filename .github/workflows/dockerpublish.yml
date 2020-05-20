@@ -1,17 +1,21 @@
 # github ci
 # 从1.44.2-11之后，aliyun只提供centos版本，可以从docker.io下载debian版本
+# 从1.45.1-01版本后，使用固定的小版本，信息不会与发布版本对应
 # 精简版使用debian系统
 name: Docker
 
 # https://help.github.com/en/actions/reference/context-and-expression-syntax-for-github-actions#github-context
 # https://help.github.com/en/actions/reference/events-that-trigger-workflows
 on:
-  release:
-    types: [published]
+  #release:
+  #  types: [published]
+  push:
+    branches: [ master ]
 
 env:
   GITHUB_IMAGE_NAME: vscode
   DOCKER_IMAGE_NAME: suisrc/vscode
+  DOCKER_VERSION: 1.45.1-01
 
 jobs:
   vscode:
@@ -34,9 +38,7 @@ jobs:
 
           IMAGE_ID=$(echo $IMAGE_ID | tr '[A-Z]' '[a-z]')
           echo IMAGE_ID=$IMAGE_ID
-
-          VERSION=$(echo "${{ github.ref }}" | sed -e 's,.*/\(.*\),\1,')
-          [[ "${{ github.ref }}" == "refs/tags/"* ]] && VERSION=$(echo $VERSION | sed -e 's/^v//')
+          VERSION=$DOCKER_VERSION
           echo VERSION=$VERSION
 
           docker tag image $IMAGE_ID:$VERSION
@@ -50,9 +52,7 @@ jobs:
 
           IMAGE_ID=$REGISTRY_URL/$DOCKER_IMAGE_NAME
           echo IMAGE_ID=$IMAGE_ID
-
-          VERSION=$(echo "${{ github.ref }}" | sed -e 's,.*/\(.*\),\1,')
-          [[ "${{ github.ref }}" == "refs/tags/"* ]] && VERSION=$(echo $VERSION | sed -e 's/^v//')
+          VERSION=$DOCKER_VERSION
           echo VERSION=$VERSION
 
           docker tag image $IMAGE_ID:$VERSION
@@ -66,9 +66,7 @@ jobs:
 
           IMAGE_ID=$REGISTRY_URL/$DOCKER_IMAGE_NAME
           echo IMAGE_ID=$IMAGE_ID
-
-          VERSION=$(echo "${{ github.ref }}" | sed -e 's,.*/\(.*\),\1,')
-          [[ "${{ github.ref }}" == "refs/tags/"* ]] && VERSION=$(echo $VERSION | sed -e 's/^v//')
+          VERSION=$DOCKER_VERSION
           echo VERSION=$VERSION
 
           docker tag image $IMAGE_ID:$VERSION
@@ -81,9 +79,7 @@ jobs:
 #
 #          IMAGE_ID=$REGISTRY_URL/$DOCKER_IMAGE_NAME
 #          echo IMAGE_ID=$IMAGE_ID
-#
-#          VERSION=$(echo "${{ github.ref }}" | sed -e 's,.*/\(.*\),\1,')
-#          [[ "${{ github.ref }}" == "refs/tags/"* ]] && VERSION=$(echo $VERSION | sed -e 's/^v//')
+#          VERSION=$DOCKER_VERSION
 #          echo VERSION=$VERSION
 #
 #          docker tag image $IMAGE_ID:$VERSION
@@ -106,19 +102,19 @@ jobs:
 
           IMAGE_ID=$REGISTRY_URL/${{ github.repository }}/$GITHUB_IMAGE_NAME
           #IMAGE_ID=$REGISTRY_URL/$DOCKER_IMAGE_NAME
-
           # Change all uppercase to lowercase
           IMAGE_ID=$(echo $IMAGE_ID | tr '[A-Z]' '[a-z]')
           echo IMAGE_ID=$IMAGE_ID
 
-          # Strip git ref prefix from version
-          VERSION=$(echo "${{ github.ref }}" | sed -e 's,.*/\(.*\),\1,')-${{ github.job }}
+          ## Strip git ref prefix from version (use relase version)
+          #VERSION=$(echo "${{ github.ref }}" | sed -e 's,.*/\(.*\),\1,')-${{ github.job }}
+          ## Strip "v" prefix from tag name
+          #[[ "${{ github.ref }}" == "refs/tags/"* ]] && VERSION=$(echo $VERSION | sed -e 's/^v//')
+          ## Use Docker `latest` tag convention
+          ##[ "$VERSION" == "master" ] && VERSION=latest
+          #echo VERSION=$VERSION
 
-          # Strip "v" prefix from tag name
-          [[ "${{ github.ref }}" == "refs/tags/"* ]] && VERSION=$(echo $VERSION | sed -e 's/^v//')
-
-          # Use Docker `latest` tag convention
-          #[ "$VERSION" == "master" ] && VERSION=latest
+          VERSION=$DOCKER_VERSION-${{ github.job }}
           echo VERSION=$VERSION
 
           docker tag image $IMAGE_ID:$VERSION
@@ -136,7 +132,6 @@ jobs:
 
           VERSION=$(echo "${{ github.job }}")
           echo VERSION=$VERSION
-
           docker tag image $IMAGE_ID:$VERSION
           docker push $IMAGE_ID:$VERSION
 
@@ -152,9 +147,7 @@ jobs:
 
           IMAGE_ID=$REGISTRY_URL/$DOCKER_IMAGE_NAME
           echo IMAGE_ID=$IMAGE_ID
-
-          VERSION=$(echo "${{ github.ref }}" | sed -e 's,.*/\(.*\),\1,')-${{ github.job }}
-          [[ "${{ github.ref }}" == "refs/tags/"* ]] && VERSION=$(echo $VERSION | sed -e 's/^v//')
+          VERSION=$DOCKER_VERSION-${{ github.job }}
           echo VERSION=$VERSION
 
           docker tag image $IMAGE_ID:$VERSION
@@ -168,9 +161,7 @@ jobs:
 
           IMAGE_ID=$REGISTRY_URL/$DOCKER_IMAGE_NAME
           echo IMAGE_ID=$IMAGE_ID
-
-          VERSION=$(echo "${{ github.ref }}" | sed -e 's,.*/\(.*\),\1,')-${{ github.job }}
-          [[ "${{ github.ref }}" == "refs/tags/"* ]] && VERSION=$(echo $VERSION | sed -e 's/^v//')
+          VERSION=$DOCKER_VERSION-${{ github.job }}
           echo VERSION=$VERSION
 
           docker tag image $IMAGE_ID:$VERSION
@@ -183,9 +174,7 @@ jobs:
 #
 #          IMAGE_ID=$REGISTRY_URL/$DOCKER_IMAGE_NAME
 #          echo IMAGE_ID=$IMAGE_ID
-#
-#          VERSION=$(echo "${{ github.ref }}" | sed -e 's,.*/\(.*\),\1,')-${{ github.job }}
-#          [[ "${{ github.ref }}" == "refs/tags/"* ]] && VERSION=$(echo $VERSION | sed -e 's/^v//')
+#          VERSION=$DOCKER_VERSION-${{ github.job }}
 #          echo VERSION=$VERSION
 #
 #          docker tag image $IMAGE_ID:$VERSION
@@ -209,9 +198,7 @@ jobs:
           IMAGE_ID=$REGISTRY_URL/${{ github.repository }}/$GITHUB_IMAGE_NAME
           IMAGE_ID=$(echo $IMAGE_ID | tr '[A-Z]' '[a-z]')
           echo IMAGE_ID=$IMAGE_ID
-
-          VERSION=$(echo "${{ github.ref }}" | sed -e 's,.*/\(.*\),\1,')-${{ github.job }}
-          [[ "${{ github.ref }}" == "refs/tags/"* ]] && VERSION=$(echo $VERSION | sed -e 's/^v//')
+          VERSION=$DOCKER_VERSION-${{ github.job }}
           echo VERSION=$VERSION
 
           docker tag image $IMAGE_ID:$VERSION
@@ -226,7 +213,6 @@ jobs:
           IMAGE_ID=$REGISTRY_URL/${{ github.repository }}/$GITHUB_IMAGE_NAME
           IMAGE_ID=$(echo $IMAGE_ID | tr '[A-Z]' '[a-z]')
           echo IMAGE_ID=$IMAGE_ID
-
           VERSION=$(echo "${{ github.job }}")
           echo VERSION=$VERSION
 
@@ -241,9 +227,7 @@ jobs:
 
           IMAGE_ID=$REGISTRY_URL/$DOCKER_IMAGE_NAME
           echo IMAGE_ID=$IMAGE_ID
-
-          VERSION=$(echo "${{ github.ref }}" | sed -e 's,.*/\(.*\),\1,')-${{ github.job }}
-          [[ "${{ github.ref }}" == "refs/tags/"* ]] && VERSION=$(echo $VERSION | sed -e 's/^v//')
+          VERSION=$DOCKER_VERSION-${{ github.job }}
           echo VERSION=$VERSION
 
           docker tag image $IMAGE_ID:$VERSION
@@ -276,9 +260,7 @@ jobs:
 
           IMAGE_ID=$REGISTRY_URL/$DOCKER_IMAGE_NAME
           echo IMAGE_ID=$IMAGE_ID
-
-          VERSION=$(echo "${{ github.ref }}" | sed -e 's,.*/\(.*\),\1,')-${{ github.job }}
-          [[ "${{ github.ref }}" == "refs/tags/"* ]] && VERSION=$(echo $VERSION | sed -e 's/^v//')
+          VERSION=$DOCKER_VERSION-${{ github.job }}
           echo VERSION=$VERSION
 
           docker tag image $IMAGE_ID:$VERSION
@@ -291,9 +273,7 @@ jobs:
 
           IMAGE_ID=$REGISTRY_URL/$DOCKER_IMAGE_NAME
           echo IMAGE_ID=$IMAGE_ID
-
-          VERSION=$(echo "${{ github.ref }}" | sed -e 's,.*/\(.*\),\1,')-${{ github.job }}
-          [[ "${{ github.ref }}" == "refs/tags/"* ]] && VERSION=$(echo $VERSION | sed -e 's/^v//')
+          VERSION=$DOCKER_VERSION-${{ github.job }}
           echo VERSION=$VERSION
 
           docker tag image $IMAGE_ID:$VERSION
@@ -306,9 +286,7 @@ jobs:
 #
 #          IMAGE_ID=$REGISTRY_URL/$DOCKER_IMAGE_NAME
 #          echo IMAGE_ID=$IMAGE_ID
-#
-#          VERSION=$(echo "${{ github.ref }}" | sed -e 's,.*/\(.*\),\1,')-${{ github.job }}
-#          [[ "${{ github.ref }}" == "refs/tags/"* ]] && VERSION=$(echo $VERSION | sed -e 's/^v//')
+#          VERSION=$DOCKER_VERSION-${{ github.job }}
 #          echo VERSION=$VERSION
 #
 #          docker tag image $IMAGE_ID:$VERSION
@@ -339,9 +317,7 @@ jobs:
 
           IMAGE_ID=$REGISTRY_URL/$DOCKER_IMAGE_NAME
           echo IMAGE_ID=$IMAGE_ID
-
-          VERSION=$(echo "${{ github.ref }}" | sed -e 's,.*/\(.*\),\1,')-${{ github.job }}
-          [[ "${{ github.ref }}" == "refs/tags/"* ]] && VERSION=$(echo $VERSION | sed -e 's/^v//')
+          VERSION=$DOCKER_VERSION-${{ github.job }}
           echo VERSION=$VERSION
 
           docker tag image $IMAGE_ID:$VERSION
@@ -374,9 +350,7 @@ jobs:
 
           IMAGE_ID=$REGISTRY_URL/$DOCKER_IMAGE_NAME
           echo IMAGE_ID=$IMAGE_ID
-
-          VERSION=$(echo "${{ github.ref }}" | sed -e 's,.*/\(.*\),\1,')-${{ github.job }}
-          [[ "${{ github.ref }}" == "refs/tags/"* ]] && VERSION=$(echo $VERSION | sed -e 's/^v//')
+          VERSION=$DOCKER_VERSION-${{ github.job }}
           echo VERSION=$VERSION
 
           docker tag image $IMAGE_ID:$VERSION
@@ -389,9 +363,7 @@ jobs:
 
           IMAGE_ID=$REGISTRY_URL/$DOCKER_IMAGE_NAME
           echo IMAGE_ID=$IMAGE_ID
-
-          VERSION=$(echo "${{ github.ref }}" | sed -e 's,.*/\(.*\),\1,')-${{ github.job }}
-          [[ "${{ github.ref }}" == "refs/tags/"* ]] && VERSION=$(echo $VERSION | sed -e 's/^v//')
+          VERSION=$DOCKER_VERSION-${{ github.job }}
           echo VERSION=$VERSION
 
           docker tag image $IMAGE_ID:$VERSION
@@ -404,9 +376,7 @@ jobs:
 #
 #          IMAGE_ID=$REGISTRY_URL/$DOCKER_IMAGE_NAME
 #          echo IMAGE_ID=$IMAGE_ID
-#
-#          VERSION=$(echo "${{ github.ref }}" | sed -e 's,.*/\(.*\),\1,')-${{ github.job }}
-#          [[ "${{ github.ref }}" == "refs/tags/"* ]] && VERSION=$(echo $VERSION | sed -e 's/^v//')
+#          VERSION=$DOCKER_VERSION-${{ github.job }}
 #          echo VERSION=$VERSION
 #
 #          docker tag image $IMAGE_ID:$VERSION
@@ -437,9 +407,7 @@ jobs:
 
           IMAGE_ID=$REGISTRY_URL/$DOCKER_IMAGE_NAME
           echo IMAGE_ID=$IMAGE_ID
-
-          VERSION=$(echo "${{ github.ref }}" | sed -e 's,.*/\(.*\),\1,')-${{ github.job }}
-          [[ "${{ github.ref }}" == "refs/tags/"* ]] && VERSION=$(echo $VERSION | sed -e 's/^v//')
+          VERSION=$DOCKER_VERSION-${{ github.job }}
           echo VERSION=$VERSION
 
           docker tag image $IMAGE_ID:$VERSION
@@ -473,8 +441,7 @@ jobs:
           IMAGE_ID=$REGISTRY_URL/$DOCKER_IMAGE_NAME
           echo IMAGE_ID=$IMAGE_ID
 
-          VERSION=$(echo "${{ github.ref }}" | sed -e 's,.*/\(.*\),\1,')-${{ github.job }}
-          [[ "${{ github.ref }}" == "refs/tags/"* ]] && VERSION=$(echo $VERSION | sed -e 's/^v//')
+          VERSION=$DOCKER_VERSION-${{ github.job }}
           echo VERSION=$VERSION
 
           docker tag image $IMAGE_ID:$VERSION
@@ -487,9 +454,7 @@ jobs:
 
           IMAGE_ID=$REGISTRY_URL/$DOCKER_IMAGE_NAME
           echo IMAGE_ID=$IMAGE_ID
-
-          VERSION=$(echo "${{ github.ref }}" | sed -e 's,.*/\(.*\),\1,')-${{ github.job }}
-          [[ "${{ github.ref }}" == "refs/tags/"* ]] && VERSION=$(echo $VERSION | sed -e 's/^v//')
+          VERSION=$DOCKER_VERSION-${{ github.job }}
           echo VERSION=$VERSION
 
           docker tag image $IMAGE_ID:$VERSION
@@ -502,9 +467,7 @@ jobs:
 #
 #          IMAGE_ID=$REGISTRY_URL/$DOCKER_IMAGE_NAME
 #          echo IMAGE_ID=$IMAGE_ID
-#
-#          VERSION=$(echo "${{ github.ref }}" | sed -e 's,.*/\(.*\),\1,')-${{ github.job }}
-#          [[ "${{ github.ref }}" == "refs/tags/"* ]] && VERSION=$(echo $VERSION | sed -e 's/^v//')
+#          VERSION=$DOCKER_VERSION-${{ github.job }}
 #          echo VERSION=$VERSION
 #
 #          docker tag image $IMAGE_ID:$VERSION
@@ -535,9 +498,7 @@ jobs:
 
           IMAGE_ID=$REGISTRY_URL/$DOCKER_IMAGE_NAME
           echo IMAGE_ID=$IMAGE_ID
-
-          VERSION=$(echo "${{ github.ref }}" | sed -e 's,.*/\(.*\),\1,')-${{ github.job }}
-          [[ "${{ github.ref }}" == "refs/tags/"* ]] && VERSION=$(echo $VERSION | sed -e 's/^v//')
+          VERSION=$DOCKER_VERSION-${{ github.job }}
           echo VERSION=$VERSION
 
           docker tag image $IMAGE_ID:$VERSION
@@ -570,9 +531,7 @@ jobs:
 
           IMAGE_ID=$REGISTRY_URL/$DOCKER_IMAGE_NAME
           echo IMAGE_ID=$IMAGE_ID
-
-          VERSION=$(echo "${{ github.ref }}" | sed -e 's,.*/\(.*\),\1,')-${{ github.job }}
-          [[ "${{ github.ref }}" == "refs/tags/"* ]] && VERSION=$(echo $VERSION | sed -e 's/^v//')
+          VERSION=$DOCKER_VERSION-${{ github.job }}
           echo VERSION=$VERSION
 
           docker tag image $IMAGE_ID:$VERSION
@@ -585,9 +544,7 @@ jobs:
 
           IMAGE_ID=$REGISTRY_URL/$DOCKER_IMAGE_NAME
           echo IMAGE_ID=$IMAGE_ID
-
-          VERSION=$(echo "${{ github.ref }}" | sed -e 's,.*/\(.*\),\1,')-${{ github.job }}
-          [[ "${{ github.ref }}" == "refs/tags/"* ]] && VERSION=$(echo $VERSION | sed -e 's/^v//')
+          VERSION=$DOCKER_VERSION-${{ github.job }}
           echo VERSION=$VERSION
 
           docker tag image $IMAGE_ID:$VERSION
@@ -600,9 +557,7 @@ jobs:
 #
 #          IMAGE_ID=$REGISTRY_URL/$DOCKER_IMAGE_NAME
 #          echo IMAGE_ID=$IMAGE_ID
-#
-#          VERSION=$(echo "${{ github.ref }}" | sed -e 's,.*/\(.*\),\1,')-${{ github.job }}
-#          [[ "${{ github.ref }}" == "refs/tags/"* ]] && VERSION=$(echo $VERSION | sed -e 's/^v//')
+#          VERSION=$DOCKER_VERSION-${{ github.job }}
 #          echo VERSION=$VERSION
 #
 #          docker tag image $IMAGE_ID:$VERSION
@@ -633,9 +588,7 @@ jobs:
 
           IMAGE_ID=$REGISTRY_URL/$DOCKER_IMAGE_NAME
           echo IMAGE_ID=$IMAGE_ID
-
-          VERSION=$(echo "${{ github.ref }}" | sed -e 's,.*/\(.*\),\1,')-${{ github.job }}
-          [[ "${{ github.ref }}" == "refs/tags/"* ]] && VERSION=$(echo $VERSION | sed -e 's/^v//')
+          VERSION=$DOCKER_VERSION-${{ github.job }}
           echo VERSION=$VERSION
 
           docker tag image $IMAGE_ID:$VERSION
@@ -668,9 +621,7 @@ jobs:
 
           IMAGE_ID=$REGISTRY_URL/$DOCKER_IMAGE_NAME
           echo IMAGE_ID=$IMAGE_ID
-
-          VERSION=$(echo "${{ github.ref }}" | sed -e 's,.*/\(.*\),\1,')-${{ github.job }}
-          [[ "${{ github.ref }}" == "refs/tags/"* ]] && VERSION=$(echo $VERSION | sed -e 's/^v//')
+          VERSION=$DOCKER_VERSION-${{ github.job }}
           echo VERSION=$VERSION
 
           docker tag image $IMAGE_ID:$VERSION
@@ -683,9 +634,7 @@ jobs:
 
           IMAGE_ID=$REGISTRY_URL/$DOCKER_IMAGE_NAME
           echo IMAGE_ID=$IMAGE_ID
-
-          VERSION=$(echo "${{ github.ref }}" | sed -e 's,.*/\(.*\),\1,')-${{ github.job }}
-          [[ "${{ github.ref }}" == "refs/tags/"* ]] && VERSION=$(echo $VERSION | sed -e 's/^v//')
+          VERSION=$DOCKER_VERSION-${{ github.job }}
           echo VERSION=$VERSION
 
           docker tag image $IMAGE_ID:$VERSION
@@ -698,9 +647,7 @@ jobs:
 #
 #          IMAGE_ID=$REGISTRY_URL/$DOCKER_IMAGE_NAME
 #          echo IMAGE_ID=$IMAGE_ID
-#
-#          VERSION=$(echo "${{ github.ref }}" | sed -e 's,.*/\(.*\),\1,')-${{ github.job }}
-#          [[ "${{ github.ref }}" == "refs/tags/"* ]] && VERSION=$(echo $VERSION | sed -e 's/^v//')
+#          VERSION=$DOCKER_VERSION-${{ github.job }}
 #          echo VERSION=$VERSION
 #
 #          docker tag image $IMAGE_ID:$VERSION
@@ -731,9 +678,7 @@ jobs:
 
           IMAGE_ID=$REGISTRY_URL/$DOCKER_IMAGE_NAME
           echo IMAGE_ID=$IMAGE_ID
-
-          VERSION=$(echo "${{ github.ref }}" | sed -e 's,.*/\(.*\),\1,')-${{ github.job }}
-          [[ "${{ github.ref }}" == "refs/tags/"* ]] && VERSION=$(echo $VERSION | sed -e 's/^v//')
+          VERSION=$DOCKER_VERSION-${{ github.job }}
           echo VERSION=$VERSION
 
           docker tag image $IMAGE_ID:$VERSION
@@ -767,9 +712,7 @@ jobs:
 
           IMAGE_ID=$REGISTRY_URL/$DOCKER_IMAGE_NAME
           echo IMAGE_ID=$IMAGE_ID
-
-          VERSION=$(echo "${{ github.ref }}" | sed -e 's,.*/\(.*\),\1,')-${{ github.job }}
-          [[ "${{ github.ref }}" == "refs/tags/"* ]] && VERSION=$(echo $VERSION | sed -e 's/^v//')
+          VERSION=$DOCKER_VERSION-${{ github.job }}
           echo VERSION=$VERSION
 
           docker tag image $IMAGE_ID:$VERSION
@@ -782,9 +725,7 @@ jobs:
 
           IMAGE_ID=$REGISTRY_URL/$DOCKER_IMAGE_NAME
           echo IMAGE_ID=$IMAGE_ID
-
-          VERSION=$(echo "${{ github.ref }}" | sed -e 's,.*/\(.*\),\1,')-${{ github.job }}
-          [[ "${{ github.ref }}" == "refs/tags/"* ]] && VERSION=$(echo $VERSION | sed -e 's/^v//')
+          VERSION=$DOCKER_VERSION-${{ github.job }}
           echo VERSION=$VERSION
 
           docker tag image $IMAGE_ID:$VERSION
@@ -797,9 +738,7 @@ jobs:
 #
 #          IMAGE_ID=$REGISTRY_URL/$DOCKER_IMAGE_NAME
 #          echo IMAGE_ID=$IMAGE_ID
-#
-#          VERSION=$(echo "${{ github.ref }}" | sed -e 's,.*/\(.*\),\1,')-${{ github.job }}
-#          [[ "${{ github.ref }}" == "refs/tags/"* ]] && VERSION=$(echo $VERSION | sed -e 's/^v//')
+#          VERSION=$DOCKER_VERSION-${{ github.job }}
 #          echo VERSION=$VERSION
 #
 #          docker tag image $IMAGE_ID:$VERSION
@@ -830,9 +769,7 @@ jobs:
 
           IMAGE_ID=$REGISTRY_URL/$DOCKER_IMAGE_NAME
           echo IMAGE_ID=$IMAGE_ID
-
-          VERSION=$(echo "${{ github.ref }}" | sed -e 's,.*/\(.*\),\1,')-${{ github.job }}
-          [[ "${{ github.ref }}" == "refs/tags/"* ]] && VERSION=$(echo $VERSION | sed -e 's/^v//')
+          VERSION=$DOCKER_VERSION-${{ github.job }}
           echo VERSION=$VERSION
 
           docker tag image $IMAGE_ID:$VERSION
@@ -845,9 +782,7 @@ jobs:
 
           IMAGE_ID=$REGISTRY_URL/$DOCKER_IMAGE_NAME
           echo IMAGE_ID=$IMAGE_ID
-
-          VERSION=$(echo "${{ github.ref }}" | sed -e 's,.*/\(.*\),\1,')-${{ github.job }}
-          [[ "${{ github.ref }}" == "refs/tags/"* ]] && VERSION=$(echo $VERSION | sed -e 's/^v//')
+          VERSION=$DOCKER_VERSION-${{ github.job }}
           echo VERSION=$VERSION
 
           docker tag image $IMAGE_ID:$VERSION
@@ -860,9 +795,7 @@ jobs:
 #
 #          IMAGE_ID=$REGISTRY_URL/$DOCKER_IMAGE_NAME
 #          echo IMAGE_ID=$IMAGE_ID
-#
-#          VERSION=$(echo "${{ github.ref }}" | sed -e 's,.*/\(.*\),\1,')-${{ github.job }}
-#          [[ "${{ github.ref }}" == "refs/tags/"* ]] && VERSION=$(echo $VERSION | sed -e 's/^v//')
+#          VERSION=$DOCKER_VERSION-${{ github.job }}
 #          echo VERSION=$VERSION
 #
 #          docker tag image $IMAGE_ID:$VERSION
@@ -891,9 +824,7 @@ jobs:
 
           IMAGE_ID=$REGISTRY_URL/$DOCKER_IMAGE_NAME
           echo IMAGE_ID=$IMAGE_ID
-
-          VERSION=$(echo "${{ github.ref }}" | sed -e 's,.*/\(.*\),\1,')-${{ github.job }}
-          [[ "${{ github.ref }}" == "refs/tags/"* ]] && VERSION=$(echo $VERSION | sed -e 's/^v//')
+          VERSION=$DOCKER_VERSION-${{ github.job }}
           echo VERSION=$VERSION
 
           docker tag image $IMAGE_ID:$VERSION
@@ -906,9 +837,7 @@ jobs:
 
           IMAGE_ID=$REGISTRY_URL/$DOCKER_IMAGE_NAME
           echo IMAGE_ID=$IMAGE_ID
-
-          VERSION=$(echo "${{ github.ref }}" | sed -e 's,.*/\(.*\),\1,')-${{ github.job }}
-          [[ "${{ github.ref }}" == "refs/tags/"* ]] && VERSION=$(echo $VERSION | sed -e 's/^v//')
+          VERSION=$DOCKER_VERSION-${{ github.job }}
           echo VERSION=$VERSION
 
           docker tag image $IMAGE_ID:$VERSION
@@ -921,9 +850,7 @@ jobs:
 #
 #          IMAGE_ID=$REGISTRY_URL/$DOCKER_IMAGE_NAME
 #          echo IMAGE_ID=$IMAGE_ID
-#
-#          VERSION=$(echo "${{ github.ref }}" | sed -e 's,.*/\(.*\),\1,')-${{ github.job }}
-#          [[ "${{ github.ref }}" == "refs/tags/"* ]] && VERSION=$(echo $VERSION | sed -e 's/^v//')
+#          VERSION=$DOCKER_VERSION-${{ github.job }}
 #          echo VERSION=$VERSION
 #
 #          docker tag image $IMAGE_ID:$VERSION
