@@ -9,5 +9,6 @@
     "editor.fontFamily": "\"等距更纱黑体 SC\", Consolas, 'Courier New', monospace",
     "editor.fontSize": 16,
     "editor.fontLigatures": true,
-    "explorer.confirmDelete": false
+    "explorer.confirmDelete": false,
+    "files.autoSave": "off"
 }

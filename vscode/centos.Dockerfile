@@ -42,7 +42,7 @@ RUN echo "**** update linux ****" && \
     rm -rf /tmp/* /var/tmp/* /var/cache/yum
 
 # sqlite版本低, 无法使用django(python框架，为后面扩展)
-RUN curl -SL '${SQLITE_URL}' -o sqlite-autoconf.tar.gz &&\
+RUN curl -fSL $SQLITE_URL -o sqlite-autoconf.tar.gz &&\
     mkdir sqlite-autoconf &&\
     tar -zxvf sqlite-autoconf.tar.gz -C sqlite-autoconf --strip-components=1 &&\
     cd sqlite-autoconf && ./configure --prefix=/usr/local && make && make install &&\
@@ -98,7 +98,7 @@ RUN echo "**** install code-server ****" && \
     curl -o /tmp/code.tar.gz -L "${CODE_URL}" && \
     mkdir -p /usr/lib/code-server &&\
     tar xzf /tmp/code.tar.gz -C /usr/lib/code-server/ --strip-components=1 && \
-    ln -s /usr/lib/code-server/code-server /usr/bin/code-server &&\
+    ln -s /usr/lib/code-server/bin/code-server /usr/bin/code-server &&\
     rm -rf /tmp/*
 
 # install code server extension
