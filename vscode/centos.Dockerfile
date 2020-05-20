@@ -99,7 +99,7 @@ RUN echo "**** install code-server ****" && \
     curl -o /tmp/code.tar.gz -fSL $CODE_URL && \
     mkdir -p /usr/lib/code-server &&\
     tar xzf /tmp/code.tar.gz -C /usr/lib/code-server/ --strip-components=1 && \
-    ln -s /usr/lib/code-server/bin/code-server /usr/bin/code-server &&\
+    ln -s /usr/lib/code-server/code-server /usr/bin/code-server &&\
     rm -rf /tmp/*
 
 # install code server extension
