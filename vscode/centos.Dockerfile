@@ -20,19 +20,13 @@ ENV container docker
 # COPY RPM-GPG-KEY-* /etc/pki/rpm-gpg/
 RUN if [ ! -z ${LINUX_MIRRORS+x} ]; then \
         mv /etc/yum.repos.d/CentOS-Base.repo /etc/yum.repos.d/CentOS-Base.repo.bak &&\
-        curl -fsSL ${LINUX_MIRRORS}/repo/Centos-7.repo -o /etc/yum.repos.d/CentOS-Base.repo &&\
+        curl -fsSL ${LINUX_MIRRORS}/repo/Centos-8.repo -o /etc/yum.repos.d/CentOS-Base.repo &&\
         sed -i -e '/mirrors.cloud.aliyuncs.com/d' -e '/mirrors.aliyuncs.com/d' /etc/yum.repos.d/CentOS-Base.repo &&\
-        sed -i 's/gpgcheck=1/gpgcheck=0/g' /etc/yum.repos.d/CentOS-Base.repo &&\
-        curl -fsSL ${LINUX_MIRRORS}/repo/epel-7.repo -o /etc/yum.repos.d/epel.repo &&\
-        echo "[kubernetes]" >> /etc/yum.repos.d/kubernetes.repo &&\
-        echo "name=Kubernetes" >> /etc/yum.repos.d/kubernetes.repo &&\
-        echo "baseurl=${LINUX_MIRRORS}/kubernetes/yum/repos/kubernetes-el7-x86_64/" >> /etc/yum.repos.d/kubernetes.repo &&\
-        echo "enabled=1" >> /etc/yum.repos.d/kubernetes.repo &&\
-        echo "gpgcheck=0" >> /etc/yum.repos.d/kubernetes.repo &&\
-        echo "repo_gpgcheck=0" >> /etc/yum.repos.d/kubernetes.repo &&\
-        echo "gpgkey=${LINUX_MIRRORS}/kubernetes/yum/doc/yum-key.gpg ${LINUX_MIRRORS}/kubernetes/yum/doc/rpm-package-key.gpg" >> /etc/yum.repos.d/kubernetes.repo &&\
-        echo "" >> /etc/yum.repos.d/kubernetes.repo; \
+        sed -i 's/gpgcheck=1/gpgcheck=0/g' /etc/yum.repos.d/CentOS-Base.repo; \
+        #curl -fsSL ${LINUX_MIRRORS}/repo/epel-8.repo -o /etc/yum.repos.d/epel.repo &&\
     fi &&\
+    #yum install https://dl.fedoraproject.org/pub/epel/epel-release-latest-8.noarch.rpm
+    yum install epel-release && dnf config-manager --set-enabled PowerTools &&\
     yum clean all && yum makecache && yum update -y &&\
     yum install -y sudo curl git jq net-tools zsh p7zip nano fontconfig ntpdate dpkg openssl  \
                 gcc glibc-devel zlib-devel libstdc++-static gcc-c++ make openssl-devel libffi-devel && \

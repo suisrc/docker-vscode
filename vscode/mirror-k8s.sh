@@ -30,7 +30,14 @@ curl -fsSL ${LINUX_MIRRORS}/repo/Centos-7.repo -o /etc/yum.repos.d/CentOS-Base.r
 sed -i -e '/mirrors.cloud.aliyuncs.com/d' -e '/mirrors.aliyuncs.com/d' /etc/yum.repos.d/CentOS-Base.repo &&\
 sed -i 's/gpgcheck=1/gpgcheck=0/g' /etc/yum.repos.d/CentOS-Base.repo &&\
 curl -fsSL ${LINUX_MIRRORS}/repo/epel-7.repo -o /etc/yum.repos.d/epel.repo;
-
+echo "[kubernetes]" >> /etc/yum.repos.d/kubernetes.repo &&\
+echo "name=Kubernetes" >> /etc/yum.repos.d/kubernetes.repo &&\
+echo "baseurl=${LINUX_MIRRORS}/kubernetes/yum/repos/kubernetes-el7-x86_64/" >> /etc/yum.repos.d/kubernetes.repo &&\
+echo "enabled=1" >> /etc/yum.repos.d/kubernetes.repo &&\
+echo "gpgcheck=0" >> /etc/yum.repos.d/kubernetes.repo &&\
+echo "repo_gpgcheck=0" >> /etc/yum.repos.d/kubernetes.repo &&\
+echo "gpgkey=${LINUX_MIRRORS}/kubernetes/yum/doc/yum-key.gpg ${LINUX_MIRRORS}/kubernetes/yum/doc/rpm-package-key.gpg" >> /etc/yum.repos.d/kubernetes.repo &&\
+echo "" >> /etc/yum.repos.d/kubernetes.repo; \
 # debian
 mv /etc/apt/sources.list /etc/apt/sources.list.bak && \
 LINUX_MIRRORS=http://mirrors.aliyuncs.com &&\
