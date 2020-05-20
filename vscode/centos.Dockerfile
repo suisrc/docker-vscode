@@ -1,6 +1,6 @@
-FROM centos:7
+FROM centos:8
 # args
-ARG CODE_URL=https://github.com/cdr/code-server/releases/download/3.2.0/code-server-3.2.0-linux-x86_64.tar.gz
+ARG CODE_URL
 ARG CODE_RELEASE
 
 ARG FONT_URL
@@ -9,8 +9,6 @@ ARG FONT_RELEASE
 ARG OH_MY_ZSH_SH_URL
 ARG OH_MY_ZSH_SUGGES
 
-ARG SQLITE_URL=https://www.sqlite.org/2020/sqlite-autoconf-3310100.tar.gz
-
 ARG LINUX_MIRRORS
 #ARG LINUX_MIRRORS=http://mirrors.aliyun.com
 
@@ -18,10 +16,9 @@ ARG LINUX_MIRRORS
 LABEL maintainer="suisrc@outlook.com"
 
 ENV container docker
-# linux and softs
+# update linux
 # COPY RPM-GPG-KEY-* /etc/pki/rpm-gpg/
-RUN echo "**** update linux ****" && \
-    if [ ! -z ${LINUX_MIRRORS+x} ]; then \
+RUN if [ ! -z ${LINUX_MIRRORS+x} ]; then \
         mv /etc/yum.repos.d/CentOS-Base.repo /etc/yum.repos.d/CentOS-Base.repo.bak &&\
         curl -fsSL ${LINUX_MIRRORS}/repo/Centos-7.repo -o /etc/yum.repos.d/CentOS-Base.repo &&\
         sed -i -e '/mirrors.cloud.aliyuncs.com/d' -e '/mirrors.aliyuncs.com/d' /etc/yum.repos.d/CentOS-Base.repo &&\
@@ -36,27 +33,13 @@ RUN echo "**** update linux ****" && \
         echo "gpgkey=${LINUX_MIRRORS}/kubernetes/yum/doc/yum-key.gpg ${LINUX_MIRRORS}/kubernetes/yum/doc/rpm-package-key.gpg" >> /etc/yum.repos.d/kubernetes.repo &&\
         echo "" >> /etc/yum.repos.d/kubernetes.repo; \
     fi &&\
-    yum install -y  https://repo.ius.io/ius-release-el7.rpm &&\
     yum clean all && yum makecache && yum update -y &&\
-    yum install -y sudo curl git222 jq net-tools zsh p7zip nano fontconfig ntpdate dpkg openssl  \
+    yum install -y sudo curl git jq net-tools zsh p7zip nano fontconfig ntpdate dpkg openssl  \
                 gcc glibc-devel zlib-devel libstdc++-static gcc-c++ make openssl-devel libffi-devel && \
     rm -rf /tmp/* /var/tmp/* /var/cache/yum
 
-# sqlite版本低, 无法使用django(python框架，为后面扩展)
-RUN curl -fSL $SQLITE_URL -o sqlite-autoconf.tar.gz &&\
-    mkdir sqlite-autoconf &&\
-    tar -zxvf sqlite-autoconf.tar.gz -C sqlite-autoconf --strip-components=1 &&\
-    cd sqlite-autoconf && ./configure --prefix=/usr/local && make && make install &&\
-    cd .. && rm -rf sqlite-autoconf &&\
-    mv /usr/bin/sqlite3  /usr/bin/sqlite3_old &&\
-    ln -s /usr/local/bin/sqlite3   /usr/bin/sqlite3 &&\
-    echo "/usr/local/lib" > /etc/ld.so.conf.d/sqlite3.conf &&\
-    ldconfig &&\
-    sqlite3 -version
-
-# fonts
-RUN echo "**** install sarasa-gothic ****" && \
-    if [ -z ${FONT_URL+x} ]; then \
+# install sarasa-gothic
+RUN if [ -z ${FONT_URL+x} ]; then \
         if [ -z ${FONT_RELEASE+x} ]; then \
             FONT_RELEASE=$(curl -sX GET "https://api.github.com/repos/suisrc/Sarasa-Gothic/releases/latest" \
             | awk '/tag_name/{print $4;exit}' FS='[""]'); \
@@ -71,11 +54,10 @@ RUN echo "**** install sarasa-gothic ****" && \
     fc-cache -f -v &&\
     rm -rf /tmp/*
 
-# zsh
+# install oh-my-zsh
 # https://raw.githubusercontent.com/robbyrussell/oh-my-zsh/master/tools/install.sh => https://gitee.com/mirrors/oh-my-zsh/raw/master/tools/install.sh
 # https://github.com/zsh-users/zsh-autosuggestions => https://gitee.com/ncr/zsh-autosuggestions
-RUN echo "**** install oh-my-zsh ****" && \
-    if [ -z ${OH_MY_ZSH_SH_URL+x} ]; then \
+RUN if [ -z ${OH_MY_ZSH_SH_URL+x} ]; then \
         OH_MY_ZSH_SH_URL="https://raw.githubusercontent.com/ohmyzsh/ohmyzsh/master/tools/install.sh"; \
     fi &&\
     if [ -z ${OH_MY_ZSH_SUGGES+x} ]; then \
@@ -86,9 +68,8 @@ RUN echo "**** install oh-my-zsh ****" && \
     echo "source ~/.oh-my-zsh/plugins/zsh-autosuggestions/zsh-autosuggestions.zsh" >> /root/.zshrc &&\
     sed -i "s/ZSH_THEME=\"robbyrussell\"/ZSH_THEME=\"agnoster\"/g" /root/.zshrc
 
-# Code-Server
-RUN echo "**** install code-server ****" && \
-    if [ -z ${CODE_URL+x} ]; then \
+# install code-server
+RUN if [ -z ${CODE_URL+x} ]; then \
         if [ -z ${CODE_RELEASE+x} ]; then \
             CODE_RELEASE=$(curl -sX GET "https://api.github.com/repos/cdr/code-server/releases/latest" \
             | awk '/tag_name/{print $4;exit}' FS='[""]'); \
@@ -99,7 +80,7 @@ RUN echo "**** install code-server ****" && \
     curl -o /tmp/code.tar.gz -fSL $CODE_URL && \
     mkdir -p /usr/lib/code-server &&\
     tar xzf /tmp/code.tar.gz -C /usr/lib/code-server/ --strip-components=1 && \
-    ln -s /usr/lib/code-server/code-server /usr/bin/code-server &&\
+    ln -s /usr/lib/code-server/bin/code-server /usr/bin/code-server &&\
     rm -rf /tmp/*
 
 # install code server extension
@@ -107,8 +88,8 @@ ENV SERVICE_URL=https://marketplace.visualstudio.com/_apis/public/gallery \
     ITEM_URL=https://marketplace.visualstudio.com/items \
     NODE_EXTRA_CA_CERTS=/etc/ssl/certs/ca-bundle.crt
 
-RUN echo "**** install code-server extension ****" && \
-    code-server --install-extension ms-ceintl.vscode-language-pack-zh-hans &&\
+# install code-server extension
+RUN code-server --install-extension ms-ceintl.vscode-language-pack-zh-hans &&\
     code-server --install-extension mhutchie.git-graph &&\
     code-server --install-extension esbenp.prettier-vscode 
 

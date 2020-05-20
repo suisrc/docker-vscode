@@ -3,7 +3,7 @@ FROM debian:buster-slim
 #FROM debian:buster
 
 # args
-ARG CODE_URL=https://github.com/cdr/code-server/releases/download/3.2.0/code-server-3.2.0-linux-x86_64.tar.gz
+ARG CODE_URL
 ARG CODE_RELEASE
 
 ARG FONT_URL
@@ -19,9 +19,8 @@ ARG LINUX_MIRRORS
 LABEL maintainer="suisrc@outlook.com"
 
 ENV container docker
-# linux and softs
-RUN echo "**** update linux ****" && \
-    if [ ! -z ${LINUX_MIRRORS+x} ]; then \
+# update linux
+RUN if [ ! -z ${LINUX_MIRRORS+x} ]; then \
         mv /etc/apt/sources.list /etc/apt/sources.list.bak && \
         echo "deb ${LINUX_MIRRORS}/debian/ buster main non-free contrib" >>/etc/apt/sources.list &&\
         echo "deb-src ${LINUX_MIRRORS}/debian/ buster main non-free contrib" >>/etc/apt/sources.list &&\
@@ -38,9 +37,8 @@ RUN echo "**** update linux ****" && \
         gcc build-essential libz-dev zlib1g-dev &&\
     rm -rf /tmp/* /var/tmp/* /var/lib/apt/lists/*
 
-# fonts
-RUN echo "**** install sarasa-gothic ****" && \
-    if [ -z ${FONT_URL+x} ]; then \
+# install sarasa-gothic
+RUN if [ -z ${FONT_URL+x} ]; then \
         if [ -z ${FONT_RELEASE+x} ]; then \
             FONT_RELEASE=$(curl -sX GET "https://api.github.com/repos/suisrc/Sarasa-Gothic/releases/latest" \
             | awk '/tag_name/{print $4;exit}' FS='[""]'); \
@@ -55,11 +53,10 @@ RUN echo "**** install sarasa-gothic ****" && \
     fc-cache -f -v &&\
     rm -rf /tmp/*
 
-# zsh
+# install oh-my-zsh
 # https://raw.githubusercontent.com/robbyrussell/oh-my-zsh/master/tools/install.sh => https://gitee.com/mirrors/oh-my-zsh/raw/master/tools/install.sh
 # https://github.com/zsh-users/zsh-autosuggestions => https://gitee.com/ncr/zsh-autosuggestions
-RUN echo "**** install oh-my-zsh ****" && \
-    if [ -z ${OH_MY_ZSH_SH_URL+x} ]; then \
+RUN if [ -z ${OH_MY_ZSH_SH_URL+x} ]; then \
         OH_MY_ZSH_SH_URL="https://raw.githubusercontent.com/ohmyzsh/ohmyzsh/master/tools/install.sh"; \
     fi &&\
     if [ -z ${OH_MY_ZSH_SUGGES+x} ]; then \
@@ -70,10 +67,9 @@ RUN echo "**** install oh-my-zsh ****" && \
     echo "source ~/.oh-my-zsh/plugins/zsh-autosuggestions/zsh-autosuggestions.zsh" >> /root/.zshrc &&\
     sed -i "s/ZSH_THEME=\"robbyrussell\"/ZSH_THEME=\"agnoster\"/g" /root/.zshrc
 
-# Code-Server
+# install code-server
 # tar xzf /tmp/code.tar.gz -C /usr/local/bin/ --strip-components=1 --wildcards code-server*/code-server && \
-RUN echo "**** install code-server ****" && \
-    if [ -z ${CODE_URL+x} ]; then \
+RUN if [ -z ${CODE_URL+x} ]; then \
         if [ -z ${CODE_RELEASE+x} ]; then \
             CODE_RELEASE=$(curl -sX GET "https://api.github.com/repos/cdr/code-server/releases/latest" \
             | awk '/tag_name/{print $4;exit}' FS='[""]'); \
@@ -84,15 +80,15 @@ RUN echo "**** install code-server ****" && \
     curl -o /tmp/code.tar.gz -L "${CODE_URL}" && \
     mkdir -p /usr/lib/code-server &&\
     tar xzf /tmp/code.tar.gz -C /usr/lib/code-server/ --strip-components=1 && \
-    ln -s /usr/lib/code-server/code-server /usr/bin/code-server &&\
+    ln -s /usr/lib/code-server/bin/code-server /usr/bin/code-server &&\
     rm -rf /tmp/*
 
 # install code server extension
 ENV SERVICE_URL=https://marketplace.visualstudio.com/_apis/public/gallery \
     ITEM_URL=https://marketplace.visualstudio.com/items
 
-RUN echo "**** install code-server extension ****" && \
-    code-server --install-extension ms-ceintl.vscode-language-pack-zh-hans &&\
+# install code-server extension
+RUN code-server --install-extension ms-ceintl.vscode-language-pack-zh-hans &&\
     code-server --install-extension mhutchie.git-graph &&\
     code-server --install-extension esbenp.prettier-vscode
 

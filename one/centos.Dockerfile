@@ -15,17 +15,17 @@ ARG MAVEN_RELEASE=3.6.3
 ARG MAVEN_URL=https://downloads.apache.org/maven/maven-3/${MAVEN_RELEASE}/binaries/apache-maven-${MAVEN_RELEASE}-bin.tar.gz
 
 # install python
-RUN curl -fSL  $PY_URL -o python-autoconf.tar.gz &&\
-    mkdir python-autoconf && mkdir -p /usr/local/python3 &&\
-    tar -zxvf python-autoconf.tar.gz -C python-autoconf --strip-components=1 &&\
-    cd python-autoconf &&\
-    ./configure --prefix=/usr/local/python3 --with-ssl &&\
-    make && make install &&\
-    cd .. && rm -rf python-autoconf &&\
-    ln -s /usr/local/python3/bin/python3 /usr/local/bin/python3 &&\
-    ln -s /usr/local/python3/bin/pip3    /usr/local/bin/pip3 &&\
-    ln -s /usr/local/python3/bin/python3 /usr/local/bin/py &&\
-    pip3 install --upgrade pip && pip3 --version
+#RUN curl -fSL  $PY_URL -o python-autoconf.tar.gz &&\
+#    mkdir python-autoconf && mkdir -p /usr/local/python3 &&\
+#    tar -zxvf python-autoconf.tar.gz -C python-autoconf --strip-components=1 &&\
+#    cd python-autoconf &&\
+#    ./configure --prefix=/usr/local/python3 --with-ssl &&\
+#    make && make install &&\
+#    cd .. && rm -rf python-autoconf &&\
+#    ln -s /usr/local/python3/bin/python3 /usr/local/bin/python3 &&\
+#    ln -s /usr/local/python3/bin/pip3    /usr/local/bin/pip3 &&\
+#    ln -s /usr/local/python3/bin/python3 /usr/local/bin/py &&\
+#    pip3 install --upgrade pip && pip3 --version
 
 # python extension
 RUN mkdir /root/.pip &&\

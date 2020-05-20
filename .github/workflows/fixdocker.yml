@@ -3,12 +3,12 @@ name: DockerFix
 
 on:
   push:
-    branches: [ fix-1.44.2 ]
+    branches: [ fix-master ]
 
 env:
   GITHUB_IMAGE_NAME: vscode
   DOCKER_IMAGE_NAME: suisrc/vscode
-  DOCKER_VERSION: 1.44.2-01
+  DOCKER_VERSION: 1.45.1-01
 
 jobs:
   test:
