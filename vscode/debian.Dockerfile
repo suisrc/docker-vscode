@@ -1,6 +1,6 @@
 # FROM debian:stretch-slim
-# FROM debian:buster-slim
-FROM debian:buster
+FROM debian:buster-slim
+#FROM debian:buster
 
 # args
 ARG CODE_URL
@@ -12,7 +12,8 @@ ARG FONT_RELEASE
 ARG OH_MY_ZSH_SH_URL
 ARG OH_MY_ZSH_SUGGES
 
-ARG LINUX_MIRRORS=http://mirrors.aliyun.com
+ARG LINUX_MIRRORS
+#ARG LINUX_MIRRORS=http://mirrors.aliyun.com
 
 # set version label
 LABEL maintainer="suisrc@outlook.com"
@@ -107,9 +108,12 @@ COPY entrypoint.sh /usr/local/bin/
 
 # worksapce
 # 测试过程中发现，如果使用root账户，会导致程序部分插件没有访问User/文件夹的权限
-RUN mkdir -p /home/project && \
+RUN mkdir -p /home/project && mkdir -p /home/test/mirror &&\
     chmod +x /usr/local/bin/entrypoint.sh &&\
     mkdir -p /root/.local/share/code-server/User/globalStorage
+# test
+COPY [ 'test.*',   '/home/test/' ]
+COPY [ 'mirror-*', '/home/test/mirror/' ]
 
 WORKDIR  /home/project
 #VOLUME [ "/home/project" ]

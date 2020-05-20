@@ -30,9 +30,4 @@ RUN echo "**** install nodejs ****" &&\
     npm  --version
 
 # config china npm and aliyun yarn
-RUN npm install -g cnpm yarn tyarn &&\
-    npm config set registry https://registry.npm.taobao.org --global &&\
-    npm config set disturl https://npm.taobao.org/dist --global
-
-# 增加开发环境测试用例
-COPY *.js /home/test/
+RUN npm install -g cnpm yarn tyarn

@@ -13,5 +13,3 @@ RUN pip3 install --user pylint &&\
 # vscode extension
 RUN code-server --install-extension ms-python.python
 
-# 增加开发环境测试用例
-COPY *.py /home/test/

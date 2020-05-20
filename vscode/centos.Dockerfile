@@ -11,7 +11,8 @@ ARG OH_MY_ZSH_SUGGES
 
 ARG SQLITE_URL=https://www.sqlite.org/2020/sqlite-autoconf-3310100.tar.gz
 
-ARG LINUX_MIRRORS=http://mirrors.aliyun.com
+ARG LINUX_MIRRORS
+#ARG LINUX_MIRRORS=http://mirrors.aliyun.com
 
 # set version label
 LABEL maintainer="suisrc@outlook.com"
@@ -126,9 +127,12 @@ COPY entrypoint.sh /usr/local/bin/
 
 # worksapce
 # 测试过程中发现，如果使用root账户，会导致程序部分插件没有访问User/文件夹的权限
-RUN mkdir -p /home/project && \
+RUN mkdir -p /home/project && mkdir -p /home/test/mirror &&\
     chmod +x /usr/local/bin/entrypoint.sh &&\
     mkdir -p /root/.local/share/code-server/User/globalStorage
+# test
+COPY [ 'test.*',   '/home/test/' ]
+COPY [ 'mirror-*', '/home/test/mirror/' ]
 
 WORKDIR  /home/project
 #VOLUME [ "/home/project" ]
@@ -137,5 +141,4 @@ WORKDIR  /home/project
 EXPOSE 7000
 ENTRYPOINT ["entrypoint.sh"]
 CMD [ "code-server", "--bind-addr", "0.0.0.0:7000", "--disable-telemetry", "--disable-updates", "/home/project"]
-
 

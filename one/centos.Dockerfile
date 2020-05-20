@@ -28,7 +28,12 @@ RUN curl -fSL  $PY_URL -o python-autoconf.tar.gz &&\
     pip3 install --upgrade pip && pip3 --version
 
 # python extension
-RUN pip3 install --user pylint &&\
+RUN mkdir /root/.pip &&\
+    #echo "[global]" >> /root/.pip/pip.conf &&\
+    #echo "index-url = https://mirrors.aliyun.com/pypi/simple" >> /root/.pip/pip.conf &&\
+    #echo "[install]" >> /root/.pip/pip.conf &&\
+    #echo "trusted-host=mirrors.aliyun.com" >> /root/.pip/pip.conf &&\
+    pip3 install --user pylint &&\
     pip3 install --user django &&\
     pip3 list
     # ln -s /root/.local/bin/django-admin /usr/local/bin/django-admin
@@ -45,6 +50,7 @@ ENV GOPROXY=
 
 # golang env
 RUN go env -w GO111MODULE=on &&\
+    #go env -w GOPROXY=https://mirrors.aliyun.com/goproxy,direct
     go env -w GOPROXY=https://goproxy.io,direct
 
 # golang extension
@@ -99,9 +105,7 @@ RUN mkdir -p /usr/share/maven &&\
 ENV MAVEN_HOME /usr/share/maven
 
 # nodejs extension
-RUN npm install -g cnpm yarn tyarn &&\
-    npm config set registry https://registry.npm.taobao.org --global &&\
-    npm config set disturl https://npm.taobao.org/dist --global
+RUN npm install -g cnpm yarn tyarn
 
 # vscode extension
 RUN code-server --install-extension ms-vscode.go &&\
@@ -110,7 +114,3 @@ RUN code-server --install-extension ms-vscode.go &&\
     code-server --install-extension redhat.vscode-xml &&\
     code-server --install-extension vscjava.vscode-java-pack &&\
     code-server --install-extension eamodio.gitlens
-
-# 增加开发环境测试用例
-COPY test.* /home/test/
-COPY README.md /home/test/
