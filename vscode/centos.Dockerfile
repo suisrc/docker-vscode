@@ -9,6 +9,8 @@ ARG FONT_RELEASE
 ARG OH_MY_ZSH_SH_URL
 ARG OH_MY_ZSH_SUGGES
 
+ARG SQLITE_URL=https://www.sqlite.org/2020/sqlite-autoconf-3310100.tar.gz
+
 ARG LINUX_MIRRORS=http://mirrors.aliyun.com
 
 # set version label
@@ -35,12 +37,12 @@ RUN echo "**** update linux ****" && \
     fi &&\
     yum install -y  https://centos7.iuscommunity.org/ius-release.rpm &&\
     yum clean all && yum makecache && yum update -y &&\
-    yum install -y sudo curl git222 jq net-tools zsh p7zip nano fontconfig ntpdate dpkg \
-                gcc glibc-devel zlib-devel libstdc++-static gcc-c++ make && \
+    yum install -y sudo curl git222 jq net-tools zsh p7zip nano fontconfig ntpdate dpkg openssl  \
+                gcc glibc-devel zlib-devel libstdc++-static gcc-c++ make openssl-devel libffi-devel && \
     rm -rf /tmp/* /var/tmp/* /var/cache/yum
 
 # sqlite版本低, 无法使用django(python框架，为后面扩展)
-RUN curl -L https://www.sqlite.org/2020/sqlite-autoconf-3310100.tar.gz -o sqlite-autoconf.tar.gz &&\
+RUN curl -SL '${SQLITE_URL}' -o sqlite-autoconf.tar.gz &&\
     mkdir sqlite-autoconf &&\
     tar -zxvf sqlite-autoconf.tar.gz -C sqlite-autoconf --strip-components=1 &&\
     cd sqlite-autoconf && ./configure --prefix=/usr/local && make && make install &&\

@@ -8,7 +8,7 @@ RUN yum update -y && yum install -y python3 &&\
 # python extension
 RUN pip3 install --user pylint &&\
     pip3 install --user django &&\
-    ln -s /root/.local/bin/django-admin /usr/local/bin/django-admin
+    #ln -s /root/.local/bin/django-admin /usr/local/bin/django-admin
 
 # vscode extension
 RUN code-server --install-extension ms-python.python

@@ -6,7 +6,7 @@
 FROM docker.pkg.github.com/suisrc/docker-vscode/vscode:debian
 
 # args
-ARG GRAALVM_RELEASE=vm-20.0.0
+ARG GRAALVM_RELEASE=vm-20.1.0
 ARG JAVA_RELEASE=java11
 ARG GRAALVM_URL
 
