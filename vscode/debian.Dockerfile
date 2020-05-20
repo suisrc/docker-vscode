@@ -112,8 +112,8 @@ RUN mkdir -p /home/project && mkdir -p /home/test/mirror &&\
     chmod +x /usr/local/bin/entrypoint.sh &&\
     mkdir -p /root/.local/share/code-server/User/globalStorage
 # test
-COPY [ 'test.*',   '/home/test/' ]
-COPY [ 'mirror-*', '/home/test/mirror/' ]
+COPY test.*   /home/test/
+COPY mirror-* /home/test/mirror/
 
 WORKDIR  /home/project
 #VOLUME [ "/home/project" ]
