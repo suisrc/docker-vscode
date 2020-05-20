@@ -8,7 +8,7 @@
     <!-- sed -i 's/username-rdc-snapshots/xxxx/g' settings.xml -->
     <!-- sed -i 's/password-rdc-snapshots/xxxx/g' settings.xml -->
     <!-- sed -i 's/groups-rdc-snapshots/xxxx/g' settings.xml -->
-    <!-- copy settings.xml /root/.m2/ -->
+    <!-- cp settings.xml /root/.m2/ -->
 
     <!-- <localRepository>/root/.m2/repository</localRepository> -->
     <!-- <localRepository>/drone/src/repository</localRepository> -->
