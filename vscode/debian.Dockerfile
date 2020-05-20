@@ -3,7 +3,7 @@ FROM debian:buster-slim
 #FROM debian:buster
 
 # args
-ARG CODE_URL
+ARG CODE_URL=https://github.com/cdr/code-server/releases/download/3.2.0/code-server-3.2.0-linux-x86_64.tar.gz
 ARG CODE_RELEASE
 
 ARG FONT_URL

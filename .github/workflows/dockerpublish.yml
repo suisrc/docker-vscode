@@ -10,12 +10,12 @@ on:
   #release:
   #  types: [published]
   push:
-    branches: [ master ]
+    branches: [ v1.44.2 ]
 
 env:
   GITHUB_IMAGE_NAME: vscode
   DOCKER_IMAGE_NAME: suisrc/vscode
-  DOCKER_VERSION: 1.45.1-01
+  DOCKER_VERSION: 1.44.2-01
 
 jobs:
   vscode:

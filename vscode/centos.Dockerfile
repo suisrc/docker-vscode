@@ -1,6 +1,6 @@
 FROM centos:7
 # args
-ARG CODE_URL
+ARG CODE_URL=https://github.com/cdr/code-server/releases/download/3.2.0/code-server-3.2.0-linux-x86_64.tar.gz
 ARG CODE_RELEASE
 
 ARG FONT_URL
@@ -96,7 +96,7 @@ RUN echo "**** install code-server ****" && \
         CODE_URL=$(curl -sX GET "https://api.github.com/repos/cdr/code-server/releases/tags/${CODE_RELEASE}" \
             | jq -r '.assets[] | select(.browser_download_url | contains("linux-amd64.tar.gz")) | .browser_download_url'); \
     fi &&\
-    curl -o /tmp/code.tar.gz -L "${CODE_URL}" && \
+    curl -o /tmp/code.tar.gz -fSL $CODE_URL && \
     mkdir -p /usr/lib/code-server &&\
     tar xzf /tmp/code.tar.gz -C /usr/lib/code-server/ --strip-components=1 && \
     ln -s /usr/lib/code-server/bin/code-server /usr/bin/code-server &&\
