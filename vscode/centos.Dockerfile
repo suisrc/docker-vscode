@@ -29,7 +29,7 @@ RUN if [ ! -z ${LINUX_MIRRORS+x} ]; then \
     yum install -y epel-release &&\
     dnf install -y 'dnf-command(config-manager)' && dnf config-manager --set-enabled PowerTools &&\
     yum clean all && yum makecache && yum update -y &&\
-    yum install -y sudo curl git jq net-tools zsh p7zip nano fontconfig ntpdate dpkg openssl  \
+    yum install -y sudo curl git jq net-tools zsh p7zip nano fontconfig dpkg openssl  \
                 gcc glibc-devel zlib-devel libstdc++-static gcc-c++ make openssl-devel libffi-devel && \
     rm -rf /tmp/* /var/tmp/* /var/cache/yum
 
