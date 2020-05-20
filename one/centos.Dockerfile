@@ -16,7 +16,7 @@ ARG MAVEN_URL=https://downloads.apache.org/maven/maven-3/${MAVEN_RELEASE}/binari
 
 # install python
 RUN curl -fSL  $PY_URL -o python-autoconf.tar.gz &&\
-    mddir python-autoconf && mkdir -p /usr/local/python3 &&\
+    mkdir python-autoconf && mkdir -p /usr/local/python3 &&\
     tar -zxvf python-autoconf.tar.gz -C python-autoconf --strip-components=1 &&\
     cd python-autoconf &&\
     ./configure --prefix=/usr/local/python3 --with-ssl &&\
