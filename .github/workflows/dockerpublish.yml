@@ -11,7 +11,7 @@ on:
   #release:
   #  types: [published]
   push:
-    branches: [ master ]
+    branches: [ master1 ]
 
 env:
   GITHUB_IMAGE_NAME: vscode

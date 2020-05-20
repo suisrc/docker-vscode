@@ -110,6 +110,7 @@ ENV MAVEN_HOME /usr/share/maven
 
 # nodejs extension
 RUN npm install -g cnpm yarn tyarn
+ENV PATH=/graalvm/languages/js/bin:$PATH
 
 # vscode extension
 RUN code-server --install-extension ms-vscode.go &&\
