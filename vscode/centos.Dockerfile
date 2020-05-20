@@ -26,7 +26,7 @@ RUN if [ ! -z ${LINUX_MIRRORS+x} ]; then \
         #curl -fsSL ${LINUX_MIRRORS}/repo/epel-8.repo -o /etc/yum.repos.d/epel.repo &&\
     fi &&\
     #yum install https://dl.fedoraproject.org/pub/epel/epel-release-latest-8.noarch.rpm
-    yum install epel-release && dnf config-manager --set-enabled PowerTools &&\
+    yum install -y epel-release && dnf config-manager --set-enabled PowerTools &&\
     yum clean all && yum makecache && yum update -y &&\
     yum install -y sudo curl git jq net-tools zsh p7zip nano fontconfig ntpdate dpkg openssl  \
                 gcc glibc-devel zlib-devel libstdc++-static gcc-c++ make openssl-devel libffi-devel && \
