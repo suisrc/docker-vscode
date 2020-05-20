@@ -1,6 +1,7 @@
 # github ci
 # 从1.44.2-11之后，aliyun只提供centos版本，可以从docker.io下载debian版本
 # 从1.45.1-01版本后，使用固定的小版本，信息不会与发布版本对应
+# registry.cn-beijing.aliyuncs.com -> registry.cn-hongkong.aliyuncs.com
 # 精简版使用debian系统
 name: Docker
 
@@ -16,6 +17,10 @@ env:
   GITHUB_IMAGE_NAME: vscode
   DOCKER_IMAGE_NAME: suisrc/vscode
   DOCKER_VERSION: 1.44.2-01
+  GITHUB_REGISTRY: docker.pkg.github.com
+  QUAY_REGISTRY: quay.io
+  DOCKER_REGISTRY: docker.io
+  ALIYUN_REGISTRY: registry.cn-hongkong.aliyuncs.com
 
 jobs:
   vscode:
@@ -30,7 +35,7 @@ jobs:
 
       - name: Push github image
         run: |
-          REGISTRY_URL=docker.pkg.github.com
+          REGISTRY_URL=$GITHUB_REGISTRY
           echo "${{ secrets.GITHUB_TOKEN }}" | docker login $REGISTRY_URL -u ${{ github.actor }} --password-stdin
 
           IMAGE_ID=$REGISTRY_URL/${{ github.repository }}/$GITHUB_IMAGE_NAME
@@ -47,7 +52,7 @@ jobs:
       - name: Push quay image
         #if: startsWith(github.ref, 'refs/tags/v')
         run: |
-          REGISTRY_URL=quay.io
+          REGISTRY_URL=$QUAY_REGISTRY
           echo "${{ secrets.QUAY_TOKEN }}" | docker login $REGISTRY_URL -u ${{ secrets.QUAY_USER }} --password-stdin
 
           IMAGE_ID=$REGISTRY_URL/$DOCKER_IMAGE_NAME
@@ -61,7 +66,7 @@ jobs:
       - name: Push docker image
         #if: startsWith(github.ref, 'refs/tags/v')
         run: |
-          REGISTRY_URL=docker.io
+          REGISTRY_URL=$DOCKER_REGISTRY
           echo "${{ secrets.DOCKER_TOKEN }}" | docker login $REGISTRY_URL -u ${{ secrets.DOCKER_USER }} --password-stdin
 
           IMAGE_ID=$REGISTRY_URL/$DOCKER_IMAGE_NAME
@@ -74,7 +79,7 @@ jobs:
 
       - name: Push aliyun image
         run: |
-          REGISTRY_URL=registry.cn-beijing.aliyuncs.com
+          REGISTRY_URL=$ALIYUN_REGISTRY
           echo "${{ secrets.ALIYUN_TOKEN }}" | docker login $REGISTRY_URL -u ${{ secrets.ALIYUN_USER }} --password-stdin
 
           IMAGE_ID=$REGISTRY_URL/$DOCKER_IMAGE_NAME
@@ -97,7 +102,7 @@ jobs:
 
       - name: Push github image
         run: |
-          REGISTRY_URL=docker.pkg.github.com
+          REGISTRY_URL=$GITHUB_REGISTRY
           echo "${{ secrets.GITHUB_TOKEN }}" | docker login $REGISTRY_URL -u ${{ github.actor }} --password-stdin
 
           IMAGE_ID=$REGISTRY_URL/${{ github.repository }}/$GITHUB_IMAGE_NAME
@@ -123,7 +128,7 @@ jobs:
       - name: Push github latest image
         #if: startsWith(github.ref, 'refs/tags/v')
         run: |
-          REGISTRY_URL=docker.pkg.github.com
+          REGISTRY_URL=$GITHUB_REGISTRY
           echo "${{ secrets.GITHUB_TOKEN }}" | docker login $REGISTRY_URL -u ${{ github.actor }} --password-stdin
 
           IMAGE_ID=$REGISTRY_URL/${{ github.repository }}/$GITHUB_IMAGE_NAME
@@ -142,7 +147,7 @@ jobs:
       - name: Push quay image
         #if: startsWith(github.ref, 'refs/tags/v')
         run: |
-          REGISTRY_URL=quay.io
+          REGISTRY_URL=$QUAY_REGISTRY
           echo "${{ secrets.QUAY_TOKEN }}" | docker login $REGISTRY_URL -u ${{ secrets.QUAY_USER }} --password-stdin
 
           IMAGE_ID=$REGISTRY_URL/$DOCKER_IMAGE_NAME
@@ -156,7 +161,7 @@ jobs:
       - name: Push docker image
         #if: startsWith(github.ref, 'refs/tags/v')
         run: |
-          REGISTRY_URL=docker.io
+          REGISTRY_URL=$DOCKER_REGISTRY
           echo "${{ secrets.DOCKER_TOKEN }}" | docker login $REGISTRY_URL -u ${{ secrets.DOCKER_USER }} --password-stdin
 
           IMAGE_ID=$REGISTRY_URL/$DOCKER_IMAGE_NAME
@@ -169,7 +174,7 @@ jobs:
 
       - name: Push aliyun image
         run: |
-          REGISTRY_URL=registry.cn-beijing.aliyuncs.com
+          REGISTRY_URL=$ALIYUN_REGISTRY
           echo "${{ secrets.ALIYUN_TOKEN }}" | docker login $REGISTRY_URL -u ${{ secrets.ALIYUN_USER }} --password-stdin
 
           IMAGE_ID=$REGISTRY_URL/$DOCKER_IMAGE_NAME
@@ -192,7 +197,7 @@ jobs:
 
       - name: Push github image
         run: |
-          REGISTRY_URL=docker.pkg.github.com
+          REGISTRY_URL=$GITHUB_REGISTRY
           echo "${{ secrets.GITHUB_TOKEN }}" | docker login $REGISTRY_URL -u ${{ github.actor }} --password-stdin
 
           IMAGE_ID=$REGISTRY_URL/${{ github.repository }}/$GITHUB_IMAGE_NAME
@@ -207,7 +212,7 @@ jobs:
       - name: Push github latest image
         #if: startsWith(github.ref, 'refs/tags/v')
         run: |
-          REGISTRY_URL=docker.pkg.github.com
+          REGISTRY_URL=$GITHUB_REGISTRY
           echo "${{ secrets.GITHUB_TOKEN }}" | docker login $REGISTRY_URL -u ${{ github.actor }} --password-stdin
 
           IMAGE_ID=$REGISTRY_URL/${{ github.repository }}/$GITHUB_IMAGE_NAME
@@ -222,7 +227,7 @@ jobs:
       - name: Push docker image
         #if: startsWith(github.ref, 'refs/tags/v')
         run: |
-          REGISTRY_URL=docker.io
+          REGISTRY_URL=$DOCKER_REGISTRY
           echo "${{ secrets.DOCKER_TOKEN }}" | docker login $REGISTRY_URL -u ${{ secrets.DOCKER_USER }} --password-stdin
 
           IMAGE_ID=$REGISTRY_URL/$DOCKER_IMAGE_NAME
@@ -244,7 +249,7 @@ jobs:
 
       - name: Build image
         run: |
-          REGISTRY_URL=docker.pkg.github.com
+          REGISTRY_URL=$GITHUB_REGISTRY
           DOCKER_DIR=${{ github.job }}
           DOCKER_DIR=${DOCKER_DIR##*-}
           DOCKER_BOS=${{ github.job }}
@@ -255,7 +260,7 @@ jobs:
 
       - name: Push docker image
         run: |
-          REGISTRY_URL=docker.io
+          REGISTRY_URL=$DOCKER_REGISTRY
           echo "${{ secrets.DOCKER_TOKEN }}" | docker login $REGISTRY_URL -u ${{ secrets.DOCKER_USER }} --password-stdin
 
           IMAGE_ID=$REGISTRY_URL/$DOCKER_IMAGE_NAME
@@ -268,7 +273,7 @@ jobs:
 
       - name: Push quay image
         run: |
-          REGISTRY_URL=quay.io
+          REGISTRY_URL=$QUAY_REGISTRY
           echo "${{ secrets.QUAY_TOKEN }}" | docker login $REGISTRY_URL -u ${{ secrets.QUAY_USER }} --password-stdin
 
           IMAGE_ID=$REGISTRY_URL/$DOCKER_IMAGE_NAME
@@ -281,7 +286,7 @@ jobs:
 
       - name: Push aliyun image
         run: |
-          REGISTRY_URL=registry.cn-beijing.aliyuncs.com
+          REGISTRY_URL=$ALIYUN_REGISTRY
           echo "${{ secrets.ALIYUN_TOKEN }}" | docker login $REGISTRY_URL -u ${{ secrets.ALIYUN_USER }} --password-stdin
 
           IMAGE_ID=$REGISTRY_URL/$DOCKER_IMAGE_NAME
@@ -301,7 +306,7 @@ jobs:
 
       - name: Build image
         run: |
-          REGISTRY_URL=docker.pkg.github.com
+          REGISTRY_URL=$GITHUB_REGISTRY
           DOCKER_DIR=${{ github.job }}
           DOCKER_DIR=${DOCKER_DIR##*-}
           DOCKER_BOS=${{ github.job }}
@@ -312,7 +317,7 @@ jobs:
 
       - name: Push docker image
         run: |
-          REGISTRY_URL=docker.io
+          REGISTRY_URL=$DOCKER_REGISTRY
           echo "${{ secrets.DOCKER_TOKEN }}" | docker login $REGISTRY_URL -u ${{ secrets.DOCKER_USER }} --password-stdin
 
           IMAGE_ID=$REGISTRY_URL/$DOCKER_IMAGE_NAME
@@ -334,7 +339,7 @@ jobs:
 
       - name: Build image
         run: |
-          REGISTRY_URL=docker.pkg.github.com
+          REGISTRY_URL=$GITHUB_REGISTRY
           DOCKER_DIR=${{ github.job }}
           DOCKER_DIR=${DOCKER_DIR##*-}
           DOCKER_BOS=${{ github.job }}
@@ -345,7 +350,7 @@ jobs:
 
       - name: Push docker image
         run: |
-          REGISTRY_URL=docker.io
+          REGISTRY_URL=$DOCKER_REGISTRY
           echo "${{ secrets.DOCKER_TOKEN }}" | docker login $REGISTRY_URL -u ${{ secrets.DOCKER_USER }} --password-stdin
 
           IMAGE_ID=$REGISTRY_URL/$DOCKER_IMAGE_NAME
@@ -358,7 +363,7 @@ jobs:
 
       - name: Push quay image
         run: |
-          REGISTRY_URL=quay.io
+          REGISTRY_URL=$QUAY_REGISTRY
           echo "${{ secrets.QUAY_TOKEN }}" | docker login $REGISTRY_URL -u ${{ secrets.QUAY_USER }} --password-stdin
 
           IMAGE_ID=$REGISTRY_URL/$DOCKER_IMAGE_NAME
@@ -371,7 +376,7 @@ jobs:
 
       - name: Push aliyun image
         run: |
-          REGISTRY_URL=registry.cn-beijing.aliyuncs.com
+          REGISTRY_URL=$ALIYUN_REGISTRY
           echo "${{ secrets.ALIYUN_TOKEN }}" | docker login $REGISTRY_URL -u ${{ secrets.ALIYUN_USER }} --password-stdin
 
           IMAGE_ID=$REGISTRY_URL/$DOCKER_IMAGE_NAME
@@ -391,7 +396,7 @@ jobs:
 
       - name: Build image
         run: |
-          REGISTRY_URL=docker.pkg.github.com
+          REGISTRY_URL=$GITHUB_REGISTRY
           DOCKER_DIR=${{ github.job }}
           DOCKER_DIR=${DOCKER_DIR##*-}
           DOCKER_BOS=${{ github.job }}
@@ -402,7 +407,7 @@ jobs:
 
       - name: Push docker image
         run: |
-          REGISTRY_URL=docker.io
+          REGISTRY_URL=$DOCKER_REGISTRY
           echo "${{ secrets.DOCKER_TOKEN }}" | docker login $REGISTRY_URL -u ${{ secrets.DOCKER_USER }} --password-stdin
 
           IMAGE_ID=$REGISTRY_URL/$DOCKER_IMAGE_NAME
@@ -424,7 +429,7 @@ jobs:
 
       - name: Build image
         run: |
-          REGISTRY_URL=docker.pkg.github.com
+          REGISTRY_URL=$GITHUB_REGISTRY
           DOCKER_DIR=${{ github.job }}
           DOCKER_DIR=${DOCKER_DIR##*-}
           DOCKER_BOS=${{ github.job }}
@@ -435,7 +440,7 @@ jobs:
 
       - name: Push docker image
         run: |
-          REGISTRY_URL=docker.io
+          REGISTRY_URL=$DOCKER_REGISTRY
           echo "${{ secrets.DOCKER_TOKEN }}" | docker login $REGISTRY_URL -u ${{ secrets.DOCKER_USER }} --password-stdin
 
           IMAGE_ID=$REGISTRY_URL/$DOCKER_IMAGE_NAME
@@ -449,7 +454,7 @@ jobs:
 
       - name: Push quay image
         run: |
-          REGISTRY_URL=quay.io
+          REGISTRY_URL=$QUAY_REGISTRY
           echo "${{ secrets.QUAY_TOKEN }}" | docker login $REGISTRY_URL -u ${{ secrets.QUAY_USER }} --password-stdin
 
           IMAGE_ID=$REGISTRY_URL/$DOCKER_IMAGE_NAME
@@ -462,7 +467,7 @@ jobs:
 
       - name: Push aliyun image
         run: |
-          REGISTRY_URL=registry.cn-beijing.aliyuncs.com
+          REGISTRY_URL=$ALIYUN_REGISTRY
           echo "${{ secrets.ALIYUN_TOKEN }}" | docker login $REGISTRY_URL -u ${{ secrets.ALIYUN_USER }} --password-stdin
 
           IMAGE_ID=$REGISTRY_URL/$DOCKER_IMAGE_NAME
@@ -482,7 +487,7 @@ jobs:
 
       - name: Build image
         run: |
-          REGISTRY_URL=docker.pkg.github.com
+          REGISTRY_URL=$GITHUB_REGISTRY
           DOCKER_DIR=${{ github.job }}
           DOCKER_DIR=${DOCKER_DIR##*-}
           DOCKER_BOS=${{ github.job }}
@@ -493,7 +498,7 @@ jobs:
 
       - name: Push docker image
         run: |
-          REGISTRY_URL=docker.io
+          REGISTRY_URL=$DOCKER_REGISTRY
           echo "${{ secrets.DOCKER_TOKEN }}" | docker login $REGISTRY_URL -u ${{ secrets.DOCKER_USER }} --password-stdin
 
           IMAGE_ID=$REGISTRY_URL/$DOCKER_IMAGE_NAME
@@ -515,7 +520,7 @@ jobs:
 
       - name: Build image
         run: |
-          REGISTRY_URL=docker.pkg.github.com
+          REGISTRY_URL=$GITHUB_REGISTRY
           DOCKER_DIR=${{ github.job }}
           DOCKER_DIR=${DOCKER_DIR##*-}
           DOCKER_BOS=${{ github.job }}
@@ -526,7 +531,7 @@ jobs:
 
       - name: Push docker image
         run: |
-          REGISTRY_URL=docker.io
+          REGISTRY_URL=$DOCKER_REGISTRY
           echo "${{ secrets.DOCKER_TOKEN }}" | docker login $REGISTRY_URL -u ${{ secrets.DOCKER_USER }} --password-stdin
 
           IMAGE_ID=$REGISTRY_URL/$DOCKER_IMAGE_NAME
@@ -539,7 +544,7 @@ jobs:
 
       - name: Push quay image
         run: |
-          REGISTRY_URL=quay.io
+          REGISTRY_URL=$QUAY_REGISTRY
           echo "${{ secrets.QUAY_TOKEN }}" | docker login $REGISTRY_URL -u ${{ secrets.QUAY_USER }} --password-stdin
 
           IMAGE_ID=$REGISTRY_URL/$DOCKER_IMAGE_NAME
@@ -552,7 +557,7 @@ jobs:
 
       - name: Push aliyun image
         run: |
-          REGISTRY_URL=registry.cn-beijing.aliyuncs.com
+          REGISTRY_URL=$ALIYUN_REGISTRY
           echo "${{ secrets.ALIYUN_TOKEN }}" | docker login $REGISTRY_URL -u ${{ secrets.ALIYUN_USER }} --password-stdin
 
           IMAGE_ID=$REGISTRY_URL/$DOCKER_IMAGE_NAME
@@ -572,7 +577,7 @@ jobs:
 
       - name: Build image
         run: |
-          REGISTRY_URL=docker.pkg.github.com
+          REGISTRY_URL=$GITHUB_REGISTRY
           DOCKER_DIR=${{ github.job }}
           DOCKER_DIR=${DOCKER_DIR##*-}
           DOCKER_BOS=${{ github.job }}
@@ -583,7 +588,7 @@ jobs:
 
       - name: Push docker image
         run: |
-          REGISTRY_URL=docker.io
+          REGISTRY_URL=$DOCKER_REGISTRY
           echo "${{ secrets.DOCKER_TOKEN }}" | docker login $REGISTRY_URL -u ${{ secrets.DOCKER_USER }} --password-stdin
 
           IMAGE_ID=$REGISTRY_URL/$DOCKER_IMAGE_NAME
@@ -605,7 +610,7 @@ jobs:
 
       - name: Build image
         run: |
-          REGISTRY_URL=docker.pkg.github.com
+          REGISTRY_URL=$GITHUB_REGISTRY
           DOCKER_DIR=${{ github.job }}
           DOCKER_DIR=${DOCKER_DIR##*-}
           DOCKER_BOS=${{ github.job }}
@@ -616,7 +621,7 @@ jobs:
 
       - name: Push docker image
         run: |
-          REGISTRY_URL=docker.io
+          REGISTRY_URL=$DOCKER_REGISTRY
           echo "${{ secrets.DOCKER_TOKEN }}" | docker login $REGISTRY_URL -u ${{ secrets.DOCKER_USER }} --password-stdin
 
           IMAGE_ID=$REGISTRY_URL/$DOCKER_IMAGE_NAME
@@ -629,7 +634,7 @@ jobs:
 
       - name: Push quay image
         run: |
-          REGISTRY_URL=quay.io
+          REGISTRY_URL=$QUAY_REGISTRY
           echo "${{ secrets.QUAY_TOKEN }}" | docker login $REGISTRY_URL -u ${{ secrets.QUAY_USER }} --password-stdin
 
           IMAGE_ID=$REGISTRY_URL/$DOCKER_IMAGE_NAME
@@ -642,7 +647,7 @@ jobs:
 
       - name: Push aliyun image
         run: |
-          REGISTRY_URL=registry.cn-beijing.aliyuncs.com
+          REGISTRY_URL=$ALIYUN_REGISTRY
           echo "${{ secrets.ALIYUN_TOKEN }}" | docker login $REGISTRY_URL -u ${{ secrets.ALIYUN_USER }} --password-stdin
 
           IMAGE_ID=$REGISTRY_URL/$DOCKER_IMAGE_NAME
@@ -662,7 +667,7 @@ jobs:
 
       - name: Build image
         run: |
-          REGISTRY_URL=docker.pkg.github.com
+          REGISTRY_URL=$GITHUB_REGISTRY
           DOCKER_DIR=${{ github.job }}
           DOCKER_DIR=${DOCKER_DIR##*-}
           DOCKER_BOS=${{ github.job }}
@@ -673,7 +678,7 @@ jobs:
 
       - name: Push docker image
         run: |
-          REGISTRY_URL=docker.io
+          REGISTRY_URL=$DOCKER_REGISTRY
           echo "${{ secrets.DOCKER_TOKEN }}" | docker login $REGISTRY_URL -u ${{ secrets.DOCKER_USER }} --password-stdin
 
           IMAGE_ID=$REGISTRY_URL/$DOCKER_IMAGE_NAME
@@ -696,7 +701,7 @@ jobs:
 
       - name: Build image
         run: |
-          REGISTRY_URL=docker.pkg.github.com
+          REGISTRY_URL=$GITHUB_REGISTRY
           DOCKER_DIR=${{ github.job }}
           DOCKER_DIR=${DOCKER_DIR##*-}
           DOCKER_BOS=${{ github.job }}
@@ -707,7 +712,7 @@ jobs:
 
       - name: Push docker image
         run: |
-          REGISTRY_URL=docker.io
+          REGISTRY_URL=$DOCKER_REGISTRY
           echo "${{ secrets.DOCKER_TOKEN }}" | docker login $REGISTRY_URL -u ${{ secrets.DOCKER_USER }} --password-stdin
 
           IMAGE_ID=$REGISTRY_URL/$DOCKER_IMAGE_NAME
@@ -720,7 +725,7 @@ jobs:
 
       - name: Push quay image
         run: |
-          REGISTRY_URL=quay.io
+          REGISTRY_URL=$QUAY_REGISTRY
           echo "${{ secrets.QUAY_TOKEN }}" | docker login $REGISTRY_URL -u ${{ secrets.QUAY_USER }} --password-stdin
 
           IMAGE_ID=$REGISTRY_URL/$DOCKER_IMAGE_NAME
@@ -733,7 +738,7 @@ jobs:
 
       - name: Push aliyun image
         run: |
-          REGISTRY_URL=registry.cn-beijing.aliyuncs.com
+          REGISTRY_URL=$ALIYUN_REGISTRY
           echo "${{ secrets.ALIYUN_TOKEN }}" | docker login $REGISTRY_URL -u ${{ secrets.ALIYUN_USER }} --password-stdin
 
           IMAGE_ID=$REGISTRY_URL/$DOCKER_IMAGE_NAME
@@ -755,7 +760,7 @@ jobs:
 
       - name: Build image
         run: |
-          REGISTRY_URL=docker.pkg.github.com
+          REGISTRY_URL=$GITHUB_REGISTRY
           DOCKER_DIR=graal
           DOCKER_BOS=centos-jdk11
 
@@ -764,7 +769,7 @@ jobs:
 
       - name: Push docker image
         run: |
-          REGISTRY_URL=docker.io
+          REGISTRY_URL=$DOCKER_REGISTRY
           echo "${{ secrets.DOCKER_TOKEN }}" | docker login $REGISTRY_URL -u ${{ secrets.DOCKER_USER }} --password-stdin
 
           IMAGE_ID=$REGISTRY_URL/$DOCKER_IMAGE_NAME
@@ -777,7 +782,7 @@ jobs:
 
       - name: Push quay image
         run: |
-          REGISTRY_URL=quay.io
+          REGISTRY_URL=$QUAY_REGISTRY
           echo "${{ secrets.QUAY_TOKEN }}" | docker login $REGISTRY_URL -u ${{ secrets.QUAY_USER }} --password-stdin
 
           IMAGE_ID=$REGISTRY_URL/$DOCKER_IMAGE_NAME
@@ -790,7 +795,7 @@ jobs:
 
       - name: Push aliyun image
         run: |
-          REGISTRY_URL=registry.cn-beijing.aliyuncs.com
+          REGISTRY_URL=$ALIYUN_REGISTRY
           echo "${{ secrets.ALIYUN_TOKEN }}" | docker login $REGISTRY_URL -u ${{ secrets.ALIYUN_USER }} --password-stdin
 
           IMAGE_ID=$REGISTRY_URL/$DOCKER_IMAGE_NAME
@@ -810,7 +815,7 @@ jobs:
 
       - name: Build image
         run: |
-          REGISTRY_URL=docker.pkg.github.com
+          REGISTRY_URL=$GITHUB_REGISTRY
           DOCKER_DIR=java
           DOCKER_BOS=centos-jdk11
 
@@ -819,7 +824,7 @@ jobs:
 
       - name: Push docker image
         run: |
-          REGISTRY_URL=docker.io
+          REGISTRY_URL=$DOCKER_REGISTRY
           echo "${{ secrets.DOCKER_TOKEN }}" | docker login $REGISTRY_URL -u ${{ secrets.DOCKER_USER }} --password-stdin
 
           IMAGE_ID=$REGISTRY_URL/$DOCKER_IMAGE_NAME
@@ -832,7 +837,7 @@ jobs:
 
       - name: Push quay image
         run: |
-          REGISTRY_URL=quay.io
+          REGISTRY_URL=$QUAY_REGISTRY
           echo "${{ secrets.QUAY_TOKEN }}" | docker login $REGISTRY_URL -u ${{ secrets.QUAY_USER }} --password-stdin
 
           IMAGE_ID=$REGISTRY_URL/$DOCKER_IMAGE_NAME
@@ -845,7 +850,7 @@ jobs:
 
       - name: Push aliyun image
         run: |
-          REGISTRY_URL=registry.cn-beijing.aliyuncs.com
+          REGISTRY_URL=$ALIYUN_REGISTRY
           echo "${{ secrets.ALIYUN_TOKEN }}" | docker login $REGISTRY_URL -u ${{ secrets.ALIYUN_USER }} --password-stdin
 
           IMAGE_ID=$REGISTRY_URL/$DOCKER_IMAGE_NAME
