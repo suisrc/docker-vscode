@@ -3,12 +3,18 @@ name: DockerFix
 
 on:
   push:
-    branches: [ fix-master ]
+    branches: [ fix-1.44.2 ]
 
 env:
   GITHUB_IMAGE_NAME: vscode
   DOCKER_IMAGE_NAME: suisrc/vscode
   DOCKER_VERSION: 1.44.2-01
 
-#jobs:
+jobs:
+  test:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v2
+      - name: test
+        run: echo "Hello World"
 ############################################################################################
