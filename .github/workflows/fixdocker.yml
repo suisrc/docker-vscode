@@ -4,6 +4,7 @@ name: DockerFix
 on:
   push:
     branches: [ fix-master ]
+
 env:
   GITHUB_IMAGE_NAME: vscode
   DOCKER_IMAGE_NAME: suisrc/vscode
