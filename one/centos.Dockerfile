@@ -4,8 +4,8 @@ FROM docker.pkg.github.com/suisrc/docker-vscode/vscode:centos
 ARG GO_VER=1.14.2
 ARG GO_URL=https://dl.google.com/go/go${GO_VER}.linux-amd64.tar.gz
 
-ARG PY_VER=3.8.3
-ARG PY_URL=https://www.python.org/ftp/python/${PY_VER}/Python-${PY_VER}.tgz
+#ARG PY_VER=3.8.3
+#ARG PY_URL=https://www.python.org/ftp/python/${PY_VER}/Python-${PY_VER}.tgz
 
 ARG GRAALVM_RELEASE=vm-20.1.0
 ARG JAVA_RELEASE=java11
@@ -26,6 +26,9 @@ ARG MAVEN_URL=https://downloads.apache.org/maven/maven-3/${MAVEN_RELEASE}/binari
 #    ln -s /usr/local/python3/bin/pip3    /usr/local/bin/pip3 &&\
 #    ln -s /usr/local/python3/bin/python3 /usr/local/bin/py &&\
 #    pip3 install --upgrade pip && pip3 --version
+RUN yum update -y && yum install -y python3 &&\
+    ln -s /usr/bin/python3 /usr/local/bin/py &&\
+    rm -rf /tmp/* /var/tmp/* /var/cache/yum
 
 # python extension
 RUN mkdir /root/.pip &&\
@@ -33,6 +36,7 @@ RUN mkdir /root/.pip &&\
     #echo "index-url = https://mirrors.aliyun.com/pypi/simple" >> /root/.pip/pip.conf &&\
     #echo "[install]" >> /root/.pip/pip.conf &&\
     #echo "trusted-host=mirrors.aliyun.com" >> /root/.pip/pip.conf &&\
+    pip3 install --upgrade pip &&\
     pip3 install --user pylint &&\
     pip3 install --user django &&\
     pip3 list

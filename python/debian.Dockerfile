@@ -6,7 +6,8 @@ RUN apt-get update && apt-get install -y python3 python3-pip &&\
     apt-get autoremove -y && apt-get clean && rm -rf /tmp/* /var/tmp/* /var/lib/apt/lists/*
 
 # python extension
-RUN pip3 install --user pylint &&\
+RUN pip3 install --upgrade pip &&\
+    pip3 install --user pylint &&\
     pip3 install --user django
     #ln -s /root/.local/bin/django-admin /usr/local/bin/django-admin
 
