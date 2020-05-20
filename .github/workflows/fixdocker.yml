@@ -16,8 +16,6 @@ jobs:
 ###########################################################################################
 # all-in-one, 提供js, java, python, golang支持, 暂时只提供JDK11版本
   centos-one:
-    if: startsWith(github.ref, 'refs/tags/v')
-    needs: centos
     runs-on: ubuntu-latest
 
     steps:
