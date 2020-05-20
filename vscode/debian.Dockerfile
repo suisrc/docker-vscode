@@ -78,7 +78,7 @@ RUN echo "**** install code-server ****" && \
             | awk '/tag_name/{print $4;exit}' FS='[""]'); \
         fi && \
         CODE_URL=$(curl -sX GET "https://api.github.com/repos/cdr/code-server/releases/tags/${CODE_RELEASE}" \
-            | jq -r '.assets[] | select(.browser_download_url | contains("linux-x86_64")) | .browser_download_url'); \
+            | jq -r '.assets[] | select(.browser_download_url | contains("linux-amd64.tar.gz")) | .browser_download_url'); \
     fi &&\
     curl -o /tmp/code.tar.gz -L "${CODE_URL}" && \
     mkdir -p /usr/lib/code-server &&\
