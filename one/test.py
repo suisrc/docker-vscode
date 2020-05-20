@@ -32,7 +32,7 @@ print('Hello World!')
 # pip3 install --upgrade pip
 # ```
 ###################################################################
-# 编译构建, 可以使用python的最新版构建
+# 编译构建, 可以使用python的最新版构建， 当前环境默认的python安装方式
 # ```
 # yum install -y openssl openssl-devel libffi-devel
 # curl -SL https://www.python.org/ftp/python/3.8.3/Python-3.8.3.tgz -o python-autoconf.tar.gz
