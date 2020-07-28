@@ -11,7 +11,7 @@ ARG S6_URL=https://github.com/just-containers/s6-overlay/releases/download/v2.0.
 # apk add --no-cache openssh bash vim curl jq tar git #apline软件
 # dumb-init #使用s6代替
 RUN apt update && apt install --no-install-recommends -y \
-        sudo ca-certificates curl git jq bash net-tools vim nano ntpdate locales &&\
+        sudo ca-certificates curl git procps jq bash net-tools vim nano ntpdate locales &&\
     rm -rf /tmp/* /var/tmp/* /var/lib/apt/lists/*
 
 # s6-overlay
@@ -76,8 +76,8 @@ ENTRYPOINT ["/init"]
 # /etc/fix-attrs.d/ 
 # /etc/services.d/
 # /etc/cont-init.d/
-RUN mkdir -p /etc/services.d/code-server && \
-    echo "#!/usr/bin/execlineb -P\ncode-server --bind-addr 0.0.0.0:7000 --disable-telemetry --disable-updates /home/project" > /etc/services.d/code-server/run && \
-    chmod +x /etc/services.d/code-server/run
+RUN mkdir -p /etc/services.d/vscode && \
+    echo "#!/usr/bin/execlineb -P\ncode-server --bind-addr 0.0.0.0:7000 --disable-telemetry --disable-updates /home/project" > /etc/services.d/vscode/run && \
+    chmod +x /etc/services.d/vscode/run
 
 
