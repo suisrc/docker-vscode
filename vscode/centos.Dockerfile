@@ -112,12 +112,11 @@ COPY ["settings.json", "locale.json", "/root/.local/share/code-server/User/"]
 #ENV LANG="zh_CN.UTF-8" \
 #    SHELL=/bin/zsh
 
-COPY entrypoint.sh /usr/local/bin/
+COPY git-init.sh /
 
 # worksapce
 # 测试过程中发现，如果使用root账户，会导致程序部分插件没有访问User/文件夹的权限
 RUN mkdir -p /home/project && mkdir -p /home/test/mirror &&\
-    chmod +x /usr/local/bin/entrypoint.sh &&\
     mkdir -p /root/.local/share/code-server/User/globalStorage
 # test
 COPY test.*   /home/test/
@@ -129,7 +128,12 @@ WORKDIR /home/project
 # code-server start
 EXPOSE 7000
 ENTRYPOINT ["/init"]
+
 RUN mkdir -p /etc/services.d/vscode && \
     echo "#!/usr/bin/execlineb -P\ncode-server --bind-addr 0.0.0.0:7000 --disable-telemetry /home/project" > /etc/services.d/vscode/run && \
-    chmod +x /etc/services.d/vscode/run
-
+    chmod +x /etc/services.d/vscode/run &&\
+    #echo "#!/usr/bin/execlineb -S1\ns6-svscanctl -t /var/run/s6/services" > /etc/services.d/vscode/finish && \
+    #chmod +x /etc/services.d/vscode/finish &&\
+    echo "#!/usr/bin/execlineb -P\n/git-init.sh" > /etc/cont-init.d/git-init &&\
+    chmod +x /etc/cont-init.d/git-init
+ENV S6_KEEP_ENV=true

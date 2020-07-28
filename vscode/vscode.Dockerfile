@@ -56,13 +56,12 @@ RUN sed -i "s/# zh_CN.UTF-8 UTF-8/zh_CN.UTF-8 UTF-8/g" /etc/locale.gen && locale
 ENV LC_ALL=zh_CN.UTF-8 \
     SHELL=/bin/bash
 
-COPY entrypoint.sh /usr/local/bin/
+COPY git-init.sh /
 
 # worksapce
 # 测试过程中发现，如果使用root账户，会导致程序部分插件没有访问User/文件夹的权限
 RUN mv /root/.local/share/code-server/User/settings2.json /root/.local/share/code-server/User/settings.json &&\
     mkdir -p /home/project && \
-    chmod +x /usr/local/bin/entrypoint.sh &&\
     mkdir -p /root/.local/share/code-server/User/globalStorage
 
 WORKDIR /home/project
@@ -76,11 +75,18 @@ EXPOSE 7000
 
 # https://github.com/just-containers/s6-overlay
 ENTRYPOINT ["/init"]
-# /etc/fix-attrs.d/ 
+
 # /etc/services.d/
-# /etc/cont-init.d/
 RUN mkdir -p /etc/services.d/vscode && \
     echo "#!/usr/bin/execlineb -P\ncode-server --bind-addr 0.0.0.0:7000 --disable-telemetry /home/project" > /etc/services.d/vscode/run && \
-    chmod +x /etc/services.d/vscode/run
+    chmod +x /etc/services.d/vscode/run &&\
+    #echo "#!/usr/bin/execlineb -S1\ns6-svscanctl -t /var/run/s6/services" > /etc/services.d/vscode/finish && \
+    #chmod +x /etc/services.d/vscode/finish &&\
+    echo "#!/usr/bin/execlineb -P\n/git-init.sh" > /etc/cont-init.d/git-init &&\
+    chmod +x /etc/cont-init.d/git-init
+ENV S6_KEEP_ENV=true
 
-
+# /etc/cont-init.d/
+# /etc/fix-attrs.d/
+#RUN echo "#!/usr/bin/execlineb -P\n/git-init.sh"         > /etc/cont-init.d/git-init &&\
+#    echo "/etc/cont-init.d/git-init true root 0755 0755" > /etc/fix-attrs.d/git-init

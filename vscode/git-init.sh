@@ -7,7 +7,7 @@ fi
 if [[ $GIT_USER_EMAIL ]]; then
     git config --global user.email "$GIT_USER_EMAIL"
 fi
-if [ ! -e ".gitignore" ]; then
+if [ $GIT_INIT = "true" ] && [ ! -e ".gitignore" ]; then
     if [[ $GIT_REPO_URLS ]]; then
         IFS=';'
         read -ra gits <<<"$GIT_REPO_URLS"
@@ -31,4 +31,4 @@ if [ ! -e ".gitignore" ]; then
     fi
 fi
 
-exec $@
+#exec $@
