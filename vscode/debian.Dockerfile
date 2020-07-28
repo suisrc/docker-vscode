@@ -66,7 +66,7 @@ RUN if [ -z ${OH_MY_ZSH_SH_URL+x} ]; then \
     fi &&\
     sh -c "$(curl -fsSL ${OH_MY_ZSH_SH_URL})" &&\
     git clone "${OH_MY_ZSH_SUGGES}" /root/.oh-my-zsh/plugins/zsh-autosuggestions &&\
-    echo "source ~/.oh-my-zsh/plugins/zsh-autosuggestions/zsh-autosuggestions.zsh" >> /root/.zshrc \
+    echo "source ~/.oh-my-zsh/plugins/zsh-autosuggestions/zsh-autosuggestions.zsh" >> /root/.zshrc
     #sed -i "s/ZSH_THEME=\"robbyrussell\"/ZSH_THEME=\"agnoster\"/g" /root/.zshrc
 
 # s6-overlay
@@ -127,7 +127,7 @@ WORKDIR /home/project
 EXPOSE 7000
 ENTRYPOINT ["/init"]
 RUN mkdir -p /etc/services.d/vscode && \
-    echo "#!/usr/bin/execlineb -P\ncode-server --bind-addr 0.0.0.0:7000 --disable-telemetry --disable-updates /home/project" > /etc/services.d/vscode/run && \
+    echo "#!/usr/bin/execlineb -P\ncode-server --bind-addr 0.0.0.0:7000 --disable-telemetry /home/project" > /etc/services.d/vscode/run && \
     chmod +x /etc/services.d/vscode/run
 
 

@@ -65,14 +65,15 @@ RUN if [ -z ${OH_MY_ZSH_SH_URL+x} ]; then \
     fi &&\
     sh -c "$(curl -fsSL ${OH_MY_ZSH_SH_URL})" &&\
     git clone "${OH_MY_ZSH_SUGGES}" /root/.oh-my-zsh/plugins/zsh-autosuggestions &&\
-    echo "source ~/.oh-my-zsh/plugins/zsh-autosuggestions/zsh-autosuggestions.zsh" >> /root/.zshrc &&\
-    sed -i "s/ZSH_THEME=\"robbyrussell\"/ZSH_THEME=\"agnoster\"/g" /root/.zshrc
+    echo "source ~/.oh-my-zsh/plugins/zsh-autosuggestions/zsh-autosuggestions.zsh" >> /root/.zshrc
+    #sed -i "s/ZSH_THEME=\"robbyrussell\"/ZSH_THEME=\"agnoster\"/g" /root/.zshrc
 
 # s6-overlay
 RUN curl -o /tmp/s6.tar.gz -L "${S6_URL}" && \ 
     tar xzf /tmp/s6.tar.gz -C / --exclude='./bin' && tar xzf /tmp/s6.tar.gz -C /usr ./bin &&\
-    ln -s /usr/bin/importas /bin/importas &&\
-    ln -s /usr/bin/execlineb /bin/execlineb &&\
+    # /bin = /usr/bin
+    #ln -s /usr/bin/importas /bin/importas &&\
+    #ln -s /usr/bin/execlineb /bin/execlineb &&\
     rm -rf /tmp/*
 
 # install code-server
@@ -129,6 +130,6 @@ WORKDIR /home/project
 EXPOSE 7000
 ENTRYPOINT ["/init"]
 RUN mkdir -p /etc/services.d/vscode && \
-    echo "#!/usr/bin/execlineb -P\ncode-server --bind-addr 0.0.0.0:7000 --disable-telemetry --disable-updates /home/project" > /etc/services.d/vscode/run && \
+    echo "#!/usr/bin/execlineb -P\ncode-server --bind-addr 0.0.0.0:7000 --disable-telemetry /home/project" > /etc/services.d/vscode/run && \
     chmod +x /etc/services.d/vscode/run
 
