@@ -72,6 +72,8 @@ RUN if [ -z ${OH_MY_ZSH_SH_URL+x} ]; then \
 # s6-overlay
 RUN curl -o /tmp/s6.tar.gz -L "${S6_URL}" && \ 
     tar xzf /tmp/s6.tar.gz -C / --exclude='./bin' && tar xzf /tmp/s6.tar.gz -C /usr ./bin &&\
+    ln -s /usr/bin/importas /bin/importas &&\
+    ln -s /usr/bin/execlineb /bin/execlineb &&\
     rm -rf /tmp/*
 
 # install code-server
@@ -118,7 +120,7 @@ RUN mkdir -p /home/project && mkdir -p /home/test/mirror &&\
 COPY test.*   /home/test/
 COPY mirror-* /home/test/mirror/
 
-WORKDIR  /home/project
+WORKDIR /home/project
 #VOLUME [ "/home/project" ]
 
 # code-server start

@@ -1,7 +1,12 @@
+#FROM centos:7
 FROM centos:8
+
 # args
-ARG CODE_URL
+
+ARG CODE_URL=https://github.com/suisrc/code-server/releases/download/v1.47.2/code-server-3.4.1-linux-amd64.tar.gz
 ARG CODE_RELEASE
+
+ARG S6_URL=https://github.com/just-containers/s6-overlay/releases/download/v2.0.0.1/s6-overlay-amd64.tar.gz
 
 ARG FONT_URL
 ARG FONT_RELEASE
@@ -63,6 +68,13 @@ RUN if [ -z ${OH_MY_ZSH_SH_URL+x} ]; then \
     echo "source ~/.oh-my-zsh/plugins/zsh-autosuggestions/zsh-autosuggestions.zsh" >> /root/.zshrc &&\
     sed -i "s/ZSH_THEME=\"robbyrussell\"/ZSH_THEME=\"agnoster\"/g" /root/.zshrc
 
+# s6-overlay
+RUN curl -o /tmp/s6.tar.gz -L "${S6_URL}" && \ 
+    tar xzf /tmp/s6.tar.gz -C / --exclude='./bin' && tar xzf /tmp/s6.tar.gz -C /usr ./bin &&\
+    ln -s /usr/bin/importas /bin/importas &&\
+    ln -s /usr/bin/execlineb /bin/execlineb &&\
+    rm -rf /tmp/*
+
 # install code-server
 RUN if [ -z ${CODE_URL+x} ]; then \
         if [ -z ${CODE_RELEASE+x} ]; then \
@@ -110,11 +122,13 @@ RUN mkdir -p /home/project && mkdir -p /home/test/mirror &&\
 COPY test.*   /home/test/
 COPY mirror-* /home/test/mirror/
 
-WORKDIR  /home/project
+WORKDIR /home/project
 #VOLUME [ "/home/project" ]
 
 # code-server start
 EXPOSE 7000
-ENTRYPOINT ["entrypoint.sh"]
-CMD [ "code-server", "--bind-addr", "0.0.0.0:7000", "--disable-telemetry", "/home/project"]
+ENTRYPOINT ["/init"]
+RUN mkdir -p /etc/services.d/vscode && \
+    echo "#!/usr/bin/execlineb -P\ncode-server --bind-addr 0.0.0.0:7000 --disable-telemetry --disable-updates /home/project" > /etc/services.d/vscode/run && \
+    chmod +x /etc/services.d/vscode/run
 
