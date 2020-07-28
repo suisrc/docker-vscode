@@ -53,7 +53,7 @@ RUN sed -i "s/# zh_CN.UTF-8 UTF-8/zh_CN.UTF-8 UTF-8/g" /etc/locale.gen && locale
 ENV LC_ALL=zh_CN.UTF-8 \
     SHELL=/bin/bash
 
-# COPY entrypoint.sh /usr/local/bin/
+COPY entrypoint.sh /usr/local/bin/
 
 # worksapce
 # 测试过程中发现，如果使用root账户，会导致程序部分插件没有访问User/文件夹的权限
