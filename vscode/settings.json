@@ -1,5 +1,5 @@
 {
-    "terminal.integrated.shell.linux": "/bin/bash",
+    "terminal.integrated.shell.linux": "/bin/zsh",
     "terminal.integrated.fontFamily": "Consolas",
     "terminal.integrated.scrollback": 10000,
     "git.ignoreLegacyWarning": true,
@@ -10,5 +10,6 @@
     "editor.fontSize": 16,
     "editor.fontLigatures": true,
     "explorer.confirmDelete": false,
-    "files.autoSave": "off"
+    "files.autoSave": "off",
+    "workbench.colorTheme": "Default Dark+"
 }

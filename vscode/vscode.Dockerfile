@@ -17,6 +17,7 @@ RUN apt update && apt install --no-install-recommends -y \
 # s6-overlay
 RUN curl -o /tmp/s6.tar.gz -L "${S6_URL}" && \ 
     tar xzf /tmp/s6.tar.gz -C / --exclude='./bin' && tar xzf /tmp/s6.tar.gz -C /usr ./bin &&\
+    sed -i "s/^\/bin\/importas /\/usr\/bin\/importas /g" /init &&\
     rm -rf /tmp/*
 
 # code-server
