@@ -20,7 +20,9 @@ docker.pkg.github.com/suisrc/docker-vscode/vscode
 
 ## TAGS
 
+suisrc/vscode:[1.47.2](https://github.com/suisrc/docker-vscode/tree/dev-vscode)  
 ### centos (默认使用centos)
+suisrc/vscode:[1.47.2-centos](https://hub.docker.com/r/suisrc/vscode/tags)  
 suisrc/vscode:[1.47.2-centos-nodejs](https://hub.docker.com/r/suisrc/vscode/tags)  
 suisrc/vscode:[1.47.2-centos-golang](https://hub.docker.com/r/suisrc/vscode/tags)  
 suisrc/vscode:[1.47.2-centos-java](https://hub.docker.com/r/suisrc/vscode/tags)  
@@ -28,6 +30,7 @@ suisrc/vscode:[1.47.2-centos-graal](https://hub.docker.com/r/suisrc/vscode/tags)
 suisrc/vscode:[1.47.2-centos-python](https://hub.docker.com/r/suisrc/vscode/tags)  
 
 ### debian (默认使用debian:buster)
+suisrc/vscode:[1.47.2-debian](https://hub.docker.com/r/suisrc/vscode/tags)  
 suisrc/vscode:[1.47.2-debian-nodejs](https://hub.docker.com/r/suisrc/vscode/tags)  
 suisrc/vscode:[1.47.2-debian-golang](https://hub.docker.com/r/suisrc/vscode/tags)  
 suisrc/vscode:[1.47.2-debian-java](https://hub.docker.com/r/suisrc/vscode/tags)  
