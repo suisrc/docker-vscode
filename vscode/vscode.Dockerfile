@@ -78,11 +78,11 @@ ENTRYPOINT ["/init"]
 
 # /etc/services.d/
 RUN mkdir -p /etc/services.d/vscode && \
-    echo "#!/usr/bin/execlineb -P\ncode-server --bind-addr 0.0.0.0:7000 --disable-telemetry /home/project" > /etc/services.d/vscode/run && \
+    echo -e "#!/usr/bin/execlineb -P\ncode-server --bind-addr 0.0.0.0:7000 --disable-telemetry /home/project" > /etc/services.d/vscode/run && \
     chmod +x /etc/services.d/vscode/run &&\
-    #echo "#!/usr/bin/execlineb -S1\ns6-svscanctl -t /var/run/s6/services" > /etc/services.d/vscode/finish && \
+    #echo -e "#!/usr/bin/execlineb -S1\ns6-svscanctl -t /var/run/s6/services" > /etc/services.d/vscode/finish && \
     #chmod +x /etc/services.d/vscode/finish &&\
-    echo "#!/usr/bin/execlineb -P\n/git-init.sh" > /etc/cont-init.d/git-init &&\
+    echo -e "#!/usr/bin/execlineb -P\n/git-init.sh" > /etc/cont-init.d/git-init &&\
     chmod +x /etc/cont-init.d/git-init
 ENV S6_KEEP_ENV=true
 
