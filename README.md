@@ -22,22 +22,22 @@ docker.pkg.github.com/suisrc/docker-vscode/vscode
 
 ### centos (默认使用centos)
 suisrc/vscode:[1.47.3-centos](https://github.com/suisrc/docker-vscode/tree/dev-vscode)  
-suisrc/vscode:[1.47.3-centos-nodejs](https://hub.docker.com/r/suisrc/vscode/tags)  
-suisrc/vscode:[1.47.3-centos-golang](https://hub.docker.com/r/suisrc/vscode/tags)  
-suisrc/vscode:[1.47.3-centos-java](https://hub.docker.com/r/suisrc/vscode/tags)  
-suisrc/vscode:[1.47.3-centos-graal](https://hub.docker.com/r/suisrc/vscode/tags)  
-suisrc/vscode:[1.47.3-centos-python](https://hub.docker.com/r/suisrc/vscode/tags)  
+suisrc/vscode:[1.47.3-centos-nodejs](https://github.com/suisrc/docker-vscode/tree/dev-nodejs)  
+suisrc/vscode:[1.47.3-centos-golang](https://github.com/suisrc/docker-vscode/tree/dev-golang)  
+suisrc/vscode:[1.47.3-centos-java](https://github.com/suisrc/docker-vscode/tree/dev-java)  
+suisrc/vscode:[1.47.3-centos-graal](https://github.com/suisrc/docker-vscode/tree/dev-graal)  
+suisrc/vscode:[1.47.3-centos-python](https://github.com/suisrc/docker-vscode/tree/dev-python)  
   
 
 ### debian (默认使用debian:buster)
 suisrc/vscode:[1.47.3](https://github.com/suisrc/docker-vscode/tree/dev-vscode)  
 suisrc/vscode:[1.47.3-debian](https://github.com/suisrc/docker-vscode/tree/dev-vscode)  
-suisrc/vscode:[1.47.3-debian-nodejs](https://hub.docker.com/r/suisrc/vscode/tags)  
-suisrc/vscode:[1.47.3-debian-golang](https://hub.docker.com/r/suisrc/vscode/tags)  
-suisrc/vscode:[1.47.3-debian-java](https://hub.docker.com/r/suisrc/vscode/tags)  
-suisrc/vscode:[1.47.3-debian-graal](https://hub.docker.com/r/suisrc/vscode/tags)  
-suisrc/vscode:[1.47.3-debian-python](https://hub.docker.com/r/suisrc/vscode/tags)  
-suisrc/vscode:[1.47.3-debian-php](https://hub.docker.com/r/suisrc/vscode/tags)  
+suisrc/vscode:[1.47.3-debian-nodejs](https://github.com/suisrc/docker-vscode/tree/dev-nodejs)  
+suisrc/vscode:[1.47.3-debian-golang](https://github.com/suisrc/docker-vscode/tree/dev-golang)  
+suisrc/vscode:[1.47.3-debian-java](https://github.com/suisrc/docker-vscode/tree/dev-java)  
+suisrc/vscode:[1.47.3-debian-graal](https://github.com/suisrc/docker-vscode/tree/dev-graal)  
+suisrc/vscode:[1.47.3-debian-python](https://github.com/suisrc/docker-vscode/tree/dev-python)  
+suisrc/vscode:[1.47.3-debian-php](https://github.com/suisrc/docker-vscode/tree/dev-php)  
   
 
 ## 历史版本
