@@ -5,7 +5,7 @@ on:
   #release:
   #  types: [published]
   push:
-    branches: [ master ]
+    branches: [ dev-php ]
 
 env:
   GITHUB_IMAGE_NAME: vscode
