@@ -1,5 +1,5 @@
 #FROM suisrc/vscode:1.44.2-01-centos
-FROM docker.pkg.github.com/suisrc/docker-vscode/vscode:1.47.3-centos
+FROM docker.pkg.github.com/suisrc/docker-vscode/vscode:1.47.3-debian
 
 RUN apt-get update && apt-get install -y python3 python3-pip &&\
     ln -s /usr/bin/python3 /usr/local/bin/py &&\
