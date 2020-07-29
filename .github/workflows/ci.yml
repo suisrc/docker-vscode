@@ -21,7 +21,7 @@ jobs:
   centos-nodejs:
     #if: false
     #if: startsWith(github.ref, 'refs/tags/v')
-    needs: centos
+    #needs: centos
     runs-on: ubuntu-latest
 
     steps:
@@ -80,7 +80,7 @@ jobs:
   debian-nodejs:
     #if: false
     #if: startsWith(github.ref, 'refs/tags/v')
-    needs: debian
+    #needs: debian
     runs-on: ubuntu-latest
 
     steps:
