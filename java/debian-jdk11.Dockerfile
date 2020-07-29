@@ -20,11 +20,12 @@ RUN if [ -z ${JAVA_URL+x} ]; then \
     mkdir -p /usr/lib/jvm/java-adopt &&\
     curl -L ${JAVA_URL} -o /tmp/adopt-open-jdk.tar.gz &&\
     tar -xzf /tmp/adopt-open-jdk.tar.gz -C /usr/lib/jvm/java-adopt --strip-components=1 &&\
-    ln -s /usr/lib/jvm/java-adopt/bin/java /usr/bin/java &&\
+    #ln -s /usr/lib/jvm/java-adopt/bin/java /usr/bin/java &&\
     rm -rf /tmp/* &&\
     # smoke tests
     java -version
 
+ENV PATH=/usr/lib/jvm/java-adopt/bin:$PATH
 ENV JDK_HOME=/usr/lib/jvm/java-adopt
 ENV JAVA_HOME=/usr/lib/jvm/java-adopt
 
