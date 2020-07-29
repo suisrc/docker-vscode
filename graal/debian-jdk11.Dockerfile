@@ -3,7 +3,7 @@
 # https://github.com/graalvm/graalvm-ce-builds/releases
 # https://hub.docker.com/r/suisrc/vscode
 # FROM suisrc/vscode:debian
-FROM docker.pkg.github.com/suisrc/docker-vscode/vscode:debian
+FROM docker.pkg.github.com/suisrc/docker-vscode/vscode:1.47.3-debian
 
 # args
 ARG GRAALVM_RELEASE=vm-20.1.0
@@ -14,8 +14,7 @@ ARG MAVEN_RELEASE=3.6.3
 ARG MAVEN_URL
 
 # install oracle graalvm-ce 
-RUN echo "**** install graalvm-ce ****" &&\
-    set -eux &&\
+RUN set -eux &&\
     if [ -z ${GRAALVM_URL+x} ]; then \
         if [ -z ${GRAALVM_RELEASE+x} ]; then \
             GRAALVM_RELEASE=$(curl -sX GET "https://api.github.com/repos/graalvm/graalvm-ce-builds/releases/latest" \
@@ -38,8 +37,7 @@ ENV JDK_HOME=/graalvm
 ENV JAVA_HOME=/graalvm
 
 # mvn
-RUN echo "**** install maven ****" &&\
-    if [ -z ${MAVEN_URL+x} ]; then \
+RUN if [ -z ${MAVEN_URL+x} ]; then \
         MAVEN_URL="https://downloads.apache.org/maven/maven-3/${MAVEN_RELEASE}/binaries/apache-maven-${MAVEN_RELEASE}-bin.tar.gz"; \
     fi &&\
     mkdir -p /usr/share/maven &&\
@@ -53,10 +51,8 @@ RUN echo "**** install maven ****" &&\
 ENV MAVEN_HOME /usr/share/maven
 
 # extension
-RUN echo "**** install code-server extension ****" && \
+RUN code-server --install-extension redhat.vscode-yaml &&\
+    code-server --install-extension redhat.vscode-xml &&\
     #code-server --install-extension mhutchie.git-graph &&\
     #code-server --install-extension intellsmi.comment-translate &&\
-    code-server --install-extension redhat.vscode-yaml &&\
-    code-server --install-extension redhat.vscode-xml &&\
     code-server --install-extension vscjava.vscode-java-pack
-
