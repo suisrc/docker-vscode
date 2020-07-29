@@ -25,7 +25,7 @@ RUN if [ -z ${JAVA_URL+x} ]; then \
     #ln -s /usr/lib/jvm/java-adopt/bin/java /usr/bin/java &&\
     rm -rf /tmp/* &&\
     # smoke tests
-    java -version
+    # java -version
 
 ENV PATH=/usr/lib/jvm/java-adopt/bin:$PATH
 ENV JDK_HOME=/usr/lib/jvm/java-adopt
