@@ -6,13 +6,16 @@ on:
   #release:
   #  types: [published]
   push:
-    branches: [ master ]
+    branches: [ dev-one ]
 
 env:
-  DOCKER_IMAGE_NAME: suisrc/graalvm
-  DOCKER_VERSION: '20.1.0'
+  GITHUB_IMAGE_NAME: vscode
+  DOCKER_IMAGE_NAME: suisrc/vscode
+  DOCKER_VERSION: '1.47.3'
   QUAY_REGISTRY: quay.io
   DOCKER_REGISTRY: docker.io
+  GITHUB_REGISTRY: docker.pkg.github.com
+  ALIYUN_REGISTRY: registry.cn-hongkong.aliyuncs.com
 
 jobs:
   # all-in-one, 提供js, java, python, golang支持, 暂时只提供JDK11版本
