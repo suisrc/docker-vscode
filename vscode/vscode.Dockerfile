@@ -2,11 +2,11 @@
 # FROM alpine:3
 FROM debian:buster-slim
 
-ARG CODE_RELEASE=v1.48.0
+ARG CODE_RELEASE=v1.52.1
 ARG CODE_URL=https://github.com/suisrc/code-server/releases/download/${CODE_RELEASE}/code-server-linux-amd64.tar.gz
 ARG CODE_RELEASE
 
-ARG S6_URL=https://github.com/just-containers/s6-overlay/releases/download/v2.0.0.1/s6-overlay-amd64.tar.gz
+ARG S6_URL=https://github.com/just-containers/s6-overlay/releases/download/v2.1.0.2/s6-overlay-amd64.tar.gz
 
 # linux and softs
 # apk add --no-cache openssh bash vim curl jq tar git #apline软件
@@ -47,7 +47,8 @@ ENV SERVICE_URL=https://marketplace.visualstudio.com/_apis/public/gallery \
 # install code server extension
 RUN code-server --install-extension ms-ceintl.vscode-language-pack-zh-hans &&\
     code-server --install-extension mhutchie.git-graph &&\
-    code-server --install-extension esbenp.prettier-vscode 
+    code-server --install-extension esbenp.prettier-vscode &&\
+    code-server --install-extension humao.rest-client
 
 # config for user
 COPY ["locale.json", "settings2.json", "/root/.local/share/code-server/User/"]

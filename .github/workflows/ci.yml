@@ -11,7 +11,7 @@ on:
 env:
   GITHUB_IMAGE_NAME: vscode
   DOCKER_IMAGE_NAME: suisrc/vscode
-  DOCKER_VERSION: '1.48.0'
+  DOCKER_VERSION: '1.52.1'
   QUAY_REGISTRY: quay.io
   DOCKER_REGISTRY: docker.io
   GITHUB_REGISTRY: docker.pkg.github.com

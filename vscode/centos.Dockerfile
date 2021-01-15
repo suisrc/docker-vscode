@@ -2,7 +2,7 @@
 FROM centos:8
 
 # args
-ARG CODE_RELEASE=v1.48.0
+ARG CODE_RELEASE=v1.52.1
 ARG CODE_URL=https://github.com/suisrc/code-server/releases/download/${CODE_RELEASE}/code-server-linux-amd64.tar.gz
 
 ARG S6_URL=https://github.com/just-containers/s6-overlay/releases/download/v2.0.0.1/s6-overlay-amd64.tar.gz
@@ -98,7 +98,8 @@ ENV SERVICE_URL=https://marketplace.visualstudio.com/_apis/public/gallery \
 # install code-server extension
 RUN code-server --install-extension ms-ceintl.vscode-language-pack-zh-hans &&\
     code-server --install-extension mhutchie.git-graph &&\
-    code-server --install-extension esbenp.prettier-vscode 
+    code-server --install-extension esbenp.prettier-vscode &&\
+    code-server --install-extension humao.rest-client
 
 # config for user
 COPY ["settings.json", "locale.json", "/root/.local/share/code-server/User/"]

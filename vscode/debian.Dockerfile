@@ -3,7 +3,7 @@ FROM debian:buster-slim
 #FROM debian:buster
 
 # args
-ARG CODE_RELEASE=v1.48.0
+ARG CODE_RELEASE=v1.52.1
 ARG CODE_URL=https://github.com/suisrc/code-server/releases/download/${CODE_RELEASE}/code-server-linux-amd64.tar.gz
 ARG CODE_RELEASE
 
