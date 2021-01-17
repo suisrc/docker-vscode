@@ -1,5 +1,4 @@
-#FROM centos:7
-FROM centos:8
+FROM centos:7
 
 # https://github.com/suisrc/code-server/releases
 ARG CODE_RELEASE=v1.52.1
