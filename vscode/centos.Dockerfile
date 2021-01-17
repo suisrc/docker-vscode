@@ -39,26 +39,26 @@ RUN if [ ! -z ${LINUX_MIRRORS+x} ]; then \
     fi &&\
     yum clean all && yum makecache && yum update -y &&\
     yum install -y sudo curl jq net-tools zsh p7zip nano fontconfig ntpdate dpkg openssl  \
-                gcc glibc-devel zlib-devel libstdc++-static gcc-c++ make openssl-devel libffi-devel curl-devel expat-devel && \
+                gcc glibc-devel zlib-devel libstdc++-static gcc-c++ make openssl-devel libffi-devel curl-devel expat-devel gettext-devel && \
     rm -rf /tmp/* /var/tmp/* /var/cache/yum
+
+# git版本低， 无法和vscode兼容
+RUN curl -fSL $GIT_URL -o git-autoconf.tar.gz &&\
+    mkdir git-autoconf && tar -zxf git-autoconf.tar.gz -C git-autoconf --strip-components=1 &&\
+    cd git-autoconf && make configure && ./configure --prefix=/usr/local && make && make install &&\
+    cd .. && rm -rf git-autoconf && rm -f git-autoconf.tar.gz\
+    ln -s /usr/local/bin/git   /usr/bin/git &&\
+    git -version
 
 # sqlite版本低, 无法和django兼容(python框架，为后面扩展)
 RUN curl -fSL $SQLITE_URL -o sqlite-autoconf.tar.gz &&\
-    mkdir sqlite-autoconf && tar -zxvf sqlite-autoconf.tar.gz -C sqlite-autoconf --strip-components=1 &&\
+    mkdir sqlite-autoconf && tar -zxf sqlite-autoconf.tar.gz -C sqlite-autoconf --strip-components=1 &&\
     cd sqlite-autoconf && ./configure --prefix=/usr/local && make && make install &&\
     cd .. && rm -rf sqlite-autoconf && rm -f sqlite-autoconf.tar.gz &&\
     mv /usr/bin/sqlite3  /usr/bin/sqlite3_old &&\
     ln -s /usr/local/bin/sqlite3   /usr/bin/sqlite3 &&\
     echo "/usr/local/lib" > /etc/ld.so.conf.d/sqlite3.conf && ldconfig &&\
     sqlite3 -version
-
-# git版本低， 无法和vscode兼容
-RUN curl -fSL $GIT_URL -o git-autoconf.tar.gz &&\
-    mkdir git-autoconf && tar -zxvf git-autoconf.tar.gz -C git-autoconf --strip-components=1 &&\
-    cd git-autoconf && ./configure --prefix=/usr/local && make && make install &&\
-    cd .. && rm -rf git-autoconf && rm -f git-autoconf.tar.gz\
-    ln -s /usr/local/bin/git   /usr/bin/git &&\
-    git -version
 
 # install sarasa-gothic
 RUN if [ -z ${FONT_URL+x} ]; then \
