@@ -37,7 +37,7 @@ RUN if [ ! -z ${LINUX_MIRRORS+x} ]; then \
         sed -i 's/gpgcheck=1/gpgcheck=0/g' /etc/yum.repos.d/CentOS-Base.repo &&\
         curl -fsSL ${LINUX_MIRRORS}/repo/epel-7.repo -o /etc/yum.repos.d/epel.repo; \
     fi &&\
-    yum clean all && yum makecache && yum update -y &&\
+    yum clean all && yum install -y epel-release && yum makecache && yum update -y &&\
     yum install -y sudo curl jq net-tools zsh p7zip nano fontconfig ntpdate dpkg openssl  \
                 gcc glibc-devel zlib-devel libstdc++-static gcc-c++ make openssl-devel libffi-devel curl-devel expat-devel gettext-devel && \
     rm -rf /tmp/* /var/tmp/* /var/cache/yum
