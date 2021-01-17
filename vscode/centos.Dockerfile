@@ -1,11 +1,20 @@
 #FROM centos:7
 FROM centos:8
 
-# args
+# https://github.com/suisrc/code-server/releases
 ARG CODE_RELEASE=v1.52.1
 ARG CODE_URL=https://github.com/suisrc/code-server/releases/download/${CODE_RELEASE}/code-server-linux-amd64.tar.gz
 
-ARG S6_URL=https://github.com/just-containers/s6-overlay/releases/download/v2.0.0.1/s6-overlay-amd64.tar.gz
+# https://github.com/just-containers/s6-overlay/releases
+ARG S6_RELEASE=v2.1.0.2
+ARG S6_URL=https://github.com/just-containers/s6-overlay/releases/download/${S6_RELEASE}/s6-overlay-amd64.tar.gz
+
+# https://github.com/git/git/releases
+ARG GIT_RELEASE=v2.30.0
+ARG GIT_URL=https://github.com/git/git/archive/${GIT_RELEASE}.tar.gz
+
+# https://www.sqlite.org/download.html
+ARG SQLITE_URL=https://www.sqlite.org/2020/sqlite-autoconf-3340000.tar.gz
 
 ARG FONT_URL
 ARG FONT_RELEASE
@@ -20,22 +29,37 @@ ARG LINUX_MIRRORS
 LABEL maintainer="suisrc@outlook.com"
 
 ENV container docker
+
 # update linux
-# COPY RPM-GPG-KEY-* /etc/pki/rpm-gpg/
 RUN if [ ! -z ${LINUX_MIRRORS+x} ]; then \
         mv /etc/yum.repos.d/CentOS-Base.repo /etc/yum.repos.d/CentOS-Base.repo.bak &&\
-        curl -fsSL ${LINUX_MIRRORS}/repo/Centos-8.repo -o /etc/yum.repos.d/CentOS-Base.repo &&\
+        curl -fsSL ${LINUX_MIRRORS}/repo/Centos-7.repo -o /etc/yum.repos.d/CentOS-Base.repo &&\
         sed -i -e '/mirrors.cloud.aliyuncs.com/d' -e '/mirrors.aliyuncs.com/d' /etc/yum.repos.d/CentOS-Base.repo &&\
-        sed -i 's/gpgcheck=1/gpgcheck=0/g' /etc/yum.repos.d/CentOS-Base.repo; \
-        #curl -fsSL ${LINUX_MIRRORS}/repo/epel-8.repo -o /etc/yum.repos.d/epel.repo &&\
+        sed -i 's/gpgcheck=1/gpgcheck=0/g' /etc/yum.repos.d/CentOS-Base.repo &&\
+        curl -fsSL ${LINUX_MIRRORS}/repo/epel-7.repo -o /etc/yum.repos.d/epel.repo; \
     fi &&\
-    #yum install https://dl.fedoraproject.org/pub/epel/epel-release-latest-8.noarch.rpm
-    yum install -y epel-release &&\
-    dnf install -y 'dnf-command(config-manager)' && dnf config-manager --set-enabled PowerTools &&\
     yum clean all && yum makecache && yum update -y &&\
-    yum install -y sudo curl git jq net-tools zsh p7zip nano fontconfig dpkg openssl  \
-                gcc glibc-devel zlib-devel libstdc++-static gcc-c++ make openssl-devel libffi-devel && \
+    yum install -y sudo curl jq net-tools zsh p7zip nano fontconfig ntpdate dpkg openssl  \
+                gcc glibc-devel zlib-devel libstdc++-static gcc-c++ make openssl-devel libffi-devel curl-devel expat-devel && \
     rm -rf /tmp/* /var/tmp/* /var/cache/yum
+
+# sqlite版本低, 无法和django兼容(python框架，为后面扩展)
+RUN curl -fSL $SQLITE_URL -o sqlite-autoconf.tar.gz &&\
+    mkdir sqlite-autoconf && tar -zxvf sqlite-autoconf.tar.gz -C sqlite-autoconf --strip-components=1 &&\
+    cd sqlite-autoconf && ./configure --prefix=/usr/local && make && make install &&\
+    cd .. && rm -rf sqlite-autoconf && rm -f sqlite-autoconf.tar.gz &&\
+    mv /usr/bin/sqlite3  /usr/bin/sqlite3_old &&\
+    ln -s /usr/local/bin/sqlite3   /usr/bin/sqlite3 &&\
+    echo "/usr/local/lib" > /etc/ld.so.conf.d/sqlite3.conf && ldconfig &&\
+    sqlite3 -version
+
+# git版本低， 无法和vscode兼容
+RUN curl -fSL $GIT_URL -o git-autoconf.tar.gz &&\
+    mkdir git-autoconf && tar -zxvf git-autoconf.tar.gz -C git-autoconf --strip-components=1 &&\
+    cd git-autoconf && ./configure --prefix=/usr/local && make && make install &&\
+    cd .. && rm -rf git-autoconf && rm -f git-autoconf.tar.gz\
+    ln -s /usr/local/bin/git   /usr/bin/git &&\
+    git -version
 
 # install sarasa-gothic
 RUN if [ -z ${FONT_URL+x} ]; then \
@@ -129,7 +153,7 @@ EXPOSE 7000
 ENTRYPOINT ["/init"]
 
 RUN mkdir -p /etc/services.d/vscode && \
-    echo -e "#!/usr/bin/execlineb -P\ncode-server --bind-addr 0.0.0.0:7000 --disable-telemetry /home/project" > /etc/services.d/vscode/run && \
+    echo -e "#!/usr/bin/execlineb -P\ncode-server --bind-addr 0.0.0.0:7000 --disable-telemetry --disable-update-check /home/project" > /etc/services.d/vscode/run && \
     chmod +x /etc/services.d/vscode/run &&\
     #echo -e "#!/usr/bin/execlineb -S1\ns6-svscanctl -t /var/run/s6/services" > /etc/services.d/vscode/finish && \
     #chmod +x /etc/services.d/vscode/finish &&\

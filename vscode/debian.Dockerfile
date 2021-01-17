@@ -5,9 +5,9 @@ FROM debian:buster-slim
 # args
 ARG CODE_RELEASE=v1.52.1
 ARG CODE_URL=https://github.com/suisrc/code-server/releases/download/${CODE_RELEASE}/code-server-linux-amd64.tar.gz
-ARG CODE_RELEASE
 
-ARG S6_URL=https://github.com/just-containers/s6-overlay/releases/download/v2.0.0.1/s6-overlay-amd64.tar.gz
+ARG S6_RELEASE=v2.1.0.2
+ARG S6_URL=https://github.com/just-containers/s6-overlay/releases/download/${S6_RELEASE}/s6-overlay-amd64.tar.gz
 
 ARG FONT_URL
 ARG FONT_RELEASE
@@ -128,7 +128,7 @@ EXPOSE 7000
 ENTRYPOINT ["/init"]
 
 RUN mkdir -p /etc/services.d/vscode && \
-    echo "#!/usr/bin/execlineb -P\ncode-server --bind-addr 0.0.0.0:7000 --disable-telemetry /home/project" > /etc/services.d/vscode/run && \
+    echo "#!/usr/bin/execlineb -P\ncode-server --bind-addr 0.0.0.0:7000 --disable-telemetry --disable-update-check /home/project" > /etc/services.d/vscode/run && \
     chmod +x /etc/services.d/vscode/run &&\
     #echo "#!/usr/bin/execlineb -S1\ns6-svscanctl -t /var/run/s6/services" > /etc/services.d/vscode/finish && \
     #chmod +x /etc/services.d/vscode/finish &&\
