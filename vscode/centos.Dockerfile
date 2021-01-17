@@ -46,7 +46,7 @@ RUN if [ ! -z ${LINUX_MIRRORS+x} ]; then \
 RUN curl -fSL $GIT_URL -o git-autoconf.tar.gz &&\
     mkdir git-autoconf && tar -zxf git-autoconf.tar.gz -C git-autoconf --strip-components=1 &&\
     cd git-autoconf && make prefix=/usr/local && make prefix=/usr/local install &&\
-    cd .. && rm -rf git-autoconf && rm -f git-autoconf.tar.gz\
+    cd .. && rm -rf git-autoconf && rm -f git-autoconf.tar.gz &&\
     ln -s /usr/local/bin/git   /usr/bin/git &&\
     git version
 
