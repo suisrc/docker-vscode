@@ -1,7 +1,7 @@
 #FROM suisrc/vscode:centos
-FROM docker.pkg.github.com/suisrc/docker-vscode/vscode:1.47.3-centos
+FROM docker.pkg.github.com/suisrc/docker-vscode/vscode:1.52.1-centos
 
-ENV NODE_VERSION 12.18.3
+ENV NODE_VERSION v14.15.4
 
 # nodejs
 RUN echo "**** install nodejs ****" &&\
@@ -16,9 +16,9 @@ RUN echo "**** install nodejs ****" &&\
       *) echo "unsupported architecture"; exit 1 ;; \
     esac &&\
     set -ex &&\
-    curl -fsSLO --compressed "https://nodejs.org/dist/v$NODE_VERSION/node-v$NODE_VERSION-linux-$ARCH.tar.gz" &&\
-    tar -xzf "node-v$NODE_VERSION-linux-$ARCH.tar.gz" -C /usr/local --strip-components=1 --no-same-owner &&\
-    rm "node-v$NODE_VERSION-linux-$ARCH.tar.gz"  &&\
+    curl -fsSLO --compressed "https://nodejs.org/dist/$NODE_VERSION/node-$NODE_VERSION-linux-$ARCH.tar.gz" &&\
+    tar -xzf "node-$NODE_VERSION-linux-$ARCH.tar.gz" -C /usr/local --strip-components=1 --no-same-owner &&\
+    rm "node-$NODE_VERSION-linux-$ARCH.tar.gz"  &&\
     ln -s /usr/local/bin/node /usr/local/bin/nodejs &&\
     # smoke tests
     node --version &&\
