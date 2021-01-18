@@ -61,7 +61,8 @@ RUN mv /root/.local/share/code-server/User/settings2.json /root/.local/share/cod
     mkdir -p /home/project && mkdir -p /sh && \
     mkdir -p /root/.local/share/code-server/User/globalStorage
 
-COPY init-*.sh /sh/
+COPY init-git.sh /sh/git
+COPY init-ssh.sh /sh/ssh
 
 WORKDIR /home/project
 #VOLUME [ "/home/project" ]
@@ -81,7 +82,7 @@ RUN mkdir -p /etc/services.d/vscode && \
     chmod +x /etc/services.d/vscode/run &&\
     #echo "#!/usr/bin/execlineb -S1\ns6-svscanctl -t /var/run/s6/services" > /etc/services.d/vscode/finish && \
     #chmod +x /etc/services.d/vscode/finish &&\
-    echo "#!/usr/bin/execlineb -P\n/sh/init-git.sh" > /etc/cont-init.d/git-init &&\
+    echo "#!/usr/bin/execlineb -P\n/sh/git" > /etc/cont-init.d/git-init &&\
     chmod +x /etc/cont-init.d/git-init
 ENV S6_KEEP_ENV=true
 

@@ -38,7 +38,7 @@ RUN if [ ! -z ${LINUX_MIRRORS+x} ]; then \
         curl -fsSL ${LINUX_MIRRORS}/repo/epel-7.repo -o /etc/yum.repos.d/epel.repo; \
     fi &&\
     yum clean all && yum install -y epel-release && yum makecache && yum update -y &&\
-    yum install -y sudo curl jq net-tools zsh p7zip nano fontconfig ntpdate dpkg openssl  \
+    yum install -y sudo curl jq net-tools zsh p7zip nano fontconfig ntpdate dpkg openssl openssh-server \
                 gcc glibc-devel zlib-devel libstdc++-static gcc-c++ make openssl-devel libffi-devel curl-devel expat-devel gettext-devel && \
     rm -rf /tmp/* /var/tmp/* /var/cache/yum
 
@@ -135,7 +135,8 @@ COPY ["settings.json", "locale.json", "/root/.local/share/code-server/User/"]
 RUN mkdir -p /home/project && mkdir -p /home/test/mirror && mkdir -p /sh/ &&\
     mkdir -p /root/.local/share/code-server/User/globalStorage
 # test
-COPY init-*.sh /sh/
+COPY init-git.sh /sh/git
+COPY init-ssh.sh /sh/ssh
 COPY test.*   /home/test/
 COPY mirror-* /home/test/mirror/
 
@@ -151,6 +152,6 @@ RUN mkdir -p /etc/services.d/vscode && \
     chmod +x /etc/services.d/vscode/run &&\
     #echo -e "#!/usr/bin/execlineb -S1\ns6-svscanctl -t /var/run/s6/services" > /etc/services.d/vscode/finish && \
     #chmod +x /etc/services.d/vscode/finish &&\
-    echo -e "#!/usr/bin/execlineb -P\n/sh/init-git.sh" > /etc/cont-init.d/git-init &&\
+    echo -e "#!/usr/bin/execlineb -P\n/sh/git" > /etc/cont-init.d/git-init &&\
     chmod +x /etc/cont-init.d/git-init
 ENV S6_KEEP_ENV=true
