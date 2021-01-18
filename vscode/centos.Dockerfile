@@ -44,7 +44,7 @@ RUN if [ ! -z ${LINUX_MIRRORS+x} ]; then \
 
 # git版本低， 无法和vscode兼容
 RUN curl -fSL $GIT_URL -o /tmp/git-autoconf.tar.gz &&\
-    mkdir /tmp/git-autoconf && tar -zxf /tmp/git-autoconf.tar.gz -C git-autoconf --strip-components=1 &&\
+    mkdir /tmp/git-autoconf && tar -zxf /tmp/git-autoconf.tar.gz -C /tmp/git-autoconf --strip-components=1 &&\
     cd /tmp/git-autoconf && make prefix=/usr/local && make prefix=/usr/local install &&\
     mv /usr/bin/git  /usr/bin/git_old &&\
     ln -s /usr/local/bin/git  /usr/bin/git &&\
@@ -52,7 +52,7 @@ RUN curl -fSL $GIT_URL -o /tmp/git-autoconf.tar.gz &&\
 
 # sqlite版本低, 无法和django兼容(python框架，为后面扩展)
 RUN curl -fSL $SQLITE_URL -o /tmp/sqlite-autoconf.tar.gz &&\
-    mkdir /tmp/sqlite-autoconf && tar -zxf /tmp/sqlite-autoconf.tar.gz -C sqlite-autoconf --strip-components=1 &&\
+    mkdir /tmp/sqlite-autoconf && tar -zxf /tmp/sqlite-autoconf.tar.gz -C /tmp/sqlite-autoconf --strip-components=1 &&\
     cd /tmp/sqlite-autoconf && ./configure --prefix=/usr/local && make && make install &&\
     mv /usr/bin/sqlite3  /usr/bin/sqlite3_old &&\
     ln -s /usr/local/bin/sqlite3   /usr/bin/sqlite3 &&\
