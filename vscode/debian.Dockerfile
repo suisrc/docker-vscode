@@ -34,9 +34,9 @@ RUN if [ ! -z ${LINUX_MIRRORS+x} ]; then \
         echo "deb ${LINUX_MIRRORS}/debian/ buster-backports main non-free contrib" >>/etc/apt/sources.list &&\
         echo "deb-src ${LINUX_MIRRORS}/debian/ buster-backports main non-free contrib" >>/etc/apt/sources.list; \
     fi &&\
-    apt-get update && \
-    apt-get install --no-install-recommends -y \
-        sudo ca-certificates curl git procps jq net-tools zsh vim p7zip nano fontconfig ntpdate locales dpkg \
+    apt update && \
+    apt install --no-install-recommends -y \
+        sudo ca-certificates curl git procps jq net-tools zsh vim p7zip nano fontconfig ntpdate locales dpkg openssh-server \
         gcc build-essential libz-dev zlib1g-dev &&\
     rm -rf /tmp/* /var/tmp/* /var/lib/apt/lists/*
 
@@ -114,7 +114,8 @@ ENV LC_ALL=zh_CN.UTF-8 \
 RUN mkdir -p /home/project && mkdir -p /home/test/mirror && mkdir -p /sh/ &&\
     mkdir -p /root/.local/share/code-server/User/globalStorage
 # test
-COPY init-*.sh /sh/
+COPY init-git.sh /sh/git
+COPY init-ssh.sh /sh/ssh
 COPY test.*   /home/test/
 COPY mirror-* /home/test/mirror/
 
@@ -130,6 +131,6 @@ RUN mkdir -p /etc/services.d/vscode && \
     chmod +x /etc/services.d/vscode/run &&\
     #echo "#!/usr/bin/execlineb -S1\ns6-svscanctl -t /var/run/s6/services" > /etc/services.d/vscode/finish && \
     #chmod +x /etc/services.d/vscode/finish &&\
-    echo "#!/usr/bin/execlineb -P\n/sh/init-git.sh" > /etc/cont-init.d/git-init &&\
+    echo "#!/usr/bin/execlineb -P\n/sh/git" > /etc/cont-init.d/git-init &&\
     chmod +x /etc/cont-init.d/git-init
 ENV S6_KEEP_ENV=true
