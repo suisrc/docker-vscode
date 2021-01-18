@@ -43,23 +43,21 @@ RUN if [ ! -z ${LINUX_MIRRORS+x} ]; then \
     rm -rf /tmp/* /var/tmp/* /var/cache/yum
 
 # git版本低， 无法和vscode兼容
-RUN curl -fSL $GIT_URL -o git-autoconf.tar.gz &&\
-    mkdir git-autoconf && tar -zxf git-autoconf.tar.gz -C git-autoconf --strip-components=1 &&\
-    cd git-autoconf && make prefix=/usr/local && make prefix=/usr/local install &&\
-    cd .. && rm -rf git-autoconf && rm -f git-autoconf.tar.gz &&\
+RUN curl -fSL $GIT_URL -o /tmp/git-autoconf.tar.gz &&\
+    mkdir /tmp/git-autoconf && tar -zxf /tmp/git-autoconf.tar.gz -C git-autoconf --strip-components=1 &&\
+    cd /tmp/git-autoconf && make prefix=/usr/local && make prefix=/usr/local install &&\
     mv /usr/bin/git  /usr/bin/git_old &&\
-    ln -s /usr/local/bin/git   /usr/bin/git &&\
-    git version
+    ln -s /usr/local/bin/git  /usr/bin/git &&\
+    git version && rm -rf /tmp/*
 
 # sqlite版本低, 无法和django兼容(python框架，为后面扩展)
-RUN curl -fSL $SQLITE_URL -o sqlite-autoconf.tar.gz &&\
-    mkdir sqlite-autoconf && tar -zxf sqlite-autoconf.tar.gz -C sqlite-autoconf --strip-components=1 &&\
-    cd sqlite-autoconf && ./configure --prefix=/usr/local && make && make install &&\
-    cd .. && rm -rf sqlite-autoconf && rm -f sqlite-autoconf.tar.gz &&\
+RUN curl -fSL $SQLITE_URL -o /tmp/sqlite-autoconf.tar.gz &&\
+    mkdir /tmp/sqlite-autoconf && tar -zxf /tmp/sqlite-autoconf.tar.gz -C sqlite-autoconf --strip-components=1 &&\
+    cd /tmp/sqlite-autoconf && ./configure --prefix=/usr/local && make && make install &&\
     mv /usr/bin/sqlite3  /usr/bin/sqlite3_old &&\
     ln -s /usr/local/bin/sqlite3   /usr/bin/sqlite3 &&\
     echo "/usr/local/lib" > /etc/ld.so.conf.d/sqlite3.conf && ldconfig &&\
-    sqlite3 -version
+    sqlite3 -version && rm -rf /tmp/*
 
 # install sarasa-gothic
 RUN if [ -z ${FONT_URL+x} ]; then \
@@ -74,8 +72,7 @@ RUN if [ -z ${FONT_URL+x} ]; then \
     mkdir -p /usr/share/fonts/truetype/sarasa-gothic &&\
     cd /usr/share/fonts/truetype/sarasa-gothic &&\
     7za x /tmp/sarasa-gothic-ttf.7z &&\
-    fc-cache -f -v &&\
-    rm -rf /tmp/*
+    fc-cache -f -v && rm -rf /tmp/*
 
 # install oh-my-zsh
 # https://raw.githubusercontent.com/robbyrussell/oh-my-zsh/master/tools/install.sh => https://gitee.com/mirrors/oh-my-zsh/raw/master/tools/install.sh
@@ -92,11 +89,8 @@ RUN if [ -z ${OH_MY_ZSH_SH_URL+x} ]; then \
     #sed -i "s/ZSH_THEME=\"robbyrussell\"/ZSH_THEME=\"agnoster\"/g" /root/.zshrc
 
 # s6-overlay
-RUN curl -o /tmp/s6.tar.gz -L "${S6_URL}" && \ 
+RUN curl -o /tmp/s6.tar.gz -L "${S6_URL}" &&\
     tar xzf /tmp/s6.tar.gz -C / --exclude='./bin' && tar xzf /tmp/s6.tar.gz -C /usr ./bin &&\
-    # /bin = /usr/bin
-    #ln -s /usr/bin/importas /bin/importas &&\
-    #ln -s /usr/bin/execlineb /bin/execlineb &&\
     rm -rf /tmp/*
 
 # install code-server
