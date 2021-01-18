@@ -1,8 +1,8 @@
 #FROM suisrc/vscode:centos
-FROM docker.pkg.github.com/suisrc/docker-vscode/vscode:1.47.3-centos
+FROM docker.pkg.github.com/suisrc/docker-vscode/vscode:1.52.1-centos
 
 # args
-ARG GRAALVM_RELEASE=vm-20.1.0
+ARG GRAALVM_RELEASE=vm-20.3.0
 ARG JAVA_RELEASE=java11
 ARG GRAALVM_URL
 
@@ -52,5 +52,8 @@ RUN code-server --install-extension redhat.vscode-yaml &&\
     code-server --install-extension redhat.vscode-xml &&\
     #code-server --install-extension mhutchie.git-graph &&\
     #code-server --install-extension intellsmi.comment-translate &&\
-    code-server --install-extension vscjava.vscode-java-pack
+    code-server --install-extension vscjava.vscode-java-pack &&\
+    code-server --install-extension gabrielbb.vscode-lombok &&\
+    code-server --install-extension sonarsource.sonarlint-vscode &&\
+    code-server --install-extension cweijan.vscode-mysql-client2
 
