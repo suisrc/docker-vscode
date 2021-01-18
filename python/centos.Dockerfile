@@ -1,5 +1,5 @@
 #FROM suisrc/vscode:centos
-FROM docker.pkg.github.com/suisrc/docker-vscode/vscode:1.47.3-centos
+FROM docker.pkg.github.com/suisrc/docker-vscode/vscode:1.52.1-centos
 
 RUN yum update -y && yum install -y python3 &&\
     ln -s /usr/bin/python3 /usr/local/bin/py &&\
