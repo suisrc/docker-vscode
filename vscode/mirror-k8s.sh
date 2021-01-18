@@ -25,7 +25,7 @@ EOF
 # 普通镜像替换国内镜像
 # centos
 mv /etc/yum.repos.d/CentOS-Base.repo /etc/yum.repos.d/CentOS-Base.repo.bak &&\
-LINUX_MIRRORS=http://mirrors.aliyuncs.com &&\
+LINUX_MIRRORS=http://mirrors.aliyun.com &&\
 curl -fsSL ${LINUX_MIRRORS}/repo/Centos-8.repo -o /etc/yum.repos.d/CentOS-Base.repo &&\
 sed -i -e '/mirrors.cloud.aliyuncs.com/d' -e '/mirrors.aliyuncs.com/d' /etc/yum.repos.d/CentOS-Base.repo &&\
 sed -i 's/gpgcheck=1/gpgcheck=0/g' /etc/yum.repos.d/CentOS-Base.repo &&\
@@ -40,7 +40,7 @@ echo "gpgkey=${LINUX_MIRRORS}/kubernetes/yum/doc/yum-key.gpg ${LINUX_MIRRORS}/ku
 echo "" >> /etc/yum.repos.d/kubernetes.repo; \
 # debian
 mv /etc/apt/sources.list /etc/apt/sources.list.bak && \
-LINUX_MIRRORS=http://mirrors.aliyuncs.com &&\
+LINUX_MIRRORS=http://mirrors.aliyun.com &&\
 echo "deb ${LINUX_MIRRORS}/debian/ buster main non-free contrib" >>/etc/apt/sources.list &&\
 echo "deb-src ${LINUX_MIRRORS}/debian/ buster main non-free contrib" >>/etc/apt/sources.list &&\
 echo "deb ${LINUX_MIRRORS}/debian-security buster/updates main" >>/etc/apt/sources.list &&\

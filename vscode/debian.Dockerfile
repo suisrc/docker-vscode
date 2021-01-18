@@ -3,10 +3,11 @@ FROM debian:buster-slim
 #FROM debian:buster
 
 # args
-ARG CODE_URL=https://github.com/suisrc/code-server/releases/download/v1.47.3/code-server-3.4.1-linux-amd64.tar.gz
-ARG CODE_RELEASE
+ARG CODE_RELEASE=v1.52.1
+ARG CODE_URL=https://github.com/suisrc/code-server/releases/download/${CODE_RELEASE}/code-server-linux-amd64.tar.gz
 
-ARG S6_URL=https://github.com/just-containers/s6-overlay/releases/download/v2.0.0.1/s6-overlay-amd64.tar.gz
+ARG S6_RELEASE=v2.1.0.2
+ARG S6_URL=https://github.com/just-containers/s6-overlay/releases/download/${S6_RELEASE}/s6-overlay-amd64.tar.gz
 
 ARG FONT_URL
 ARG FONT_RELEASE
@@ -70,10 +71,8 @@ RUN if [ -z ${OH_MY_ZSH_SH_URL+x} ]; then \
     #sed -i "s/ZSH_THEME=\"robbyrussell\"/ZSH_THEME=\"agnoster\"/g" /root/.zshrc
 
 # s6-overlay
-RUN curl -o /tmp/s6.tar.gz -L "${S6_URL}" && \ 
-    tar xzf /tmp/s6.tar.gz -C / --exclude='./bin' && tar xzf /tmp/s6.tar.gz -C /usr ./bin &&\
-    ln -s /usr/bin/importas /bin/importas &&\
-    ln -s /usr/bin/execlineb /bin/execlineb &&\
+RUN curl -o /tmp/s6.tar.gz -L "${S6_URL}" &&\
+    tar xzf /tmp/s6.tar.gz -C / &&\
     rm -rf /tmp/*
 
 # install code-server
@@ -127,7 +126,7 @@ EXPOSE 7000
 ENTRYPOINT ["/init"]
 
 RUN mkdir -p /etc/services.d/vscode && \
-    echo "#!/usr/bin/execlineb -P\ncode-server --bind-addr 0.0.0.0:7000 --disable-telemetry /home/project" > /etc/services.d/vscode/run && \
+    echo "#!/usr/bin/execlineb -P\ncode-server --bind-addr 0.0.0.0:7000 --disable-telemetry --disable-update-check /home/project" > /etc/services.d/vscode/run && \
     chmod +x /etc/services.d/vscode/run &&\
     #echo "#!/usr/bin/execlineb -S1\ns6-svscanctl -t /var/run/s6/services" > /etc/services.d/vscode/finish && \
     #chmod +x /etc/services.d/vscode/finish &&\

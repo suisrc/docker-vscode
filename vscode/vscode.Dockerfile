@@ -2,10 +2,11 @@
 # FROM alpine:3
 FROM debian:buster-slim
 
-ARG CODE_URL=https://github.com/suisrc/code-server/releases/download/v1.47.3/code-server-3.4.1-linux-amd64.tar.gz
-ARG CODE_RELEASE
+ARG CODE_RELEASE=v1.52.1
+ARG CODE_URL=https://github.com/suisrc/code-server/releases/download/${CODE_RELEASE}/code-server-linux-amd64.tar.gz
 
-ARG S6_URL=https://github.com/just-containers/s6-overlay/releases/download/v2.0.0.1/s6-overlay-amd64.tar.gz
+ARG S6_RELEASE=v2.1.0.2
+ARG S6_URL=https://github.com/just-containers/s6-overlay/releases/download/${S6_RELEASE}/s6-overlay-amd64.tar.gz
 
 # linux and softs
 # apk add --no-cache openssh bash vim curl jq tar git #apline软件
@@ -15,11 +16,8 @@ RUN apt update && apt install --no-install-recommends -y \
     rm -rf /tmp/* /var/tmp/* /var/lib/apt/lists/*
 
 # s6-overlay
-RUN curl -o /tmp/s6.tar.gz -L "${S6_URL}" && \ 
-    tar xzf /tmp/s6.tar.gz -C / --exclude='./bin' && tar xzf /tmp/s6.tar.gz -C /usr ./bin &&\
-    #sed -i "s/^\/bin\/importas /\/usr\/bin\/importas /g" /init &&\
-    ln -s /usr/bin/importas /bin/importas &&\
-    ln -s /usr/bin/execlineb /bin/execlineb &&\
+RUN curl -o /tmp/s6.tar.gz -L "${S6_URL}" &&\
+    tar xzf /tmp/s6.tar.gz -C / &&\
     rm -rf /tmp/*
 
 # code-server
@@ -46,7 +44,8 @@ ENV SERVICE_URL=https://marketplace.visualstudio.com/_apis/public/gallery \
 # install code server extension
 RUN code-server --install-extension ms-ceintl.vscode-language-pack-zh-hans &&\
     code-server --install-extension mhutchie.git-graph &&\
-    code-server --install-extension esbenp.prettier-vscode 
+    code-server --install-extension esbenp.prettier-vscode &&\
+    code-server --install-extension humao.rest-client
 
 # config for user
 COPY ["locale.json", "settings2.json", "/root/.local/share/code-server/User/"]
@@ -78,7 +77,7 @@ ENTRYPOINT ["/init"]
 
 # /etc/services.d/
 RUN mkdir -p /etc/services.d/vscode && \
-    echo "#!/usr/bin/execlineb -P\ncode-server --bind-addr 0.0.0.0:7000 --disable-telemetry /home/project" > /etc/services.d/vscode/run && \
+    echo "#!/usr/bin/execlineb -P\ncode-server --bind-addr 0.0.0.0:7000 --disable-telemetry --disable-update-check /home/project" > /etc/services.d/vscode/run && \
     chmod +x /etc/services.d/vscode/run &&\
     #echo "#!/usr/bin/execlineb -S1\ns6-svscanctl -t /var/run/s6/services" > /etc/services.d/vscode/finish && \
     #chmod +x /etc/services.d/vscode/finish &&\
