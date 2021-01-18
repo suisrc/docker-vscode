@@ -2,7 +2,7 @@
 FROM docker.pkg.github.com/suisrc/docker-vscode/vscode:1.52.1-debian
 
 # https://github.com/AdoptOpenJDK/openjdk11-binaries/releases
-ARG JAVA_RELEASE=jdk-11.0.9+11.2_openj9-0.23.0
+ARG JAVA_RELEASE=jdk-11.0.9+11_openj9-0.23.0
 ARG JAVA_URL
 
 ARG MAVEN_RELEASE=3.6.3
