@@ -1,10 +1,6 @@
 #!/bin/sh
 set -e
-## !/usr/bin/execlineb -P
-## chmod +x /sh/init-ssh.sh
-# 安装sshd服务器(centos): yum install openssh-server -y
-# 安装sshd服务器(debian): apt install openssh-server -y
-# 获取远程私钥:     cat /etc/ssh/ssh_host_rsa_key
+# 获取远程登录私钥: ssh-keygen -q -t rsa && cat >> ~/.ssh/authorized_keys < ~/.ssh/id_rsa.pub && cat ~/.ssh/id_rsa
 # 配置远程登录密码: echo "root:${PASSWORD}" | chpasswd
 if [ -f '/etc/init.d/ssh' ]; then
   # echo "PermitRootLogin yes" >> /etc/ssh/sshd_config
@@ -39,3 +35,4 @@ else
       ;;
   esac
 fi
+
