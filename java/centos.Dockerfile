@@ -1,8 +1,8 @@
 #FROM suisrc/vscode:centos
-FROM docker.pkg.github.com/suisrc/docker-vscode/vscode:1.47.3-centos
+FROM docker.pkg.github.com/suisrc/docker-vscode/vscode:1.52.1-centos
 
-# args
-ARG JAVA_RELEASE=jdk8u262-b10_openj9-0.21.0
+# https://github.com/AdoptOpenJDK/openjdk8-binaries/releases
+ARG JAVA_RELEASE=jdk8u275-b01_openj9-0.23.0
 ARG JAVA_URL
 
 ARG MAVEN_RELEASE=3.6.3
@@ -50,6 +50,9 @@ ENV MAVEN_HOME /usr/share/maven
 # extension
 RUN code-server --install-extension redhat.vscode-yaml &&\
     code-server --install-extension redhat.vscode-xml &&\
-    code-server --install-extension vscjava.vscode-java-pack
+    code-server --install-extension vscjava.vscode-java-pack &&\
+    code-server --install-extension gabrielbb.vscode-lombok &&\
+    code-server --install-extension sonarsource.sonarlint-vscode &&\
+    code-server --install-extension cweijan.vscode-mysql-client2
 
 

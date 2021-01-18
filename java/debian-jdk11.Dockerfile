@@ -1,8 +1,8 @@
 # FROM suisrc/vscode:debian
-FROM docker.pkg.github.com/suisrc/docker-vscode/vscode:1.47.3-debian
+FROM docker.pkg.github.com/suisrc/docker-vscode/vscode:1.52.1-debian
 
-# args
-ARG JAVA_RELEASE=jdk-11.0.8+10_openj9-0.21.0
+# https://github.com/AdoptOpenJDK/openjdk11-binaries/releases
+ARG JAVA_RELEASE=jdk-11.0.9+11_openj9-0.23.0
 ARG JAVA_URL
 
 ARG MAVEN_RELEASE=3.6.3
@@ -48,6 +48,9 @@ ENV MAVEN_HOME /usr/share/maven
 # extension
 RUN code-server --install-extension redhat.vscode-yaml &&\
     code-server --install-extension redhat.vscode-xml &&\
-    code-server --install-extension vscjava.vscode-java-pack
+    code-server --install-extension vscjava.vscode-java-pack &&\
+    code-server --install-extension gabrielbb.vscode-lombok &&\
+    code-server --install-extension sonarsource.sonarlint-vscode &&\
+    code-server --install-extension cweijan.vscode-mysql-client2
 
 
