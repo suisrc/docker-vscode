@@ -1,8 +1,9 @@
 FROM centos:7
 
 # https://github.com/suisrc/code-server/releases
-ARG CODE_RELEASE=v1.52.1
-ARG CODE_URL=https://github.com/suisrc/code-server/releases/download/${CODE_RELEASE}/code-server-linux-amd64.tar.gz
+#ARG CODE_RELEASE=v1.52.1
+#ARG CODE_URL=https://github.com/suisrc/code-server/releases/download/${CODE_RELEASE}/code-server-linux-amd64.tar.gz
+ARG CODE_URL=https://github.com/cdr/code-server/releases/download/v3.9.1/code-server-3.9.1-linux-amd64.tar.gz
 
 # https://github.com/just-containers/s6-overlay/releases
 ARG S6_RELEASE=v2.1.0.2
