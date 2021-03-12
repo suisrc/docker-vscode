@@ -2,7 +2,7 @@
 
 提供graal, java, nodejs, golang等vscode online版本  
 
-当前版本：1.52.1  
+当前版本：1.53.2  
 
 ## 镜像：
 
@@ -21,30 +21,39 @@ docker.pkg.github.com/suisrc/docker-vscode/vscode
 ## TAGS
 
 ### centos (默认使用centos)
-suisrc/vscode:[1.52.1-centos](https://github.com/suisrc/docker-vscode/tree/dev-vscode)  
-suisrc/vscode:[1.52.1-centos-nodejs](https://github.com/suisrc/docker-vscode/tree/dev-nodejs)  
-suisrc/vscode:[1.52.1-centos-golang](https://github.com/suisrc/docker-vscode/tree/dev-golang)  
-suisrc/vscode:[1.52.1-centos-java](https://github.com/suisrc/docker-vscode/tree/dev-java)  
-suisrc/vscode:[1.52.1-centos-graal](https://github.com/suisrc/docker-vscode/tree/dev-graal)  
-suisrc/vscode:[1.52.1-centos-python](https://github.com/suisrc/docker-vscode/tree/dev-python)  
-suisrc/vscode:[1.52.1-centos-one](https://github.com/suisrc/docker-vscode/tree/dev-one)  
+suisrc/vscode:[1.53.2-centos](https://github.com/suisrc/docker-vscode/tree/dev-vscode)  
+suisrc/vscode:[1.53.2-centos-nodejs](https://github.com/suisrc/docker-vscode/tree/dev-nodejs)  
+suisrc/vscode:[1.53.2-centos-golang](https://github.com/suisrc/docker-vscode/tree/dev-golang)  
+suisrc/vscode:[1.53.2-centos-java](https://github.com/suisrc/docker-vscode/tree/dev-java)  
+suisrc/vscode:[1.53.2-centos-graal](https://github.com/suisrc/docker-vscode/tree/dev-graal)  
+suisrc/vscode:[1.53.2-centos-python](https://github.com/suisrc/docker-vscode/tree/dev-python)  
+suisrc/vscode:[1.53.2-centos-one](https://github.com/suisrc/docker-vscode/tree/dev-one)  
   
 
 ### debian (默认使用debian:buster)
-suisrc/vscode:[1.52.1](https://github.com/suisrc/docker-vscode/tree/dev-vscode)  
-suisrc/vscode:[1.52.1-debian](https://github.com/suisrc/docker-vscode/tree/dev-vscode)  
-suisrc/vscode:[1.52.1-debian-nodejs](https://github.com/suisrc/docker-vscode/tree/dev-nodejs)  
-suisrc/vscode:[1.52.1-debian-golang](https://github.com/suisrc/docker-vscode/tree/dev-golang)  
-suisrc/vscode:[1.52.1-debian-java](https://github.com/suisrc/docker-vscode/tree/dev-java)  
-suisrc/vscode:[1.52.1-debian-graal](https://github.com/suisrc/docker-vscode/tree/dev-graal)  
-suisrc/vscode:[1.52.1-debian-python](https://github.com/suisrc/docker-vscode/tree/dev-python)  
-suisrc/vscode:[1.52.1-debian-php](https://github.com/suisrc/docker-vscode/tree/dev-php)  
+suisrc/vscode:[1.53.2](https://github.com/suisrc/docker-vscode/tree/dev-vscode)  
+suisrc/vscode:[1.53.2-debian](https://github.com/suisrc/docker-vscode/tree/dev-vscode)  
+suisrc/vscode:[1.53.2-debian-nodejs](https://github.com/suisrc/docker-vscode/tree/dev-nodejs)  
+suisrc/vscode:[1.53.2-debian-golang](https://github.com/suisrc/docker-vscode/tree/dev-golang)  
+suisrc/vscode:[1.53.2-debian-java](https://github.com/suisrc/docker-vscode/tree/dev-java)  
+suisrc/vscode:[1.53.2-debian-graal](https://github.com/suisrc/docker-vscode/tree/dev-graal)  
+suisrc/vscode:[1.53.2-debian-python](https://github.com/suisrc/docker-vscode/tree/dev-python)  
+suisrc/vscode:[1.53.2-debian-php](https://github.com/suisrc/docker-vscode/tree/dev-php)  
   
 ## 备注说明
 1.鉴于centos8于2021年12月结束支持， 从1.52.1后的centos版本将会还原到centos7， 1.47.3将会是最后一个centos8版本  
 2.code-server使用cdr/code-server(3.8), 不在使用再次封装版本  
   
 ## 历史版本
+
+#### 1.52.1 centos:7
+[1.52.1-centos](https://hub.docker.com/r/suisrc/vscode/tags)
+  
+
+#### 1.52.1 debian:buster(10)
+[1.52.1](https://hub.docker.com/r/suisrc/vscode/tags)
+[1.52.1-debian](https://hub.docker.com/r/suisrc/vscode/tags)
+
 #### 1.47.3 centos:8
 [1.47.3-centos](https://hub.docker.com/r/suisrc/vscode/tags)
   
