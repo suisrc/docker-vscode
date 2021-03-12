@@ -1,13 +1,13 @@
 #FROM suisrc/vscode:centos
-FROM docker.pkg.github.com/suisrc/docker-vscode/vscode:1.52.1-centos
+FROM docker.pkg.github.com/suisrc/docker-vscode/vscode:1.53.2-centos
 
-ARG GO_VER=1.14.6
+ARG GO_VER=1.16.2
 ARG GO_URL=https://dl.google.com/go/go${GO_VER}.linux-amd64.tar.gz
 
 #ARG PY_VER=3.8.3
 #ARG PY_URL=https://www.python.org/ftp/python/${PY_VER}/Python-${PY_VER}.tgz
 
-ARG GRAALVM_RELEASE=vm-20.3.0
+ARG GRAALVM_RELEASE=vm-21.0.0.2
 ARG JAVA_RELEASE=java11
 ARG GRAALVM_URL
 
