@@ -1,5 +1,5 @@
 # FROM suisrc/vscode:debian
-FROM docker.pkg.github.com/suisrc/docker-vscode/vscode:1.52.1-debian
+FROM docker.pkg.github.com/suisrc/docker-vscode/vscode:1.53.2-debian
 
 ENV NODE_VERSION v14.15.4
 

@@ -1,5 +1,5 @@
 #FROM suisrc/vscode:centos
-FROM docker.pkg.github.com/suisrc/docker-vscode/vscode:1.52.1-centos
+FROM docker.pkg.github.com/suisrc/docker-vscode/vscode:1.53.2-centos
 
 ENV NODE_VERSION v14.15.4
 
