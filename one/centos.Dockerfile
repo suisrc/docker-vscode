@@ -1,7 +1,7 @@
 #FROM suisrc/vscode:centos
-FROM docker.pkg.github.com/suisrc/docker-vscode/vscode:1.53.2-centos
+FROM docker.pkg.github.com/suisrc/docker-vscode/vscode:1.54.2-centos
 
-ARG GO_VER=1.16.2
+ARG GO_VER=1.16.3
 ARG GO_URL=https://dl.google.com/go/go${GO_VER}.linux-amd64.tar.gz
 
 #ARG PY_VER=3.8.3
@@ -11,7 +11,7 @@ ARG GRAALVM_RELEASE=vm-21.0.0.2
 ARG JAVA_RELEASE=java11
 ARG GRAALVM_URL
 
-ARG MAVEN_RELEASE=3.6.3
+ARG MAVEN_RELEASE=3.8.1
 ARG MAVEN_URL=https://downloads.apache.org/maven/maven-3/${MAVEN_RELEASE}/binaries/apache-maven-${MAVEN_RELEASE}-bin.tar.gz
 
 # install python
