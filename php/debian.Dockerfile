@@ -1,4 +1,4 @@
-FROM docker.pkg.github.com/suisrc/docker-vscode/vscode:1.53.2-debian
+FROM docker.pkg.github.com/suisrc/docker-vscode/vscode:1.54.2-debian
 
 # https://github.com/docker-library/php/blob/86c8ec4d387132b65dbe6c5ab1747f858e03852e/7.4/buster/apache/Dockerfile
 
