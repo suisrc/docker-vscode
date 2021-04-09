@@ -3,18 +3,18 @@ FROM centos:7
 # https://github.com/suisrc/code-server/releases
 #ARG CODE_RELEASE=v1.52.1
 #ARG CODE_URL=https://github.com/suisrc/code-server/releases/download/${CODE_RELEASE}/code-server-linux-amd64.tar.gz
-ARG CODE_URL=https://github.com/cdr/code-server/releases/download/v3.9.1/code-server-3.9.1-linux-amd64.tar.gz
+ARG CODE_URL=https://github.com/cdr/code-server/releases/download/v3.9.3/code-server-3.9.3-linux-amd64.tar.gz
 
 # https://github.com/just-containers/s6-overlay/releases
-ARG S6_RELEASE=v2.1.0.2
+ARG S6_RELEASE=v2.2.0.3
 ARG S6_URL=https://github.com/just-containers/s6-overlay/releases/download/${S6_RELEASE}/s6-overlay-amd64.tar.gz
 
 # https://github.com/git/git/releases
-ARG GIT_RELEASE=v2.30.0
+ARG GIT_RELEASE=v2.31.1
 ARG GIT_URL=https://github.com/git/git/archive/${GIT_RELEASE}.tar.gz
 
 # https://www.sqlite.org/download.html
-ARG SQLITE_URL=https://www.sqlite.org/2020/sqlite-autoconf-3340000.tar.gz
+ARG SQLITE_URL=https://www.sqlite.org/2021/sqlite-autoconf-3350400.tar.gz
 
 ARG FONT_URL
 ARG FONT_RELEASE
