@@ -1,11 +1,11 @@
 #FROM suisrc/vscode:centos
-FROM docker.pkg.github.com/suisrc/docker-vscode/vscode:1.53.2-centos
+FROM docker.pkg.github.com/suisrc/docker-vscode/vscode:1.54.2-centos
 
 # https://github.com/AdoptOpenJDK/openjdk8-binaries/releases
 ARG JAVA_RELEASE=jdk8u282-b08_openj9-0.24.0
 ARG JAVA_URL
 
-ARG MAVEN_RELEASE=3.6.3
+ARG MAVEN_RELEASE=3.8.1
 ARG MAVEN_URL
 
 # jdk
