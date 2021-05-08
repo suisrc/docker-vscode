@@ -1,6 +1,6 @@
 /**
 quarkus
-mvn io.quarkus:quarkus-maven-plugin:1.4.2.Final:create \
+mvn io.quarkus:quarkus-maven-plugin:1.13.3.Final:create \
     -DprojectGroupId=cn.icgear.demo \
     -DprojectArtifactId=test \
     -DclassName="org.acme.getting.started.GreetingResource" \

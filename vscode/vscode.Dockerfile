@@ -1,6 +1,7 @@
 # 推荐一个最小安装版, alpine无法运行vsc的node
 # FROM alpine:3
-FROM debian:buster-slim
+# FROM debian:buster-slim
+FROM ubuntu:focal
 
 #ARG CODE_RELEASE=v1.52.1
 #ARG CODE_URL=https://github.com/suisrc/code-server/releases/download/${CODE_RELEASE}/code-server-linux-amd64.tar.gz
