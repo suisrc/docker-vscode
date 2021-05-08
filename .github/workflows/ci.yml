@@ -27,7 +27,7 @@ jobs:
 
       - name: Build image
         run: |
-          docker build ./vscode --file ./vscode/vscode.Dockerfile --tag image
+          docker build ./vscode --file ./vscode/${{ github.job }}.Dockerfile --tag image
 
       - name: Push github image
         run: |
@@ -94,7 +94,7 @@ jobs:
 
       - name: Build image
         run: |
-          docker build ./vscode --file ./vscode/centos.Dockerfile --tag image
+          docker build ./vscode --file ./vscode/${{ github.job }}.Dockerfile --tag image
 
       - name: Push github image
         #if: false
@@ -195,7 +195,7 @@ jobs:
 
       - name: Build image
         run: |
-          docker build ./vscode --file ./vscode/debian.Dockerfile --tag image
+          docker build ./vscode --file ./vscode/${{ github.job }}.Dockerfile --tag image
 
       - name: Push github image
         run: |
@@ -264,7 +264,7 @@ jobs:
 
       - name: Build image
         run: |
-          docker build ./vscode --file ./vscode/debian.Dockerfile --tag image
+          docker build ./vscode --file ./vscode/${{ github.job }}.Dockerfile --tag image
 
       - name: Push github image
         run: |
