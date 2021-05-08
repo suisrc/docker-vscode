@@ -19,7 +19,7 @@ RUN apt update && apt install --no-install-recommends -y \
 
 # s6-overlay
 RUN curl -o /tmp/s6.tar.gz -L "${S6_URL}" &&\
-    tar xzf /tmp/s6.tar.gz -C / &&\
+    tar xzf /tmp/s6.tar.gz -C / --exclude='./bin' && tar xzf /tmp/s6.tar.gz -C /usr ./bin &&\
     rm -rf /tmp/*
 
 # code-server
@@ -41,7 +41,8 @@ RUN if [ -z ${CODE_URL+x} ]; then \
 # change code server extension store
 # 更改默认的应用市场位微软的应用市场
 ENV SERVICE_URL=https://marketplace.visualstudio.com/_apis/public/gallery \
-    ITEM_URL=https://marketplace.visualstudio.com/items
+    ITEM_URL=https://marketplace.visualstudio.com/items \
+    PATH=/usr/bin:$PATH
 
 # install code server extension
 RUN code-server --install-extension ms-ceintl.vscode-language-pack-zh-hans &&\

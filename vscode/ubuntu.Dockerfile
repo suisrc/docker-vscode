@@ -74,7 +74,7 @@ RUN if [ -z ${OH_MY_ZSH_SH_URL+x} ]; then \
 
 # s6-overlay
 RUN curl -o /tmp/s6.tar.gz -L "${S6_URL}" &&\
-    tar xzf /tmp/s6.tar.gz -C / &&\
+    tar xzf /tmp/s6.tar.gz -C / --exclude='./bin' && tar xzf /tmp/s6.tar.gz -C /usr ./bin &&\
     rm -rf /tmp/*
 
 # install code-server
