@@ -41,8 +41,7 @@ RUN if [ -z ${CODE_URL+x} ]; then \
 # change code server extension store
 # 更改默认的应用市场位微软的应用市场
 ENV SERVICE_URL=https://marketplace.visualstudio.com/_apis/public/gallery \
-    ITEM_URL=https://marketplace.visualstudio.com/items \
-    PATH=/usr/bin:$PATH
+    ITEM_URL=https://marketplace.visualstudio.com/items
 
 # install code server extension
 RUN code-server --install-extension ms-ceintl.vscode-language-pack-zh-hans &&\
