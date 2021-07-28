@@ -1,8 +1,8 @@
 # FROM suisrc/vscode:debian
-FROM docker.pkg.github.com/suisrc/docker-vscode/vscode:1.54.2-debian
+FROM docker.pkg.github.com/suisrc/docker-vscode/vscode:1.57.1-debian
 
 # https://github.com/AdoptOpenJDK/openjdk8-binaries/releases
-ARG JAVA_RELEASE=jdk8u282-b08_openj9-0.24.0
+ARG JAVA_RELEASE=jdk8u292-b10_openj9-0.26.0
 ARG JAVA_URL
 
 ARG MAVEN_RELEASE=3.8.1
@@ -15,7 +15,7 @@ RUN if [ -z ${JAVA_URL+x} ]; then \
             | awk '/tag_name/{print $4;exit}' FS='[""]'); \
         fi && \
         JAVA_URL=$(curl -sX GET "https://api.github.com/repos/AdoptOpenJDK/openjdk8-binaries/releases/tags/${JAVA_RELEASE}" \
-            | jq -r 'first(.assets[] | select(.browser_download_url | contains("jdk_x64_linux_openj9_linuxXL") and endswith(".tar.gz") ) | .browser_download_url)'); \
+            | jq -r 'first(.assets[] | select(.browser_download_url | contains("jdk_x64_linux_openj9_") and endswith(".tar.gz") ) | .browser_download_url)'); \
     fi &&\
     mkdir -p /usr/lib/jvm/java-adopt &&\
     curl -L ${JAVA_URL} -o /tmp/adopt-open-jdk.tar.gz &&\
