@@ -5,7 +5,8 @@ FROM debian:buster-slim
 # args
 #ARG CODE_RELEASE=v1.52.1
 #ARG CODE_URL=https://github.com/suisrc/code-server/releases/download/${CODE_RELEASE}/code-server-linux-amd64.tar.gz
-ARG CODE_URL=https://github.com/cdr/code-server/releases/download/v3.9.3/code-server-3.9.3-linux-amd64.tar.gz
+ARG CODE_RELEASE=3.11.0
+ARG CODE_URL=https://github.com/cdr/code-server/releases/download/v${CODE_RELEASE}/code-server-${CODE_RELEASE}-linux-amd64.tar.gz
 
 ARG S6_RELEASE=v2.2.0.3
 ARG S6_URL=https://github.com/just-containers/s6-overlay/releases/download/${S6_RELEASE}/s6-overlay-amd64.tar.gz
