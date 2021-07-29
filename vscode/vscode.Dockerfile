@@ -1,10 +1,12 @@
 # 推荐一个最小安装版, alpine无法运行vsc的node
 # FROM alpine:3
-FROM debian:buster-slim
+# FROM debian:buster-slim
+FROM ubuntu:focal
 
 #ARG CODE_RELEASE=v1.52.1
 #ARG CODE_URL=https://github.com/suisrc/code-server/releases/download/${CODE_RELEASE}/code-server-linux-amd64.tar.gz
-ARG CODE_URL=https://github.com/cdr/code-server/releases/download/v3.9.3/code-server-3.9.3-linux-amd64.tar.gz
+ARG CODE_RELEASE=3.11.0
+ARG CODE_URL=https://github.com/cdr/code-server/releases/download/v${CODE_RELEASE}/code-server-${CODE_RELEASE}-linux-amd64.tar.gz
 
 ARG S6_RELEASE=v2.2.0.3
 ARG S6_URL=https://github.com/just-containers/s6-overlay/releases/download/${S6_RELEASE}/s6-overlay-amd64.tar.gz
@@ -18,7 +20,7 @@ RUN apt update && apt install --no-install-recommends -y \
 
 # s6-overlay
 RUN curl -o /tmp/s6.tar.gz -L "${S6_URL}" &&\
-    tar xzf /tmp/s6.tar.gz -C / &&\
+    tar xzf /tmp/s6.tar.gz -C / --exclude='./bin' && tar xzf /tmp/s6.tar.gz -C /usr ./bin &&\
     rm -rf /tmp/*
 
 # code-server

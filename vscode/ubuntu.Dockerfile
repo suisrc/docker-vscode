@@ -1,6 +1,5 @@
-# FROM debian:stretch-slim
-FROM debian:buster-slim
-#FROM debian:buster
+FROM ubuntu:20.04
+#FROM ubuntu:focal
 
 # args
 #ARG CODE_RELEASE=v1.52.1
@@ -27,14 +26,16 @@ ENV container docker
 # update linux
 RUN if [ ! -z ${LINUX_MIRRORS+x} ]; then \
         mv /etc/apt/sources.list /etc/apt/sources.list.bak && \
-        echo "deb ${LINUX_MIRRORS}/debian/ buster main non-free contrib" >>/etc/apt/sources.list &&\
-        echo "deb-src ${LINUX_MIRRORS}/debian/ buster main non-free contrib" >>/etc/apt/sources.list &&\
-        echo "deb ${LINUX_MIRRORS}/debian-security buster/updates main" >>/etc/apt/sources.list &&\
-        echo "deb-src ${LINUX_MIRRORS}/debian-security buster/updates main" >>/etc/apt/sources.list &&\
-        echo "deb ${LINUX_MIRRORS}/debian/ buster-updates main non-free contrib" >>/etc/apt/sources.list &&\
-        echo "deb-src ${LINUX_MIRRORS}/debian/ buster-updates main non-free contrib" >>/etc/apt/sources.list &&\
-        echo "deb ${LINUX_MIRRORS}/debian/ buster-backports main non-free contrib" >>/etc/apt/sources.list &&\
-        echo "deb-src ${LINUX_MIRRORS}/debian/ buster-backports main non-free contrib" >>/etc/apt/sources.list; \
+        echo "deb ${LINUX_MIRRORS}/ubuntu/ focal main restricted universe multiverse" >>/etc/apt/sources.list &&\
+        echo "deb-src ${LINUX_MIRRORS}/ubuntu/ focal main restricted universe multiverse" >>/etc/apt/sources.list &&\
+        echo "deb ${LINUX_MIRRORS}/ubuntu/ focal-security main restricted universe multiverse" >>/etc/apt/sources.list &&\
+        echo "deb-src ${LINUX_MIRRORS}/ubuntu/ focal-security main restricted universe multiverse" >>/etc/apt/sources.list &&\
+        echo "deb ${LINUX_MIRRORS}/ubuntu/ focal-updates main restricted universe multiverse" >>/etc/apt/sources.list &&\
+        echo "deb-src ${LINUX_MIRRORS}/ubuntu/ focal-updates main restricted universe multiverse" >>/etc/apt/sources.list &&\
+        echo "deb ${LINUX_MIRRORS}/ubuntu/ focal-proposed main restricted universe multiverse" >>/etc/apt/sources.list &&\
+        echo "deb-src ${LINUX_MIRRORS}/ubuntu/ focal-proposed main restricted universe multiverse" >>/etc/apt/sources.list &&\
+        echo "deb ${LINUX_MIRRORS}/ubuntu/ focal-backports main restricted universe multiverse" >>/etc/apt/sources.list &&\
+        echo "deb-src ${LINUX_MIRRORS}/ubuntu/ focal-backports main restricted universe multiverse" >>/etc/apt/sources.list; \
     fi &&\
     apt update && \
     apt install --no-install-recommends -y \
@@ -74,7 +75,7 @@ RUN if [ -z ${OH_MY_ZSH_SH_URL+x} ]; then \
 
 # s6-overlay
 RUN curl -o /tmp/s6.tar.gz -L "${S6_URL}" &&\
-    tar xzf /tmp/s6.tar.gz -C / &&\
+    tar xzf /tmp/s6.tar.gz -C / --exclude='./bin' && tar xzf /tmp/s6.tar.gz -C /usr ./bin &&\
     rm -rf /tmp/*
 
 # install code-server

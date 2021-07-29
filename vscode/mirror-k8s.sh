@@ -11,15 +11,23 @@ repo_gpgcheck=0
 gpgkey=http://mirrors.aliyun.com/kubernetes/yum/doc/yum-key.gpg http://mirrors.aliyun.com/kubernetes/yum/doc/rpm-package-key.gpg
 EOF
 
+cat <<EOF >/etc/apt/sources.list.d/kubernetes.list
+deb http://mirrors.aliyun.com/kubernetes/apt/ kubernetes-focal main
+EOF
+
+cat <<EOF >/etc/apt/sources.list.d/docker.list
+deb [arch=amd64] http://download.docker.com/linux/ubuntu $(lsb_release -cs) stable
+EOF
+
 # Google（国外）
 cat <<EOF > /etc/yum.repos.d/kubernetes.repo
 [kubernetes]
 name=Kubernetes
-baseurl=https://packages.cloud.google.com/yum/repos/kubernetes-el7-x86_64
+baseurl=http://packages.cloud.google.com/yum/repos/kubernetes-el7-x86_64
 enabled=1
 gpgcheck=0
 repo_gpgcheck=0
-gpgkey=https://packages.cloud.google.com/yum/doc/yum-key.gpg https://packages.cloud.google.com/yum/doc/rpm-package-key.gpg
+gpgkey=http://packages.cloud.google.com/yum/doc/yum-key.gpg http://packages.cloud.google.com/yum/doc/rpm-package-key.gpg
 EOF
 
 # 普通镜像替换国内镜像
@@ -52,3 +60,16 @@ echo "deb-src ${LINUX_MIRRORS}/debian/ buster-updates main non-free contrib" >>/
 echo "deb ${LINUX_MIRRORS}/debian/ buster-backports main non-free contrib" >>/etc/apt/sources.list &&\
 echo "deb-src ${LINUX_MIRRORS}/debian/ buster-backports main non-free contrib" >>/etc/apt/sources.list;
 
+# ubuntu
+mv /etc/apt/sources.list /etc/apt/sources.list.bak && \
+LINUX_MIRRORS=http://mirrors.aliyun.com &&\
+echo "deb ${LINUX_MIRRORS}/ubuntu/ focal main restricted universe multiverse" >>/etc/apt/sources.list &&\
+echo "deb-src ${LINUX_MIRRORS}/ubuntu/ focal main restricted universe multiverse" >>/etc/apt/sources.list &&\
+echo "deb ${LINUX_MIRRORS}/ubuntu/ focal-security main restricted universe multiverse" >>/etc/apt/sources.list &&\
+echo "deb-src ${LINUX_MIRRORS}/ubuntu/ focal-security main restricted universe multiverse" >>/etc/apt/sources.list &&\
+echo "deb ${LINUX_MIRRORS}/ubuntu/ focal-updates main restricted universe multiverse" >>/etc/apt/sources.list &&\
+echo "deb-src ${LINUX_MIRRORS}/ubuntu/ focal-updates main restricted universe multiverse" >>/etc/apt/sources.list &&\
+echo "deb ${LINUX_MIRRORS}/ubuntu/ focal-proposed main restricted universe multiverse" >>/etc/apt/sources.list &&\
+echo "deb-src ${LINUX_MIRRORS}/ubuntu/ focal-proposed main restricted universe multiverse" >>/etc/apt/sources.list &&\
+echo "deb ${LINUX_MIRRORS}/ubuntu/ focal-backports main restricted universe multiverse" >>/etc/apt/sources.list &&\
+echo "deb-src ${LINUX_MIRRORS}/ubuntu/ focal-backports main restricted universe multiverse" >>/etc/apt/sources.list;
