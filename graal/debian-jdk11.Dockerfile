@@ -3,10 +3,10 @@
 # https://github.com/graalvm/graalvm-ce-builds/releases
 # https://hub.docker.com/r/suisrc/vscode
 # FROM suisrc/vscode:debian
-FROM docker.pkg.github.com/suisrc/docker-vscode/vscode:1.54.2-debian
+FROM docker.pkg.github.com/suisrc/docker-vscode/vscode:1.57.1-debian
 
 # args
-ARG GRAALVM_RELEASE=vm-21.0.0.2
+ARG GRAALVM_RELEASE=vm-21.2.0
 ARG JAVA_RELEASE=java11
 ARG GRAALVM_URL
 
