@@ -1,7 +1,7 @@
 #FROM suisrc/vscode:centos
-FROM docker.pkg.github.com/suisrc/docker-vscode/vscode:1.54.2-centos
+FROM docker.pkg.github.com/suisrc/docker-vscode/vscode:1.57.1-centos
 
-ENV NODE_VERSION v14.16.1
+ENV NODE_VERSION v14.17.3
 
 # nodejs
 RUN echo "**** install nodejs ****" &&\
