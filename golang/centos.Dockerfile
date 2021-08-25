@@ -1,6 +1,6 @@
 FROM docker.pkg.github.com/suisrc/docker-vscode/vscode:1.57.1-centos
 
-ARG GO_VER=1.16.6
+ARG GO_VER=1.17
 ARG GO_URL=https://dl.google.com/go/go${GO_VER}.linux-amd64.tar.gz
 
 # install golang
