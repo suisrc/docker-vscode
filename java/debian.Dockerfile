@@ -1,11 +1,11 @@
 # FROM suisrc/vscode:debian
-FROM docker.pkg.github.com/suisrc/docker-vscode/vscode:1.57.1-debian
+FROM docker.pkg.github.com/suisrc/docker-vscode/vscode:1.60.0-debian
 
 # https://github.com/AdoptOpenJDK/openjdk8-binaries/releases
 ARG JAVA_RELEASE=jdk8u292-b10_openj9-0.26.0
 ARG JAVA_URL
 
-ARG MAVEN_RELEASE=3.8.1
+ARG MAVEN_RELEASE=3.8.2
 ARG MAVEN_URL
 
 # jdk
@@ -38,6 +38,7 @@ RUN if [ -z ${MAVEN_URL+x} ]; then \
     mkdir -p /usr/share/maven &&\
     curl -L ${MAVEN_URL} -o /tmp/apache-maven.tar.gz &&\
     tar -xzf /tmp/apache-maven.tar.gz -C /usr/share/maven --strip-components=1 &&\
+    sed -i -e "158d" -e "s/  <\/mirrors>/    -->\n&/g" /usr/share/maven/conf/settings.xml &&\
     ln -s /usr/share/maven/bin/mvn /usr/bin/mvn &&\
     rm -rf /tmp/* &&\
     # smoke tests
