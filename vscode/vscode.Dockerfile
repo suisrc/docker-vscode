@@ -5,7 +5,7 @@ FROM ubuntu:focal
 
 #ARG CODE_RELEASE=v1.52.1
 #ARG CODE_URL=https://github.com/suisrc/code-server/releases/download/${CODE_RELEASE}/code-server-linux-amd64.tar.gz
-ARG CODE_RELEASE=3.11.0
+ARG CODE_RELEASE=3.12.0
 ARG CODE_URL=https://github.com/cdr/code-server/releases/download/v${CODE_RELEASE}/code-server-${CODE_RELEASE}-linux-amd64.tar.gz
 
 ARG S6_RELEASE=v2.2.0.3
