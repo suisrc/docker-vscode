@@ -1,7 +1,7 @@
 #FROM suisrc/vscode:centos
-FROM docker.pkg.github.com/suisrc/docker-vscode/vscode:1.57.1-centos
+FROM docker.pkg.github.com/suisrc/docker-vscode/vscode:1.60.0-centos
 
-ARG GO_VER=1.16.3
+ARG GO_VER=1.17.1
 ARG GO_URL=https://dl.google.com/go/go${GO_VER}.linux-amd64.tar.gz
 
 #ARG PY_VER=3.8.3
@@ -11,7 +11,7 @@ ARG GRAALVM_RELEASE=vm-21.2.0
 ARG JAVA_RELEASE=java11
 ARG GRAALVM_URL
 
-ARG MAVEN_RELEASE=3.8.1
+ARG MAVEN_RELEASE=3.8.2
 ARG MAVEN_URL=https://downloads.apache.org/maven/maven-3/${MAVEN_RELEASE}/binaries/apache-maven-${MAVEN_RELEASE}-bin.tar.gz
 
 # install python
@@ -103,6 +103,7 @@ ENV JAVA_HOME=/graalvm
 # install mvn
 RUN mkdir -p /usr/share/maven &&\
     curl -fSL ${MAVEN_URL} | tar -xzC /usr/share/maven --strip-components=1 &&\
+    sed -i -e "158d" -e "s/  <\/mirrors>/    -->\n&/g" /usr/share/maven/conf/settings.xml &&\
     ln -s /usr/share/maven/bin/mvn /usr/bin/mvn &&\
     mvn -version
 
