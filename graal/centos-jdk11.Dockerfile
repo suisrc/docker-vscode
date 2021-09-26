@@ -1,12 +1,12 @@
 #FROM suisrc/vscode:centos
-FROM docker.pkg.github.com/suisrc/docker-vscode/vscode:1.57.1-centos
+FROM docker.pkg.github.com/suisrc/docker-vscode/vscode:1.60.0-centos
 
 # args
 ARG GRAALVM_RELEASE=vm-21.2.0
 ARG JAVA_RELEASE=java11
 ARG GRAALVM_URL
 
-ARG MAVEN_RELEASE=3.8.1
+ARG MAVEN_RELEASE=3.8.2
 ARG MAVEN_URL
 
 # install oracle graalvm-ce 
@@ -40,6 +40,7 @@ RUN if [ -z ${MAVEN_URL+x} ]; then \
     mkdir -p /usr/share/maven &&\
     curl -fsSL ${MAVEN_URL} -o apache-maven.tar.gz &&\
     tar -xzf apache-maven.tar.gz -C /usr/share/maven --strip-components=1 &&\
+    sed -i -e "158d" -e "s/  <\/mirrors>/    -->\n&/g" /usr/share/maven/conf/settings.xml &&\
     rm -f apache-maven.tar.gz &&\
     ln -s /usr/share/maven/bin/mvn /usr/bin/mvn &&\
     # smoke tests
