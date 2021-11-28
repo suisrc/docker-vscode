@@ -2,7 +2,7 @@
 FROM docker.pkg.github.com/suisrc/docker-vscode/vscode:1.60.0-centos
 
 # args
-ARG GRAALVM_RELEASE=vm-21.2.0
+ARG GRAALVM_RELEASE=vm-21.3.3
 ARG JAVA_RELEASE=java11
 ARG GRAALVM_URL
 
