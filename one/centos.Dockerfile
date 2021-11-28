@@ -11,7 +11,7 @@ ARG GRAALVM_RELEASE=vm-21.3.3
 ARG JAVA_RELEASE=java11
 ARG GRAALVM_URL
 
-ARG MAVEN_RELEASE=3.8.2
+ARG MAVEN_RELEASE=3.8.4
 ARG MAVEN_URL=https://downloads.apache.org/maven/maven-3/${MAVEN_RELEASE}/binaries/apache-maven-${MAVEN_RELEASE}-bin.tar.gz
 
 # install python
