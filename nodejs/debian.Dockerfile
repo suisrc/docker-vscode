@@ -1,7 +1,7 @@
 # FROM suisrc/vscode:debian
 FROM docker.pkg.github.com/suisrc/docker-vscode/vscode:1.60.0-debian
 
-ENV NODE_VERSION v14.17.6
+ENV NODE_VERSION v14.18.1
 
 # nodejs
 RUN echo "**** install nodejs ****" &&\
