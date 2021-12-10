@@ -5,7 +5,7 @@ FROM docker.pkg.github.com/suisrc/docker-vscode/vscode:1.60.0-debian
 ARG JAVA_RELEASE=jdk8u292-b10_openj9-0.26.0
 ARG JAVA_URL
 
-ARG MAVEN_RELEASE=3.8.2
+ARG MAVEN_RELEASE=3.8.4
 ARG MAVEN_URL
 
 # jdk

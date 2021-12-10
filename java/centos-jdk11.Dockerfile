@@ -5,7 +5,7 @@ FROM docker.pkg.github.com/suisrc/docker-vscode/vscode:1.60.0-centos
 ARG JAVA_RELEASE=jdk-11.0.11+9_openj9-0.26.0
 ARG JAVA_URL
 
-ARG MAVEN_RELEASE=3.8.2
+ARG MAVEN_RELEASE=3.8.4
 ARG MAVEN_URL
 
 # jdk
