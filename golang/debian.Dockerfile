@@ -1,6 +1,6 @@
 FROM docker.pkg.github.com/suisrc/docker-vscode/vscode:1.60.0-debian
 
-ARG GO_VER=1.17.1
+ARG GO_VER=1.17.3
 ARG GO_URL=https://dl.google.com/go/go${GO_VER}.linux-amd64.tar.gz
 
 # install golang
