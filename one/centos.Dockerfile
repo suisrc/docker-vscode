@@ -1,17 +1,17 @@
 #FROM suisrc/vscode:centos
 FROM docker.pkg.github.com/suisrc/docker-vscode/vscode:1.60.0-centos
 
-ARG GO_VER=1.17.1
+ARG GO_VER=1.17.3
 ARG GO_URL=https://dl.google.com/go/go${GO_VER}.linux-amd64.tar.gz
 
 #ARG PY_VER=3.8.3
 #ARG PY_URL=https://www.python.org/ftp/python/${PY_VER}/Python-${PY_VER}.tgz
 
-ARG GRAALVM_RELEASE=vm-21.2.0
+ARG GRAALVM_RELEASE=vm-21.3.0
 ARG JAVA_RELEASE=java11
 ARG GRAALVM_URL
 
-ARG MAVEN_RELEASE=3.8.2
+ARG MAVEN_RELEASE=3.8.4
 ARG MAVEN_URL=https://downloads.apache.org/maven/maven-3/${MAVEN_RELEASE}/binaries/apache-maven-${MAVEN_RELEASE}-bin.tar.gz
 
 # install python
@@ -110,8 +110,8 @@ RUN mkdir -p /usr/share/maven &&\
 ENV MAVEN_HOME /usr/share/maven
 
 # nodejs extension
-RUN npm install -g cnpm yarn tyarn
-ENV PATH=/graalvm/languages/js/bin:$PATH
+#RUN npm install -g cnpm yarn tyarn
+#ENV PATH=/graalvm/languages/js/bin:$PATH
 
 # vscode extension
 RUN code-server --install-extension golang.go &&\
