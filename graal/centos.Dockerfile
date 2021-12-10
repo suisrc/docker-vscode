@@ -2,11 +2,11 @@
 FROM docker.pkg.github.com/suisrc/docker-vscode/vscode:1.60.0-centos
 
 # https://github.com/graalvm/graalvm-ce-builds/releases
-ARG GRAALVM_RELEASE=vm-21.2.0
+ARG GRAALVM_RELEASE=vm-20.3.3
 ARG JAVA_RELEASE=java8
 ARG GRAALVM_URL
 
-ARG MAVEN_RELEASE=3.8.2
+ARG MAVEN_RELEASE=3.8.4
 ARG MAVEN_URL
 
 # install oracle graalvm-ce 
