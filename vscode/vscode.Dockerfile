@@ -18,7 +18,7 @@ ARG OH_MY_ZSH_SUGGES
 # apk add --no-cache openssh bash vim curl jq tar git #apline软件
 # dumb-init #使用s6代替
 RUN apt update && apt install --no-install-recommends -y \
-        sudo ca-certificates curl git procps jq bash net-tools vim nano ntpdate locales openssh-client &&\
+        sudo ca-certificates curl git procps jq bash net-tools zsh vim nano ntpdate locales openssh-client &&\
     rm -rf /tmp/* /var/tmp/* /var/lib/apt/lists/*
 
 # s6-overlay
