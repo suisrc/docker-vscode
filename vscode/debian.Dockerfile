@@ -3,10 +3,10 @@ FROM debian:buster-slim
 #FROM debian:buster
 
 # args
-ARG CODE_RELEASE=v1.60.0
-ARG CODE_URL=https://github.com/suisrc/code-server/releases/download/${CODE_RELEASE}/code-server-linux-amd64.tar.gz
-#ARG CODE_RELEASE=3.12.0
-#ARG CODE_URL=https://github.com/cdr/code-server/releases/download/v${CODE_RELEASE}/code-server-${CODE_RELEASE}-linux-amd64.tar.gz
+#ARG CODE_RELEASE=v1.60.0
+#ARG CODE_URL=https://github.com/suisrc/code-server/releases/download/${CODE_RELEASE}/code-server-linux-amd64.tar.gz
+ARG CODE_RELEASE=4.0.1
+ARG CODE_URL=https://github.com/cdr/code-server/releases/download/v${CODE_RELEASE}/code-server-${CODE_RELEASE}-linux-amd64.tar.gz
 
 ARG S6_RELEASE=v2.2.0.3
 ARG S6_URL=https://github.com/just-containers/s6-overlay/releases/download/${S6_RELEASE}/s6-overlay-amd64.tar.gz
@@ -94,8 +94,7 @@ RUN if [ -z ${CODE_URL+x} ]; then \
     rm -rf /tmp/*
 
 # install code server extension
-ENV SERVICE_URL=https://marketplace.visualstudio.com/_apis/public/gallery \
-    ITEM_URL=https://marketplace.visualstudio.com/items
+ENV EXTENSIONS_GALLERY='{"serviceUrl": "https://marketplace.visualstudio.com/_apis/public/gallery", "itemUrl": "https://marketplace.visualstudio.com/items"}'
 
 # install code-server extension
 RUN code-server --install-extension ms-ceintl.vscode-language-pack-zh-hans &&\

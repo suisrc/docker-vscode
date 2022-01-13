@@ -1,10 +1,11 @@
 FROM centos:7
 
 # https://github.com/suisrc/code-server/releases
-ARG CODE_RELEASE=v1.60.0
-ARG CODE_URL=https://github.com/suisrc/code-server/releases/download/${CODE_RELEASE}/code-server-linux-amd64.tar.gz
-#ARG CODE_RELEASE=3.12.0
-#ARG CODE_URL=https://github.com/cdr/code-server/releases/download/v${CODE_RELEASE}/code-server-${CODE_RELEASE}-linux-amd64.tar.gz
+#ARG CODE_RELEASE=v1.60.0
+#ARG CODE_URL=https://github.com/suisrc/code-server/releases/download/${CODE_RELEASE}/code-server-linux-amd64.tar.gz
+# https://github.com/coder/code-server/releases
+ARG CODE_RELEASE=4.0.1
+ARG CODE_URL=https://github.com/cdr/code-server/releases/download/v${CODE_RELEASE}/code-server-${CODE_RELEASE}-linux-amd64.tar.gz
 
 # https://github.com/just-containers/s6-overlay/releases
 ARG S6_RELEASE=v2.2.0.3
@@ -111,8 +112,7 @@ RUN if [ -z ${CODE_URL+x} ]; then \
     rm -rf /tmp/*
 
 # install code server extension
-ENV SERVICE_URL=https://marketplace.visualstudio.com/_apis/public/gallery \
-    ITEM_URL=https://marketplace.visualstudio.com/items \
+ENV EXTENSIONS_GALLERY='{"serviceUrl": "https://marketplace.visualstudio.com/_apis/public/gallery", "itemUrl": "https://marketplace.visualstudio.com/items"}' \
     NODE_EXTRA_CA_CERTS=/etc/ssl/certs/ca-bundle.crt
 
 # install code-server extension
