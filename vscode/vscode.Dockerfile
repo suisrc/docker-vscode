@@ -39,13 +39,12 @@ RUN if [ -z ${CODE_URL+x} ]; then \
     ln -s /usr/lib/code-server/bin/code-server /usr/bin/code-server &&\
     rm -rf /tmp/*
 
+RUN code-server --install-extension ms-ceintl.vscode-language-pack-zh-hans
 # change code server extension store
 # 更改默认的应用市场位微软的应用市场
 ENV EXTENSIONS_GALLERY='{"serviceUrl": "https://marketplace.visualstudio.com/_apis/public/gallery", "itemUrl": "https://marketplace.visualstudio.com/items"}'
-
 # install code server extension
-RUN code-server --install-extension ms-ceintl.vscode-language-pack-zh-hans &&\
-    code-server --install-extension mhutchie.git-graph &&\
+RUN code-server --install-extension mhutchie.git-graph &&\
     code-server --install-extension esbenp.prettier-vscode &&\
     code-server --install-extension humao.rest-client
 
