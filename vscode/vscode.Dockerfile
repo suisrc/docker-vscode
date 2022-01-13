@@ -11,11 +11,14 @@ ARG CODE_URL=https://github.com/cdr/code-server/releases/download/v${CODE_RELEAS
 ARG S6_RELEASE=v2.2.0.3
 ARG S6_URL=https://github.com/just-containers/s6-overlay/releases/download/${S6_RELEASE}/s6-overlay-amd64.tar.gz
 
+ARG OH_MY_ZSH_SH_URL
+ARG OH_MY_ZSH_SUGGES
+
 # linux and softs
 # apk add --no-cache openssh bash vim curl jq tar git #apline软件
 # dumb-init #使用s6代替
 RUN apt update && apt install --no-install-recommends -y \
-        sudo ca-certificates curl git procps jq bash net-tools vim nano ntpdate locales &&\
+        sudo ca-certificates curl git procps jq bash net-tools vim nano ntpdate locales openssh-client &&\
     rm -rf /tmp/* /var/tmp/* /var/lib/apt/lists/*
 
 # s6-overlay
@@ -39,7 +42,21 @@ RUN if [ -z ${CODE_URL+x} ]; then \
     ln -s /usr/lib/code-server/bin/code-server /usr/bin/code-server &&\
     rm -rf /tmp/*
 
-RUN code-server --install-extension ms-ceintl.vscode-language-pack-zh-hans
+# install oh-my-zsh
+# https://raw.githubusercontent.com/robbyrussell/oh-my-zsh/master/tools/install.sh => https://gitee.com/mirrors/oh-my-zsh/raw/master/tools/install.sh
+# https://github.com/zsh-users/zsh-autosuggestions => https://gitee.com/ncr/zsh-autosuggestions
+RUN if [ -z ${OH_MY_ZSH_SH_URL+x} ]; then \
+        OH_MY_ZSH_SH_URL="https://raw.githubusercontent.com/ohmyzsh/ohmyzsh/master/tools/install.sh"; \
+    fi &&\
+    if [ -z ${OH_MY_ZSH_SUGGES+x} ]; then \
+        OH_MY_ZSH_SUGGES="https://github.com/zsh-users/zsh-autosuggestions"; \
+    fi &&\
+    sh -c "$(curl -fsSL ${OH_MY_ZSH_SH_URL})" &&\
+    git clone "${OH_MY_ZSH_SUGGES}" /root/.oh-my-zsh/plugins/zsh-autosuggestions &&\
+    echo "source ~/.oh-my-zsh/plugins/zsh-autosuggestions/zsh-autosuggestions.zsh" >> /root/.zshrc
+    #sed -i "s/ZSH_THEME=\"robbyrussell\"/ZSH_THEME=\"agnoster\"/g" /root/.zshrc
+
+#RUN code-server --install-extension ms-ceintl.vscode-language-pack-zh-hans
 # change code server extension store
 # 更改默认的应用市场位微软的应用市场
 ENV EXTENSIONS_GALLERY='{"serviceUrl": "https://marketplace.visualstudio.com/_apis/public/gallery", "itemUrl": "https://marketplace.visualstudio.com/items"}'

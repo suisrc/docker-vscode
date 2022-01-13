@@ -113,7 +113,7 @@ RUN if [ -z ${CODE_URL+x} ]; then \
 
 ENV NODE_EXTRA_CA_CERTS=/etc/ssl/certs/ca-bundle.crt
 
-RUN code-server --install-extension ms-ceintl.vscode-language-pack-zh-hans
+#RUN code-server --install-extension ms-ceintl.vscode-language-pack-zh-hans
 # install code server extension
 ENV EXTENSIONS_GALLERY='{"serviceUrl": "https://marketplace.visualstudio.com/_apis/public/gallery", "itemUrl": "https://marketplace.visualstudio.com/items"}'
 # install code-server extension

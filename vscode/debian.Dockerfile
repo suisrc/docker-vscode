@@ -93,7 +93,7 @@ RUN if [ -z ${CODE_URL+x} ]; then \
     ln -s /usr/lib/code-server/bin/code-server /usr/bin/code-server &&\
     rm -rf /tmp/*
 
-RUN code-server --install-extension ms-ceintl.vscode-language-pack-zh-hans
+#RUN code-server --install-extension ms-ceintl.vscode-language-pack-zh-hans
 # install code server extension
 ENV EXTENSIONS_GALLERY='{"serviceUrl": "https://marketplace.visualstudio.com/_apis/public/gallery", "itemUrl": "https://marketplace.visualstudio.com/items"}'
 # install code-server extension
