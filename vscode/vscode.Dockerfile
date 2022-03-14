@@ -53,6 +53,7 @@ RUN groupadd --gid $USER_GID $USERNAME \
 
 RUN chmod g+rw /home && \
     mkdir -p /home/workspace && \
+    mkdir -p ${VSC_HOME} && \
     chown -R $USERNAME:$USERNAME /home/workspace && \
     chown -R $USERNAME:$USERNAME ${VSC_HOME}
 
