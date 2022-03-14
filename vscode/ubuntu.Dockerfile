@@ -4,6 +4,7 @@ FROM ubuntu:20.04
 # args
 #ARG CODE_RELEASE=v1.60.0
 #ARG CODE_URL=https://github.com/suisrc/code-server/releases/download/${CODE_RELEASE}/code-server-linux-amd64.tar.gz
+#ARG CODE_URL=
 ARG CODE_RELEASE=4.0.1
 ARG CODE_URL=https://github.com/cdr/code-server/releases/download/v${CODE_RELEASE}/code-server-${CODE_RELEASE}-linux-amd64.tar.gz
 
