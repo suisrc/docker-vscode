@@ -8,6 +8,7 @@ ARG JAVA_URL
 ARG MAVEN_RELEASE=3.8.4
 ARG MAVEN_URL
 
+USER root
 # jdk
 RUN if [ -z ${JAVA_URL+x} ]; then \
         if [ -z ${JAVA_RELEASE+x} ]; then \
@@ -48,6 +49,7 @@ RUN if [ -z ${MAVEN_URL+x} ]; then \
 
 ENV MAVEN_HOME /usr/share/maven
 
+USER vscode
 # extension
 RUN code-server --install-extension redhat.vscode-yaml &&\
     code-server --install-extension redhat.vscode-xml &&\
