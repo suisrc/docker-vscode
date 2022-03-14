@@ -29,8 +29,8 @@ ENV LC_ALL=zh_CN.UTF-8 \
     SHELL=/bin/bash
 
 # s6-overlay
-RUN curl -o /tmp/s6-cfg.tar.xz -fsSL "${S6_CFG}" && tar -C / -Jxpf /tmp/s6-cfg.tar.xz &&\
-    curl -o /tmp/s6-app.tar.xz -fsSL "${S6_APP}" && tar -C / -Jxpf /tmp/s6-app.tar.xz &&\
+RUN curl -o /tmp/s6-cfg.tar.xz -L "${S6_CFG}" && tar -C / -Jxpf /tmp/s6-cfg.tar.xz &&\
+    curl -o /tmp/s6-app.tar.xz -L "${S6_APP}" && tar -C / -Jxpf /tmp/s6-app.tar.xz &&\
     rm -rf /tmp/*
     #tar xzf /tmp/s6.tar.gz -C / --exclude='./bin' && tar xzf /tmp/s6.tar.gz -C /usr ./bin &&\
 
