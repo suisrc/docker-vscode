@@ -1,4 +1,4 @@
-{
+[{
 	"extensionsGallery": {
 		"serviceUrl": "https://marketplace.visualstudio.com/_apis/public/gallery",
 		"itemUrl": "https://marketplace.visualstudio.com/items",
@@ -7,4 +7,13 @@
 		"recommendationsUrl": ""
 	},
 	"linkProtectionTrustedDomains": ["https://marketplace.visualstudio.com"]
-}
+},{
+	"extensionsGallery": {
+		"serviceUrl": "https://open-vsx.org/vscode/gallery",
+		"itemUrl": "https://open-vsx.org/vscode/item",
+		"resourceUrlTemplate": "https://open-vsx.org/vscode/asset/{publisher}/{name}/{version}/Microsoft.VisualStudio.Code.WebResources/{path}",
+		"controlUrl": "",
+		"recommendationsUrl": ""
+	},
+	"linkProtectionTrustedDomains": ["https://open-vsx.org"]
+}]

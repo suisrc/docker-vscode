@@ -16,7 +16,7 @@ ARG S6_CFG=https://github.com/just-containers/s6-overlay/releases/download/${S6_
 # apk add --no-cache openssh bash vim curl jq tar git #apline软件
 # dumb-init #使用s6代替
 RUN apt update && apt install --no-install-recommends -y \
-    sudo ca-certificates curl git procps jq bash net-tools zsh vim nano ntpdate locales openssh-client xz-utils libatomic1 &&\
+    sudo ca-certificates curl git procps jq bash net-tools iputils-ping zsh vim nano ntpdate locales openssh-client xz-utils libatomic1 &&\
     sed -i "s/# zh_CN.UTF-8 UTF-8/zh_CN.UTF-8 UTF-8/g" /etc/locale.gen && locale-gen &&\
     rm -rf /tmp/* /var/tmp/* /var/lib/apt/lists/*
 
@@ -28,8 +28,8 @@ RUN curl -o /tmp/s6-cfg.tar.xz -L "${S6_CFG}" && tar -C / -Jxpf /tmp/s6-cfg.tar.
 
 COPY init-* /command/
 # config s6
-COPY s6-git.sh /etc/cont-init.d/git-init
-COPY s6-vsc.sh /etc/services.d/vscode/run
+COPY s6-git /etc/cont-init.d/git-init
+COPY s6-vsc /etc/services.d/vscode/run
 
 # https://github.com/just-containers/s6-overlay
 ENTRYPOINT ["/init"]
@@ -64,10 +64,10 @@ RUN if [ -z ${VSC_URL+x} ]; then \
             | jq -r '.assets[] | select(.browser_download_url | contains("-linux-x64.tar.gz")) | .browser_download_url'); \
     fi &&\
     curl -o /tmp/vsc.tar.gz -L "${VSC_URL}" && mkdir -p ${VSC_HOME} && tar xzf /tmp/vsc.tar.gz -C ${VSC_HOME}/ --strip-components=1 && \
-    ln -s ${VSC_HOME}/bin/openvscode-server /usr/bin/vscode-server &&\
-    cp ${VSC_HOME}/bin/remote-cli/openvscode-server ${VSC_HOME}/bin/remote-cli/vscode &&\
-    sed -i 's/"$0"/"$(readlink -f $0)"/' ${VSC_HOME}/bin/remote-cli/vscode &&\
-    ln -s ${VSC_HOME}/bin/remote-cli/vscode /usr/bin/vscode &&\
+    ln -s ${VSC_HOME}/bin/openvscode-server /usr/bin/code-server &&\
+    cp ${VSC_HOME}/bin/remote-cli/openvscode-server ${VSC_HOME}/bin/remote-cli/code &&\
+    sed -i 's/"$0"/"$(readlink -f $0)"/' ${VSC_HOME}/bin/remote-cli/code &&\
+    ln -s ${VSC_HOME}/bin/remote-cli/code /usr/bin/code &&\
     rm -rf /tmp/*
 
 # =============================================================================================
@@ -89,9 +89,9 @@ RUN if [ -z ${OH_MY_ZSH_SH_URL+x} ]; then \
 
 ARG USERDATA=/home/$USERNAME/.openvscode-server/data
 # install extension ?ms-ceintl.vscode-language-pack-zh-hans
-RUN vscode-server --install-extension mhutchie.git-graph &&\
-    vscode-server --install-extension esbenp.prettier-vscode &&\
-    vscode-server --install-extension humao.rest-client &&\
+RUN code-server --install-extension mhutchie.git-graph &&\
+    code-server --install-extension esbenp.prettier-vscode &&\
+    code-server --install-extension humao.rest-client &&\
     mkdir -p $USERDATA/Machine
 
 # config for user or machine
@@ -99,12 +99,5 @@ COPY locale.json    $USERDATA/Machine/locale.json
 COPY settings2.json $USERDATA/Machine/settings.json
 
 # =============================================================================================
-ENV LANG=C.UTF-8 \
-    LC_ALL=C.UTF-8 \
-    EDITOR=vscode \
-    VISUAL=vscode \
-    GIT_EDITOR="vscode --wait" \
-    S6_KEEP_ENV=true
-
 #EXPOSE 7000
 WORKDIR /workspace
