@@ -52,12 +52,11 @@ RUN groupadd --gid $USER_GID $USERNAME \
     && chmod 0440 /etc/sudoers.d/$USERNAME
 
 RUN chmod g+rw /home && \
-    mkdir -p /home/workspace && \
+    mkdir -p /workspace  && \
     mkdir -p ${VSC_HOME} && \
-    chown -R $USERNAME:$USERNAME /home/workspace && \
-    chown -R $USERNAME:$USERNAME ${VSC_HOME}
-
-ENV HOME=/home/$USERNAME
+    chown -R $USERNAME:$USERNAME /workspace  && \
+    chown -R $USERNAME:$USERNAME ${VSC_HOME} && \
+    ln    -s /workspace /ws
 
 USER $USERNAME
 
@@ -97,17 +96,20 @@ RUN if [ -z ${VSC_URL+x} ]; then \
 COPY s6-git.sh   /etc/cont-init.d/git-init
 COPY s6-vsc.sh   /etc/services.d/vscode/run
 
-WORKDIR ${HOME}
-EXPOSE  7000
-
 USER $USERNAME
+ARG  USERDATAE=/home/${USERNAME}/.openvscode-server/data
 
 # install extension
-#RUN vscode --install-extension mhutchie.git-graph &&\
-#    vscode --install-extension esbenp.prettier-vscode &&\
-#    vscode --install-extension humao.rest-client
-#    #vscode --install-extension ms-ceintl.vscode-language-pack-zh-hans
+RUN vscode-server --install-extension mhutchie.git-graph &&\
+    vscode-server --install-extension esbenp.prettier-vscode &&\
+    vscode-server --install-extension humao.rest-client &&\
+    vscode-server --install-extension ms-ceintl.vscode-language-pack-zh-hans &&\
+    mkdir -p ${USERDATAE}/Machine
 
-# config for user
-COPY locale.json    ${HOME}/.openvscode-server/data/User/locale.json
-COPY settings2.json ${HOME}/.openvscode-server/data/User/settings.json
+# config for user or machine
+COPY locale.json    ${USERHOME}/Machine/locale.json
+COPY settings2.json ${USERHOME}/Machine/settings.json
+
+ENV     HOME=/workspace
+WORKDIR ${HOME}
+EXPOSE  7000

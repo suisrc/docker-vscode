@@ -1,2 +1,2 @@
-#!/usr/bin/execlineb -P
+#!/command/execlineb -P
 /command/git
