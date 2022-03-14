@@ -57,6 +57,8 @@ RUN chmod g+rw /home && \
     chown -R $USERNAME:$USERNAME /home/workspace && \
     chown -R $USERNAME:$USERNAME ${VSC_HOME}
 
+ENV HOME=/home/$USERNAME
+
 USER $USERNAME
 
 # install oh-my-zsh
@@ -95,20 +97,17 @@ RUN if [ -z ${VSC_URL+x} ]; then \
 COPY s6-git.sh   /etc/cont-init.d/git-init
 COPY s6-vsc.sh   /etc/services.d/vscode/run
 
-WORKDIR /home/worksapce
-ENV     HOME=/home/worksapce
-#VOLUME [ "/home/worksapce" ]
-
-EXPOSE 7000
+WORKDIR ${HOME}
+EXPOSE  7000
 
 USER $USERNAME
 
 # install extension
-RUN vscode --install-extension mhutchie.git-graph &&\
-    vscode --install-extension esbenp.prettier-vscode &&\
-    vscode --install-extension humao.rest-client
-    #vscode --install-extension ms-ceintl.vscode-language-pack-zh-hans
+#RUN vscode --install-extension mhutchie.git-graph &&\
+#    vscode --install-extension esbenp.prettier-vscode &&\
+#    vscode --install-extension humao.rest-client
+#    #vscode --install-extension ms-ceintl.vscode-language-pack-zh-hans
 
 # config for user
-COPY locale.json    ~/.local/share/code-server/User/locale.json
-COPY settings2.json ~/.local/share/code-server/User/settings.json
+COPY locale.json    ${HOME}/.openvscode-server/data/User/locale.json
+COPY settings2.json ${HOME}/.openvscode-server/data/User/settings.json
