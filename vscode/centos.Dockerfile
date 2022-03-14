@@ -10,7 +10,7 @@ ARG S6_APP=https://github.com/just-containers/s6-overlay/releases/download/${S6_
 ARG S6_CFG=https://github.com/just-containers/s6-overlay/releases/download/${S6_RELEASE}/s6-overlay-noarch.tar.xz
 
 # https://github.com/git/git/releases
-ARG GIT_RELEASE=v2.35.1
+ARG GIT_RELEASE=v2.33.1
 ARG GIT_URL=https://github.com/git/git/archive/${GIT_RELEASE}.tar.gz
 
 # https://www.sqlite.org/download.html
