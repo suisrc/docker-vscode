@@ -85,7 +85,10 @@ RUN if [ -z ${VSC_URL+x} ]; then \
             | jq -r '.assets[] | select(.browser_download_url | contains("-linux-x64.tar.gz")) | .browser_download_url'); \
     fi &&\
     curl -o /tmp/vsc.tar.gz -L "${VSC_URL}" && mkdir -p ${VSC_HOME} && tar xzf /tmp/vsc.tar.gz -C ${VSC_HOME}/ --strip-components=1 && \
-    ln -s ${VSC_HOME}/bin/openvscode-server /usr/bin/vscode-server && ln -s ${VSC_HOME}/bin/remote-cli/openvscode-server /usr/bin/vscode &&\
+    ln -s ${VSC_HOME}/bin/openvscode-server /usr/bin/vscode-server &&\
+    cp ${VSC_HOME}/bin/remote-cli/openvscode-server ${VSC_HOME}/bin/remote-cli/vscode &&\
+    sed -i 's/"$0"/"$(readlink -f $0)"/' ${VSC_HOME}/bin/remote-cli/vscode &&\
+    ln -s ${VSC_HOME}/bin/remote-cli/vscode /usr/bin/vscode &&\
     rm -rf /tmp/*
 
 # config s6
