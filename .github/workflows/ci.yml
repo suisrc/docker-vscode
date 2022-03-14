@@ -86,241 +86,240 @@ jobs:
           docker tag image $IMAGE_ID:$VERSION
           docker push $IMAGE_ID:$VERSION
 
-#  centos:
-#    runs-on: ubuntu-latest
-#
-#    steps:
-#      - uses: actions/checkout@v2
-#
-#      - name: Build image
-#        run: |
-#          docker build ./vscode --file ./vscode/${{ github.job }}.Dockerfile --tag image
-#
-#      - name: Push github image
-#        #if: false
-#        run: |
-#          REGISTRY_URL=$GITHUB_REGISTRY
-#          echo "${{ secrets.GITHUB_TOKEN }}" | docker login $REGISTRY_URL -u ${{ github.actor }} --password-stdin
-#
-#          IMAGE_ID=$REGISTRY_URL/${{ github.repository }}/$GITHUB_IMAGE_NAME
-#          #IMAGE_ID=$REGISTRY_URL/$DOCKER_IMAGE_NAME
-#          # Change all uppercase to lowercase
-#          IMAGE_ID=$(echo $IMAGE_ID | tr '[A-Z]' '[a-z]')
-#          echo IMAGE_ID=$IMAGE_ID
-#
-#          ## Strip git ref prefix from version (use relase version)
-#          #VERSION=$(echo "${{ github.ref }}" | sed -e 's,.*/\(.*\),\1,')-${{ github.job }}
-#          ## Strip "v" prefix from tag name
-#          #[[ "${{ github.ref }}" == "refs/tags/"* ]] && VERSION=$(echo $VERSION | sed -e 's/^v//')
-#          ## Use Docker `latest` tag convention
-#          ##[ "$VERSION" == "master" ] && VERSION=latest
-#          #echo VERSION=$VERSION
-#
-#          VERSION=$DOCKER_VERSION-${{ github.job }}
-#          echo VERSION=$VERSION
-#
-#          docker tag image $IMAGE_ID:$VERSION
-#          docker push $IMAGE_ID:$VERSION
-#
-#      - name: Push github latest image
-#        #if: false
-#        #if: startsWith(github.ref, 'refs/tags/v')
-#        run: |
-#          REGISTRY_URL=$GITHUB_REGISTRY
-#          echo "${{ secrets.GITHUB_TOKEN }}" | docker login $REGISTRY_URL -u ${{ github.actor }} --password-stdin
-#
-#          IMAGE_ID=$REGISTRY_URL/${{ github.repository }}/$GITHUB_IMAGE_NAME
-#          IMAGE_ID=$(echo $IMAGE_ID | tr '[A-Z]' '[a-z]')
-#          echo IMAGE_ID=$IMAGE_ID
-#
-#          VERSION=$(echo "${{ github.job }}")
-#          echo VERSION=$VERSION
-#          docker tag image $IMAGE_ID:$VERSION
-#          docker push $IMAGE_ID:$VERSION
-#
-#          VERSION=latest
-#          docker tag image $IMAGE_ID:$VERSION
-#          docker push $IMAGE_ID:$VERSION
-#
-#      - name: Push quay image
-#        #if: false
-#        #if: startsWith(github.ref, 'refs/tags/v')
-#        run: |
-#          REGISTRY_URL=$QUAY_REGISTRY
-#          echo "${{ secrets.QUAY_TOKEN }}" | docker login $REGISTRY_URL -u ${{ secrets.QUAY_USER }} --password-stdin
-#
-#          IMAGE_ID=$REGISTRY_URL/$DOCKER_IMAGE_NAME
-#          echo IMAGE_ID=$IMAGE_ID
-#          VERSION=$DOCKER_VERSION-${{ github.job }}
-#          echo VERSION=$VERSION
-#
-#          docker tag image $IMAGE_ID:$VERSION
-#          docker push $IMAGE_ID:$VERSION
-#
-#      - name: Push docker image
-#        #if: false
-#        #if: startsWith(github.ref, 'refs/tags/v')
-#        run: |
-#          REGISTRY_URL=$DOCKER_REGISTRY
-#          echo "${{ secrets.DOCKER_TOKEN }}" | docker login $REGISTRY_URL -u ${{ secrets.DOCKER_USER }} --password-stdin
-#
-#          IMAGE_ID=$REGISTRY_URL/$DOCKER_IMAGE_NAME
-#          echo IMAGE_ID=$IMAGE_ID
-#          VERSION=$DOCKER_VERSION-${{ github.job }}
-#          echo VERSION=$VERSION
-#
-#          docker tag image $IMAGE_ID:$VERSION
-#          docker push $IMAGE_ID:$VERSION
-#
-#      - name: Push aliyun image
-#        #if: false
-#        run: |
-#          REGISTRY_URL=$ALIYUN_REGISTRY
-#          echo "${{ secrets.ALIYUN_TOKEN }}" | docker login $REGISTRY_URL -u ${{ secrets.ALIYUN_USER }} --password-stdin
-#
-#          IMAGE_ID=$REGISTRY_URL/$DOCKER_IMAGE_NAME
-#          echo IMAGE_ID=$IMAGE_ID
-#          VERSION=$DOCKER_VERSION-${{ github.job }}
-#          echo VERSION=$VERSION
-#
-#          docker tag image $IMAGE_ID:$VERSION
-#          docker push $IMAGE_ID:$VERSION
-#
-#  debian:
-#    #if: false
-#    runs-on: ubuntu-latest
-#
-#    steps:
-#      - uses: actions/checkout@v2
-#
-#      - name: Build image
-#        run: |
-#          docker build ./vscode --file ./vscode/${{ github.job }}.Dockerfile --tag image
-#
-#      - name: Push github image
-#        run: |
-#          REGISTRY_URL=$GITHUB_REGISTRY
-#          echo "${{ secrets.GITHUB_TOKEN }}" | docker login $REGISTRY_URL -u ${{ github.actor }} --password-stdin
-#
-#          IMAGE_ID=$REGISTRY_URL/${{ github.repository }}/$GITHUB_IMAGE_NAME
-#          IMAGE_ID=$(echo $IMAGE_ID | tr '[A-Z]' '[a-z]')
-#          echo IMAGE_ID=$IMAGE_ID
-#          VERSION=$DOCKER_VERSION-${{ github.job }}
-#          echo VERSION=$VERSION
-#
-#          docker tag image $IMAGE_ID:$VERSION
-#          docker push $IMAGE_ID:$VERSION
-#
-#      - name: Push github latest image
-#        #if: startsWith(github.ref, 'refs/tags/v')
-#        run: |
-#          REGISTRY_URL=$GITHUB_REGISTRY
-#          echo "${{ secrets.GITHUB_TOKEN }}" | docker login $REGISTRY_URL -u ${{ github.actor }} --password-stdin
-#
-#          IMAGE_ID=$REGISTRY_URL/${{ github.repository }}/$GITHUB_IMAGE_NAME
-#          IMAGE_ID=$(echo $IMAGE_ID | tr '[A-Z]' '[a-z]')
-#          echo IMAGE_ID=$IMAGE_ID
-#          VERSION=$(echo "${{ github.job }}")
-#          echo VERSION=$VERSION
-#
-#          docker tag image $IMAGE_ID:$VERSION
-#          docker push $IMAGE_ID:$VERSION
-#
-#      - name: Push quay image
-#        #if: false
-#        #if: startsWith(github.ref, 'refs/tags/v')
-#        run: |
-#          REGISTRY_URL=$QUAY_REGISTRY
-#          echo "${{ secrets.QUAY_TOKEN }}" | docker login $REGISTRY_URL -u ${{ secrets.QUAY_USER }} --password-stdin
-#
-#          IMAGE_ID=$REGISTRY_URL/$DOCKER_IMAGE_NAME
-#          echo IMAGE_ID=$IMAGE_ID
-#          VERSION=$DOCKER_VERSION-${{ github.job }}
-#          echo VERSION=$VERSION
-#
-#          docker tag image $IMAGE_ID:$VERSION
-#          docker push $IMAGE_ID:$VERSION
-#
-#      - name: Push docker image
-#        #if: startsWith(github.ref, 'refs/tags/v')
-#        run: |
-#          REGISTRY_URL=$DOCKER_REGISTRY
-#          echo "${{ secrets.DOCKER_TOKEN }}" | docker login $REGISTRY_URL -u ${{ secrets.DOCKER_USER }} --password-stdin
-#
-#          IMAGE_ID=$REGISTRY_URL/$DOCKER_IMAGE_NAME
-#          echo IMAGE_ID=$IMAGE_ID
-#          VERSION=$DOCKER_VERSION-${{ github.job }}
-#          echo VERSION=$VERSION
-#
-#          docker tag image $IMAGE_ID:$VERSION
-#          docker push $IMAGE_ID:$VERSION
-#
-#  ubuntu:
-#    #if: false
-#    runs-on: ubuntu-latest
-#
-#    steps:
-#      - uses: actions/checkout@v2
-#
-#      - name: Build image
-#        run: |
-#          docker build ./vscode --file ./vscode/${{ github.job }}.Dockerfile --tag image
-#
-#      - name: Push github image
-#        run: |
-#          REGISTRY_URL=$GITHUB_REGISTRY
-#          echo "${{ secrets.GITHUB_TOKEN }}" | docker login $REGISTRY_URL -u ${{ github.actor }} --password-stdin
-#
-#          IMAGE_ID=$REGISTRY_URL/${{ github.repository }}/$GITHUB_IMAGE_NAME
-#          IMAGE_ID=$(echo $IMAGE_ID | tr '[A-Z]' '[a-z]')
-#          echo IMAGE_ID=$IMAGE_ID
-#          VERSION=$DOCKER_VERSION-${{ github.job }}
-#          echo VERSION=$VERSION
-#
-#          docker tag image $IMAGE_ID:$VERSION
-#          docker push $IMAGE_ID:$VERSION
-#
-#      - name: Push github latest image
-#        #if: startsWith(github.ref, 'refs/tags/v')
-#        run: |
-#          REGISTRY_URL=$GITHUB_REGISTRY
-#          echo "${{ secrets.GITHUB_TOKEN }}" | docker login $REGISTRY_URL -u ${{ github.actor }} --password-stdin
-#
-#          IMAGE_ID=$REGISTRY_URL/${{ github.repository }}/$GITHUB_IMAGE_NAME
-#          IMAGE_ID=$(echo $IMAGE_ID | tr '[A-Z]' '[a-z]')
-#          echo IMAGE_ID=$IMAGE_ID
-#          VERSION=$(echo "${{ github.job }}")
-#          echo VERSION=$VERSION
-#
-#          docker tag image $IMAGE_ID:$VERSION
-#          docker push $IMAGE_ID:$VERSION
-#
-#      - name: Push quay image
-#        #if: false
-#        #if: startsWith(github.ref, 'refs/tags/v')
-#        run: |
-#          REGISTRY_URL=$QUAY_REGISTRY
-#          echo "${{ secrets.QUAY_TOKEN }}" | docker login $REGISTRY_URL -u ${{ secrets.QUAY_USER }} --password-stdin
-#
-#          IMAGE_ID=$REGISTRY_URL/$DOCKER_IMAGE_NAME
-#          echo IMAGE_ID=$IMAGE_ID
-#          VERSION=$DOCKER_VERSION-${{ github.job }}
-#          echo VERSION=$VERSION
-#
-#          docker tag image $IMAGE_ID:$VERSION
-#          docker push $IMAGE_ID:$VERSION
-#
-#      - name: Push docker image
-#        #if: startsWith(github.ref, 'refs/tags/v')
-#        run: |
-#          REGISTRY_URL=$DOCKER_REGISTRY
-#          echo "${{ secrets.DOCKER_TOKEN }}" | docker login $REGISTRY_URL -u ${{ secrets.DOCKER_USER }} --password-stdin
-#
-#          IMAGE_ID=$REGISTRY_URL/$DOCKER_IMAGE_NAME
-#          echo IMAGE_ID=$IMAGE_ID
-#          VERSION=$DOCKER_VERSION-${{ github.job }}
-#          echo VERSION=$VERSION
-#
-#          docker tag image $IMAGE_ID:$VERSION
-#          docker push $IMAGE_ID:$VERSION
-#
+  centos:
+    runs-on: ubuntu-latest
+
+    steps:
+      - uses: actions/checkout@v2
+
+      - name: Build image
+        run: |
+          docker build ./vscode --file ./vscode/${{ github.job }}.Dockerfile --tag image
+
+      - name: Push github image
+        #if: false
+        run: |
+          REGISTRY_URL=$GITHUB_REGISTRY
+          echo "${{ secrets.GITHUB_TOKEN }}" | docker login $REGISTRY_URL -u ${{ github.actor }} --password-stdin
+
+          IMAGE_ID=$REGISTRY_URL/${{ github.repository }}/$GITHUB_IMAGE_NAME
+          #IMAGE_ID=$REGISTRY_URL/$DOCKER_IMAGE_NAME
+          # Change all uppercase to lowercase
+          IMAGE_ID=$(echo $IMAGE_ID | tr '[A-Z]' '[a-z]')
+          echo IMAGE_ID=$IMAGE_ID
+
+          ## Strip git ref prefix from version (use relase version)
+          #VERSION=$(echo "${{ github.ref }}" | sed -e 's,.*/\(.*\),\1,')-${{ github.job }}
+          ## Strip "v" prefix from tag name
+          #[[ "${{ github.ref }}" == "refs/tags/"* ]] && VERSION=$(echo $VERSION | sed -e 's/^v//')
+          ## Use Docker `latest` tag convention
+          ##[ "$VERSION" == "master" ] && VERSION=latest
+          #echo VERSION=$VERSION
+
+          VERSION=$DOCKER_VERSION-${{ github.job }}
+          echo VERSION=$VERSION
+
+          docker tag image $IMAGE_ID:$VERSION
+          docker push $IMAGE_ID:$VERSION
+
+      - name: Push github latest image
+        #if: false
+        #if: startsWith(github.ref, 'refs/tags/v')
+        run: |
+          REGISTRY_URL=$GITHUB_REGISTRY
+          echo "${{ secrets.GITHUB_TOKEN }}" | docker login $REGISTRY_URL -u ${{ github.actor }} --password-stdin
+
+          IMAGE_ID=$REGISTRY_URL/${{ github.repository }}/$GITHUB_IMAGE_NAME
+          IMAGE_ID=$(echo $IMAGE_ID | tr '[A-Z]' '[a-z]')
+          echo IMAGE_ID=$IMAGE_ID
+
+          VERSION=$(echo "${{ github.job }}")
+          echo VERSION=$VERSION
+          docker tag image $IMAGE_ID:$VERSION
+          docker push $IMAGE_ID:$VERSION
+
+          VERSION=latest
+          docker tag image $IMAGE_ID:$VERSION
+          docker push $IMAGE_ID:$VERSION
+
+      - name: Push quay image
+        #if: false
+        #if: startsWith(github.ref, 'refs/tags/v')
+        run: |
+          REGISTRY_URL=$QUAY_REGISTRY
+          echo "${{ secrets.QUAY_TOKEN }}" | docker login $REGISTRY_URL -u ${{ secrets.QUAY_USER }} --password-stdin
+
+          IMAGE_ID=$REGISTRY_URL/$DOCKER_IMAGE_NAME
+          echo IMAGE_ID=$IMAGE_ID
+          VERSION=$DOCKER_VERSION-${{ github.job }}
+          echo VERSION=$VERSION
+
+          docker tag image $IMAGE_ID:$VERSION
+          docker push $IMAGE_ID:$VERSION
+
+      - name: Push docker image
+        #if: false
+        #if: startsWith(github.ref, 'refs/tags/v')
+        run: |
+          REGISTRY_URL=$DOCKER_REGISTRY
+          echo "${{ secrets.DOCKER_TOKEN }}" | docker login $REGISTRY_URL -u ${{ secrets.DOCKER_USER }} --password-stdin
+
+          IMAGE_ID=$REGISTRY_URL/$DOCKER_IMAGE_NAME
+          echo IMAGE_ID=$IMAGE_ID
+          VERSION=$DOCKER_VERSION-${{ github.job }}
+          echo VERSION=$VERSION
+
+          docker tag image $IMAGE_ID:$VERSION
+          docker push $IMAGE_ID:$VERSION
+
+      - name: Push aliyun image
+        #if: false
+        run: |
+          REGISTRY_URL=$ALIYUN_REGISTRY
+          echo "${{ secrets.ALIYUN_TOKEN }}" | docker login $REGISTRY_URL -u ${{ secrets.ALIYUN_USER }} --password-stdin
+
+          IMAGE_ID=$REGISTRY_URL/$DOCKER_IMAGE_NAME
+          echo IMAGE_ID=$IMAGE_ID
+          VERSION=$DOCKER_VERSION-${{ github.job }}
+          echo VERSION=$VERSION
+
+          docker tag image $IMAGE_ID:$VERSION
+          docker push $IMAGE_ID:$VERSION
+
+  debian:
+    #if: false
+    runs-on: ubuntu-latest
+
+    steps:
+      - uses: actions/checkout@v2
+
+      - name: Build image
+        run: |
+          docker build ./vscode --file ./vscode/${{ github.job }}.Dockerfile --tag image
+
+      - name: Push github image
+        run: |
+          REGISTRY_URL=$GITHUB_REGISTRY
+          echo "${{ secrets.GITHUB_TOKEN }}" | docker login $REGISTRY_URL -u ${{ github.actor }} --password-stdin
+
+          IMAGE_ID=$REGISTRY_URL/${{ github.repository }}/$GITHUB_IMAGE_NAME
+          IMAGE_ID=$(echo $IMAGE_ID | tr '[A-Z]' '[a-z]')
+          echo IMAGE_ID=$IMAGE_ID
+          VERSION=$DOCKER_VERSION-${{ github.job }}
+          echo VERSION=$VERSION
+
+          docker tag image $IMAGE_ID:$VERSION
+          docker push $IMAGE_ID:$VERSION
+
+      - name: Push github latest image
+        #if: startsWith(github.ref, 'refs/tags/v')
+        run: |
+          REGISTRY_URL=$GITHUB_REGISTRY
+          echo "${{ secrets.GITHUB_TOKEN }}" | docker login $REGISTRY_URL -u ${{ github.actor }} --password-stdin
+
+          IMAGE_ID=$REGISTRY_URL/${{ github.repository }}/$GITHUB_IMAGE_NAME
+          IMAGE_ID=$(echo $IMAGE_ID | tr '[A-Z]' '[a-z]')
+          echo IMAGE_ID=$IMAGE_ID
+          VERSION=$(echo "${{ github.job }}")
+          echo VERSION=$VERSION
+
+          docker tag image $IMAGE_ID:$VERSION
+          docker push $IMAGE_ID:$VERSION
+
+      - name: Push quay image
+        #if: false
+        #if: startsWith(github.ref, 'refs/tags/v')
+        run: |
+          REGISTRY_URL=$QUAY_REGISTRY
+          echo "${{ secrets.QUAY_TOKEN }}" | docker login $REGISTRY_URL -u ${{ secrets.QUAY_USER }} --password-stdin
+
+          IMAGE_ID=$REGISTRY_URL/$DOCKER_IMAGE_NAME
+          echo IMAGE_ID=$IMAGE_ID
+          VERSION=$DOCKER_VERSION-${{ github.job }}
+          echo VERSION=$VERSION
+
+          docker tag image $IMAGE_ID:$VERSION
+          docker push $IMAGE_ID:$VERSION
+
+      - name: Push docker image
+        #if: startsWith(github.ref, 'refs/tags/v')
+        run: |
+          REGISTRY_URL=$DOCKER_REGISTRY
+          echo "${{ secrets.DOCKER_TOKEN }}" | docker login $REGISTRY_URL -u ${{ secrets.DOCKER_USER }} --password-stdin
+
+          IMAGE_ID=$REGISTRY_URL/$DOCKER_IMAGE_NAME
+          echo IMAGE_ID=$IMAGE_ID
+          VERSION=$DOCKER_VERSION-${{ github.job }}
+          echo VERSION=$VERSION
+
+          docker tag image $IMAGE_ID:$VERSION
+          docker push $IMAGE_ID:$VERSION
+
+  ubuntu:
+    #if: false
+    runs-on: ubuntu-latest
+
+    steps:
+      - uses: actions/checkout@v2
+
+      - name: Build image
+        run: |
+          docker build ./vscode --file ./vscode/${{ github.job }}.Dockerfile --tag image
+
+      - name: Push github image
+        run: |
+          REGISTRY_URL=$GITHUB_REGISTRY
+          echo "${{ secrets.GITHUB_TOKEN }}" | docker login $REGISTRY_URL -u ${{ github.actor }} --password-stdin
+
+          IMAGE_ID=$REGISTRY_URL/${{ github.repository }}/$GITHUB_IMAGE_NAME
+          IMAGE_ID=$(echo $IMAGE_ID | tr '[A-Z]' '[a-z]')
+          echo IMAGE_ID=$IMAGE_ID
+          VERSION=$DOCKER_VERSION-${{ github.job }}
+          echo VERSION=$VERSION
+
+          docker tag image $IMAGE_ID:$VERSION
+          docker push $IMAGE_ID:$VERSION
+
+      - name: Push github latest image
+        #if: startsWith(github.ref, 'refs/tags/v')
+        run: |
+          REGISTRY_URL=$GITHUB_REGISTRY
+          echo "${{ secrets.GITHUB_TOKEN }}" | docker login $REGISTRY_URL -u ${{ github.actor }} --password-stdin
+
+          IMAGE_ID=$REGISTRY_URL/${{ github.repository }}/$GITHUB_IMAGE_NAME
+          IMAGE_ID=$(echo $IMAGE_ID | tr '[A-Z]' '[a-z]')
+          echo IMAGE_ID=$IMAGE_ID
+          VERSION=$(echo "${{ github.job }}")
+          echo VERSION=$VERSION
+
+          docker tag image $IMAGE_ID:$VERSION
+          docker push $IMAGE_ID:$VERSION
+
+      - name: Push quay image
+        #if: false
+        #if: startsWith(github.ref, 'refs/tags/v')
+        run: |
+          REGISTRY_URL=$QUAY_REGISTRY
+          echo "${{ secrets.QUAY_TOKEN }}" | docker login $REGISTRY_URL -u ${{ secrets.QUAY_USER }} --password-stdin
+
+          IMAGE_ID=$REGISTRY_URL/$DOCKER_IMAGE_NAME
+          echo IMAGE_ID=$IMAGE_ID
+          VERSION=$DOCKER_VERSION-${{ github.job }}
+          echo VERSION=$VERSION
+
+          docker tag image $IMAGE_ID:$VERSION
+          docker push $IMAGE_ID:$VERSION
+
+      - name: Push docker image
+        #if: startsWith(github.ref, 'refs/tags/v')
+        run: |
+          REGISTRY_URL=$DOCKER_REGISTRY
+          echo "${{ secrets.DOCKER_TOKEN }}" | docker login $REGISTRY_URL -u ${{ secrets.DOCKER_USER }} --password-stdin
+
+          IMAGE_ID=$REGISTRY_URL/$DOCKER_IMAGE_NAME
+          echo IMAGE_ID=$IMAGE_ID
+          VERSION=$DOCKER_VERSION-${{ github.job }}
+          echo VERSION=$VERSION
+
+          docker tag image $IMAGE_ID:$VERSION
+          docker push $IMAGE_ID:$VERSION

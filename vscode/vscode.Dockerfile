@@ -3,9 +3,9 @@
 # FROM debian:buster-slim
 FROM ubuntu:focal
 
-ARG VSC_DOMAIN=https://github.com/gitpod-io/openvscode-server/releases
+ARG VSC_RURL=https://github.com/gitpod-io/openvscode-server/releases
 ARG VSC_RELEASE=v1.65.2
-ARG VSC_URL=${VSC_DOMAIN}/download/openvscode-server-${VSC_RELEASE}/openvscode-server-${VSC_RELEASE}-linux-x64.tar.gz
+ARG VSC_URL=${VSC_RURL}/download/openvscode-server-${VSC_RELEASE}/openvscode-server-${VSC_RELEASE}-linux-x64.tar.gz
 ARG VSC_HOME=/vsc
 
 ARG S6_RELEASE=v3.1.0.1
@@ -57,10 +57,10 @@ RUN groupadd --gid $USER_GID $USERNAME && \
 # vscode-server
 RUN if [ -z ${VSC_URL+x} ]; then \
         if [ -z ${VSC_RELEASE+x} ]; then \
-            VSC_RELEASE=$(curl -sX GET "${VSC_DOMAIN}/latest" \
+            VSC_RELEASE=$(curl -sX GET "${VSC_RURL}/latest" \
             | awk '/tag_name/{print $4;exit}' FS='[""]'); \
         fi && \
-        VSC_URL=$(curl -sX GET "${VSC_DOMAIN}/tags/${VSC_RELEASE}" \
+        VSC_URL=$(curl -sX GET "${VSC_RURL}/tags/${VSC_RELEASE}" \
             | jq -r '.assets[] | select(.browser_download_url | contains("-linux-x64.tar.gz")) | .browser_download_url'); \
     fi &&\
     curl -o /tmp/vsc.tar.gz -L "${VSC_URL}" && mkdir -p ${VSC_HOME} && tar xzf /tmp/vsc.tar.gz -C ${VSC_HOME}/ --strip-components=1 && \
@@ -99,5 +99,8 @@ COPY locale.json    $USERDATA/Machine/locale.json
 COPY settings2.json $USERDATA/Machine/settings.json
 
 # =============================================================================================
+ENV EDITOR=code    \
+    VISUAL=code    \
+    GIT_EDITOR="code --wait"
 #EXPOSE 7000
 WORKDIR /workspace
