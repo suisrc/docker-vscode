@@ -9,7 +9,7 @@ ARG VSC_URL=${VSC_DOMAIN}/download/openvscode-server-${VSC_RELEASE}/openvscode-s
 ARG VSC_HOME=/vsc
 
 ARG S6_RELEASE=v3.1.0.1
-ARG S6_URL=https://github.com/just-containers/s6-overlay/releases/download/${S6_RELEASE}/s6-overlay-x86_64.tar.xz
+ARG S6_APP=https://github.com/just-containers/s6-overlay/releases/download/${S6_RELEASE}/s6-overlay-x86_64.tar.xz
 ARG S6_CFG=https://github.com/just-containers/s6-overlay/releases/download/${S6_RELEASE}/s6-overlay-noarch.tar.xz
 
 
@@ -29,8 +29,8 @@ ENV LC_ALL=zh_CN.UTF-8 \
     SHELL=/bin/bash
 
 # s6-overlay
-RUN curl -o /tmp/s6-cfg.tar.xz -fsSL ${S6_CFG} && tar -C / -Jxpf /tmp/s6-cfg.tar.xz &&\
-    curl -o /tmp/s6-app.tar.xz -fsSL ${S6_APP} && tar -C / -Jxpf /tmp/s6-app.tar.xz &&\
+RUN curl -o /tmp/s6-cfg.tar.xz -fsSL "${S6_CFG}" && tar -C / -Jxpf /tmp/s6-cfg.tar.xz &&\
+    curl -o /tmp/s6-app.tar.xz -fsSL "${S6_APP}" && tar -C / -Jxpf /tmp/s6-app.tar.xz &&\
     rm -rf /tmp/*
     #tar xzf /tmp/s6.tar.gz -C / --exclude='./bin' && tar xzf /tmp/s6.tar.gz -C /usr ./bin &&\
 
