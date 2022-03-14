@@ -1,5 +1,5 @@
 #FROM suisrc/vscode:centos
-FROM docker.pkg.github.com/suisrc/docker-vscode/vscode:1.60.0-centos
+FROM docker.pkg.github.com/suisrc/docker-vscode/vscode:1.65.2-centos
 
 # https://github.com/AdoptOpenJDK/openjdk8-binaries/releases
 ARG JAVA_RELEASE=jdk8u292-b10_openj9-0.26.0

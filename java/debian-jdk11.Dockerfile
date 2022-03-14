@@ -1,5 +1,5 @@
 # FROM suisrc/vscode:debian
-FROM docker.pkg.github.com/suisrc/docker-vscode/vscode:1.60.0-debian
+FROM docker.pkg.github.com/suisrc/docker-vscode/vscode:1.65.2-debian
 
 # https://github.com/AdoptOpenJDK/openjdk11-binaries/releases
 ARG JAVA_RELEASE=jdk-11.0.11+9_openj9-0.26.0
