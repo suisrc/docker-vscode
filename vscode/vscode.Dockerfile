@@ -73,7 +73,7 @@ RUN if [ -z ${OH_MY_ZSH_SH_URL+x} ]; then \
     echo "source ~/.oh-my-zsh/plugins/zsh-autosuggestions/zsh-autosuggestions.zsh" >> ~/.zshrc
     #sed -i "s/ZSH_THEME=\"robbyrussell\"/ZSH_THEME=\"agnoster\"/g" ~/.zshrc
 
-USER ROOT
+USER root
 
 # vscode-server
 RUN if [ -z ${VSC_URL+x} ]; then \
