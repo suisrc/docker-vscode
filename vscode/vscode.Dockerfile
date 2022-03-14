@@ -91,7 +91,7 @@ ARG USERDATA=/home/$USERNAME/.openvscode-server/data
 # install extension ?ms-ceintl.vscode-language-pack-zh-hans
 RUN vscode-server --install-extension mhutchie.git-graph &&\
     vscode-server --install-extension esbenp.prettier-vscode &&\
-    vscode-server --install-extension humao.rest-client
+    vscode-server --install-extension humao.rest-client &&\
     mkdir -p $USERDATA/Machine
 
 # config for user or machine
