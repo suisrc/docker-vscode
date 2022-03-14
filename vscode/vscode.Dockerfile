@@ -107,9 +107,9 @@ RUN vscode-server --install-extension mhutchie.git-graph &&\
     mkdir -p ${USERDATAE}/Machine
 
 # config for user or machine
-COPY locale.json    ${USERHOME}/Machine/locale.json
-COPY settings2.json ${USERHOME}/Machine/settings.json
+COPY locale.json    ${USERDATAE}/Machine/locale.json
+COPY settings2.json ${USERDATAE}/Machine/settings.json
 
-ENV     HOME=/workspace
-WORKDIR ${HOME}
-EXPOSE  7000
+ENV HOME=/workspace
+WORKDIR  /workspace
+EXPOSE   7000
