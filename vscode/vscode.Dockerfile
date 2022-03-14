@@ -12,10 +12,6 @@ ARG S6_RELEASE=v3.1.0.1
 ARG S6_APP=https://github.com/just-containers/s6-overlay/releases/download/${S6_RELEASE}/s6-overlay-x86_64.tar.xz
 ARG S6_CFG=https://github.com/just-containers/s6-overlay/releases/download/${S6_RELEASE}/s6-overlay-noarch.tar.xz
 
-
-ARG OH_MY_ZSH_SH_URL
-ARG OH_MY_ZSH_SUGGES
-
 # linux and softs
 # apk add --no-cache openssh bash vim curl jq tar git #apline软件
 # dumb-init #使用s6代替
@@ -58,8 +54,11 @@ RUN chmod g+rw /home && \
     chown -R $USERNAME:$USERNAME ${VSC_HOME} && \
     ln    -s /workspace /ws
 
+# =============================================================================================
 USER $USERNAME
 
+ARG OH_MY_ZSH_SH_URL
+ARG OH_MY_ZSH_SUGGES
 # install oh-my-zsh
 # https://raw.githubusercontent.com/robbyrussell/oh-my-zsh/master/tools/install.sh => https://gitee.com/mirrors/oh-my-zsh/raw/master/tools/install.sh
 # https://github.com/zsh-users/zsh-autosuggestions => https://gitee.com/ncr/zsh-autosuggestions
@@ -96,20 +95,22 @@ RUN if [ -z ${VSC_URL+x} ]; then \
 COPY s6-git.sh   /etc/cont-init.d/git-init
 COPY s6-vsc.sh   /etc/services.d/vscode/run
 
+# =============================================================================================
 USER $USERNAME
-ARG  USERDATAE=/home/${USERNAME}/.openvscode-server/data
+ARG  USERDATAE=/home/$USERNAME/.openvscode-server/data
 
 # install extension
 RUN vscode-server --install-extension mhutchie.git-graph &&\
     vscode-server --install-extension esbenp.prettier-vscode &&\
     vscode-server --install-extension humao.rest-client &&\
     vscode-server --install-extension ms-ceintl.vscode-language-pack-zh-hans &&\
-    mkdir -p ${USERDATAE}/Machine
+    mkdir -p $USERDATAE/Machine
 
 # config for user or machine
-COPY locale.json    ${USERDATAE}/Machine/locale.json
-COPY settings2.json ${USERDATAE}/Machine/settings.json
+COPY locale.json    $USERDATAE/Machine/locale.json
+COPY settings2.json $USERDATAE/Machine/settings.json
 
+# =============================================================================================
 ENV HOME=/workspace
 WORKDIR  /workspace
 EXPOSE   7000
