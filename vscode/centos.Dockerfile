@@ -103,6 +103,16 @@ RUN if [ -z ${OH_MY_ZSH_SH_URL+x} ]; then \
     sed -i "1iZSH_DISABLE_COMPFIX=true" ~/.zshrc
     #sed -i "s/ZSH_THEME=\"robbyrussell\"/ZSH_THEME=\"agnoster\"/g" ~/.zshrc
 
+# Creating the user and usergroup
+ARG USERNAME=vscode
+ARG USER_UID=1000
+ARG USER_GID=$USER_UID
+
+RUN groupadd --gid $USER_GID $USERNAME && \
+    useradd --uid $USER_UID --gid $USERNAME -m -s /bin/bash $USERNAME   && \
+    echo $USERNAME ALL=\(root\) NOPASSWD:ALL > /etc/sudoers.d/$USERNAME && \
+    chmod 0440 /etc/sudoers.d/$USERNAME && chmod g+rw /home
+
 ENV NODE_EXTRA_CA_CERTS=/etc/ssl/certs/ca-bundle.crt
 # =============================================================================================
 # vscode-server
