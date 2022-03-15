@@ -46,7 +46,7 @@ suisrc/vscode:[1.65.2-debian-php](https://github.com/suisrc/docker-vscode/tree/d
 ## 备注说明
 1.鉴于centos8于2021年12月结束支持， 从1.52.1后还原到centos7， 1.47.3将会是最后一个centos8版本  
 2.code-server从3.8后使用cdr/code-server原版, 不在使用再次封装版本  
-3.code-server使用的cdr最后一个版本1.60.0，并发cdr原版，为自定义版  
+3.code-server使用的cdr最后一个版本1.60.0，不是cdr原版，为自定义版本  
 4.code-server从1.65.2之后使用gitpod-io/openvscode-server，gitpod-io与microsoft更相近而且与官方迭代速度相近  
 5.code-server提供最小版使用alpine，大小仅100MB(其中还包含插件和ZSH整体大小)  
   
