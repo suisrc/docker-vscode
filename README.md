@@ -2,7 +2,7 @@
 
 提供graal, java, nodejs, golang等vscode online版本  
 
-当前版本：1.60.0  
+当前版本：1.65.2  
 
 ## 镜像：
 
@@ -20,38 +20,46 @@ docker.pkg.github.com/suisrc/docker-vscode/vscode
 
 ## TAGS
 
-### ubuntu (默认使用ubuntu:focal)
-suisrc/vscode:[1.60.0](https://github.com/suisrc/docker-vscode/tree/dev-vscode)  
+### alpine (默认使用node:14-alpine)
+suisrc/vscode:[1.65.2](https://github.com/suisrc/docker-vscode/tree/dev-vscode)  
   
-
 ### centos (默认使用centos)
-suisrc/vscode:[1.60.0-centos](https://github.com/suisrc/docker-vscode/tree/dev-vscode)  
-suisrc/vscode:[1.60.0-centos-nodejs](https://github.com/suisrc/docker-vscode/tree/dev-nodejs)  
-suisrc/vscode:[1.60.0-centos-golang](https://github.com/suisrc/docker-vscode/tree/dev-golang)  
-suisrc/vscode:[1.60.0-centos-java](https://github.com/suisrc/docker-vscode/tree/dev-java)  
-suisrc/vscode:[1.60.0-centos-graal](https://github.com/suisrc/docker-vscode/tree/dev-graal)  
-suisrc/vscode:[1.60.0-centos-python](https://github.com/suisrc/docker-vscode/tree/dev-python)  
-suisrc/vscode:[1.60.0-centos-one](https://github.com/suisrc/docker-vscode/tree/dev-one)  
+suisrc/vscode:[1.65.2-centos](https://github.com/suisrc/docker-vscode/tree/dev-vscode)  
+suisrc/vscode:[1.65.2-centos-nodejs](https://github.com/suisrc/docker-vscode/tree/dev-nodejs)  
+suisrc/vscode:[1.65.2-centos-golang](https://github.com/suisrc/docker-vscode/tree/dev-golang)  
+suisrc/vscode:[1.65.2-centos-java](https://github.com/suisrc/docker-vscode/tree/dev-java)  
+suisrc/vscode:[1.65.2-centos-graal](https://github.com/suisrc/docker-vscode/tree/dev-graal)  
+suisrc/vscode:[1.65.2-centos-python](https://github.com/suisrc/docker-vscode/tree/dev-python)  
   
-
-### ubuntu (默认使用ubuntu:20.04)
-suisrc/vscode:[1.60.0-ubuntu](https://github.com/suisrc/docker-vscode/tree/dev-vscode)  
+### ubuntu (默认使用ubuntu:focal)
+suisrc/vscode:[1.65.2-ubuntu](https://github.com/suisrc/docker-vscode/tree/dev-vscode)  
   
-
 ### debian (默认使用debian:buster)
-suisrc/vscode:[1.60.0-debian](https://github.com/suisrc/docker-vscode/tree/dev-vscode)  
-suisrc/vscode:[1.60.0-debian-nodejs](https://github.com/suisrc/docker-vscode/tree/dev-nodejs)  
-suisrc/vscode:[1.60.0-debian-golang](https://github.com/suisrc/docker-vscode/tree/dev-golang)  
-suisrc/vscode:[1.60.0-debian-java](https://github.com/suisrc/docker-vscode/tree/dev-java)  
-suisrc/vscode:[1.60.0-debian-graal](https://github.com/suisrc/docker-vscode/tree/dev-graal)  
-suisrc/vscode:[1.60.0-debian-python](https://github.com/suisrc/docker-vscode/tree/dev-python)  
-suisrc/vscode:[1.60.0-debian-php](https://github.com/suisrc/docker-vscode/tree/dev-php)  
+suisrc/vscode:[1.65.2-debian](https://github.com/suisrc/docker-vscode/tree/dev-vscode)  
+suisrc/vscode:[1.65.2-debian-nodejs](https://github.com/suisrc/docker-vscode/tree/dev-nodejs)  
+suisrc/vscode:[1.65.2-debian-golang](https://github.com/suisrc/docker-vscode/tree/dev-golang)  
+suisrc/vscode:[1.65.2-debian-java](https://github.com/suisrc/docker-vscode/tree/dev-java)  
+suisrc/vscode:[1.65.2-debian-graal](https://github.com/suisrc/docker-vscode/tree/dev-graal)  
+suisrc/vscode:[1.65.2-debian-python](https://github.com/suisrc/docker-vscode/tree/dev-python)  
+suisrc/vscode:[1.65.2-debian-php](https://github.com/suisrc/docker-vscode/tree/dev-php)  
   
 ## 备注说明
-1.鉴于centos8于2021年12月结束支持， 从1.52.1后的centos版本将会还原到centos7， 1.47.3将会是最后一个centos8版本  
+1.鉴于centos8于2021年12月结束支持， 从1.52.1后还原到centos7， 1.47.3将会是最后一个centos8版本  
 2.code-server从3.8后使用cdr/code-server原版, 不在使用再次封装版本  
+3.code-server使用的cdr最后一个版本1.60.0，并发cdr原版，为自定义版
+4.code-server从1.65.2之后使用gitpod-io/openvscode-server，gitpod-io与microsoft更相近而且与官方迭代速度相近
+5.code-server提供最小版使用alpine，大小仅100MB(其中还包含插件和ZSH整体大小)
   
 ## 历史版本
+
+#### 1.60.0 centos:7
+[1.57.1-centos](https://quay.io/repository/suisrc/vscode)
+
+#### 1.60.0 ubuntu:focal(20.04)
+[1.57.1-ubuntu](https://quay.io/repository/suisrc/vscode)
+
+#### 1.60.0 debian:buster(10)
+[1.57.1-debian](https://quay.io/repository/suisrc/vscode)
 
 #### 1.57.1 ubuntu:focal
 [1.57.1](https://quay.io/repository/suisrc/vscode)
@@ -139,4 +147,5 @@ suisrc/vscode:[1.60.0-debian-php](https://github.com/suisrc/docker-vscode/tree/d
 
 # 鸣谢
 [vscode](https://github.com/microsoft/vscode/releases)  
-[code-server](https://github.com/cdr/code-server/releases)  
+[gitpod](https://github.com/gitpod-io/openvscode-server/releases)  
+[cdr](https://github.com/cdr/code-server/releases)  
