@@ -3,6 +3,8 @@
 # FROM debian:buster-slim
 FROM ubuntu:focal
 
+LABEL maintainer="suisrc@outlook.com"
+
 ARG VSC_RURL=https://github.com/gitpod-io/openvscode-server/releases
 ARG VSC_RELEASE=v1.65.2
 ARG VSC_URL=${VSC_RURL}/download/openvscode-server-${VSC_RELEASE}/openvscode-server-${VSC_RELEASE}-linux-x64.tar.gz
@@ -20,6 +22,7 @@ RUN apt update && apt install --no-install-recommends -y \
     sed -i "s/# zh_CN.UTF-8 UTF-8/zh_CN.UTF-8 UTF-8/g" /etc/locale.gen && locale-gen &&\
     rm -rf /tmp/* /var/tmp/* /var/lib/apt/lists/*
 
+# =============================================================================================
 # s6-overlay
 RUN curl -o /tmp/s6-cfg.tar.xz -L "${S6_CFG}" && tar -C / -Jxpf /tmp/s6-cfg.tar.xz &&\
     curl -o /tmp/s6-app.tar.xz -L "${S6_APP}" && tar -C / -Jxpf /tmp/s6-app.tar.xz &&\
@@ -38,9 +41,7 @@ RUN mkdir -p $USERDATA/Machine && ln -s /workspace /ws && mkdir -p ${VSC_HOME}
 WORKDIR   /workspace
 ENTRYPOINT ["/init"]
 
-ENV LANG=C.UTF-8    \
-    LC_ALL=C.UTF-8  \
-    HOME=/workspace \
+ENV HOME=/workspace \
     S6_KEEP_ENV=true
 
 # install oh-my-zsh
@@ -54,7 +55,8 @@ RUN if [ -z ${OH_MY_ZSH_SH_URL+x} ]; then \
     fi &&\
     sh -c "$(curl -fsSL ${OH_MY_ZSH_SH_URL})" &&\
     git clone "${OH_MY_ZSH_SUGGES}" ~/.oh-my-zsh/plugins/zsh-autosuggestions &&\
-    echo "source ~/.oh-my-zsh/plugins/zsh-autosuggestions/zsh-autosuggestions.zsh" >> ~/.zshrc
+    echo "source ~/.oh-my-zsh/plugins/zsh-autosuggestions/zsh-autosuggestions.zsh" >> ~/.zshrc &&\
+    sed -i "1iZSH_DISABLE_COMPFIX=true" ~/.zshrc
     #sed -i "s/ZSH_THEME=\"robbyrussell\"/ZSH_THEME=\"agnoster\"/g" ~/.zshrc
 
 # Creating the user and usergroup

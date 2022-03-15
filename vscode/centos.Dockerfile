@@ -1,5 +1,7 @@
 FROM centos:7
 
+LABEL maintainer="suisrc@outlook.com"
+
 ARG VSC_RURL=https://github.com/gitpod-io/openvscode-server/releases
 ARG VSC_RELEASE=v1.65.2
 ARG VSC_URL=${VSC_RURL}/download/openvscode-server-${VSC_RELEASE}/openvscode-server-${VSC_RELEASE}-linux-x64.tar.gz
@@ -16,16 +18,13 @@ ARG GIT_URL=https://github.com/git/git/archive/${GIT_RELEASE}.tar.gz
 # https://www.sqlite.org/download.html
 ARG SQLITE_URL=https://www.sqlite.org/2022/sqlite-autoconf-3380100.tar.gz
 
-# set version label
-LABEL maintainer="suisrc@outlook.com"
-
 #ARG LINUX_MIRRORS=http://mirrors.aliyun.com
 # update linux
 RUN yum clean all && yum install -y epel-release && yum makecache && yum update -y && yum install -y \
     sudo curl jq net-tools zsh vim nano ntpdate openssh-server xz openssl make p7zip fontconfig gcc dpkg libstdc++-static gcc-c++ \
     glibc-devel zlib-devel openssl-devel libffi-devel curl-devel expat-devel gettext-devel && \
     rm -rf /tmp/* /var/tmp/* /var/cache/yum
-
+# localedef -c -f UTF-8 -i zh_CN.UTF8
 
 # git版本低， 无法和vscode兼容
 RUN curl -fSL $GIT_URL -o /tmp/git-autoconf.tar.gz &&\
@@ -63,46 +62,48 @@ RUN if [ -z ${FONT_URL+x} ]; then \
     fc-cache -f -v &&\
     rm -rf /tmp/*
 
+# =============================================================================================
 # s6-overlay
 RUN curl -o /tmp/s6-cfg.tar.xz -L "${S6_CFG}" && tar -C / -Jxpf /tmp/s6-cfg.tar.xz &&\
     curl -o /tmp/s6-app.tar.xz -L "${S6_APP}" && tar -C / -Jxpf /tmp/s6-app.tar.xz &&\
-    mkdir -p /home/test/{demo,mirror} &&\
-    rm -rf /tmp/*
+    rm -rf  /tmp/*
     #tar xzf /tmp/s6.tar.gz -C / --exclude='./bin' && tar xzf /tmp/s6.tar.gz -C /usr ./bin
 
 COPY init-* /command/
 # config s6
 COPY s6-git /etc/cont-init.d/git-init
 COPY s6-vsc /etc/services.d/vscode/run
-
+# copy demo
 COPY test.*   /home/test/demo/
 COPY mirror-* /home/test/mirror/
 
+ARG USERDATA=/workspace/.openvscode-server/data
+RUN mkdir -p $USERDATA/Machine && ln -s /workspace /ws && mkdir -p ${VSC_HOME}
+
 # https://github.com/just-containers/s6-overlay
+WORKDIR   /workspace
 ENTRYPOINT ["/init"]
 
-ENV LANG=C.UTF-8 \
-    LC_ALL=C.UTF-8 \
+ENV HOME=/workspace \
     S6_KEEP_ENV=true
 
-# Creating the user and usergroup
-ARG USERNAME=vscode
-ARG USER_UID=1000
-ARG USER_GID=$USER_UID
-
-RUN groupadd --gid $USER_GID $USERNAME && \
-    useradd --uid $USER_UID --gid $USERNAME -m -s /bin/bash $USERNAME   && \
-    echo $USERNAME ALL=\(root\) NOPASSWD:ALL > /etc/sudoers.d/$USERNAME && \
-    chmod 0440 /etc/sudoers.d/$USERNAME && \
-    chmod g+rw /home && \
-    mkdir -p   /workspace  && \
-    mkdir -p   ${VSC_HOME} && \
-    chown -R   $USERNAME:$USERNAME /workspace  && \
-    chown -R   $USERNAME:$USERNAME ${VSC_HOME} && \
-    chown -R   $USERNAME:$USERNAME /home/test  && \
-    ln    -s   /workspace /ws
+# install oh-my-zsh
+#ARG OH_MY_ZSH_SH_URL=https://gitee.com/mirrors/oh-my-zsh/raw/master/tools/install.sh
+#ARG OH_MY_ZSH_SUGGES=https://gitee.com/ncr/zsh-autosuggestions
+RUN if [ -z ${OH_MY_ZSH_SH_URL+x} ]; then \
+        OH_MY_ZSH_SH_URL="https://raw.githubusercontent.com/ohmyzsh/ohmyzsh/master/tools/install.sh"; \
+    fi &&\
+    if [ -z ${OH_MY_ZSH_SUGGES+x} ]; then \
+        OH_MY_ZSH_SUGGES="https://github.com/zsh-users/zsh-autosuggestions"; \
+    fi &&\
+    sh -c "$(curl -fsSL ${OH_MY_ZSH_SH_URL})" &&\
+    git clone "${OH_MY_ZSH_SUGGES}" ~/.oh-my-zsh/plugins/zsh-autosuggestions &&\
+    echo "source ~/.oh-my-zsh/plugins/zsh-autosuggestions/zsh-autosuggestions.zsh" >> ~/.zshrc &&\
+    sed -i "1iZSH_DISABLE_COMPFIX=true" ~/.zshrc
+    #sed -i "s/ZSH_THEME=\"robbyrussell\"/ZSH_THEME=\"agnoster\"/g" ~/.zshrc
 
 ENV NODE_EXTRA_CA_CERTS=/etc/ssl/certs/ca-bundle.crt
+# =============================================================================================
 # vscode-server
 RUN if [ -z ${VSC_URL+x} ]; then \
         if [ -z ${VSC_RELEASE+x} ]; then \
@@ -119,37 +120,23 @@ RUN if [ -z ${VSC_URL+x} ]; then \
     ln -s ${VSC_HOME}/bin/remote-cli/code /usr/bin/code &&\
     rm -rf /tmp/*
 
-# =============================================================================================
-USER $USERNAME
 
-# install oh-my-zsh
-#ARG OH_MY_ZSH_SH_URL=https://gitee.com/mirrors/oh-my-zsh/raw/master/tools/install.sh
-#ARG OH_MY_ZSH_SUGGES=https://gitee.com/ncr/zsh-autosuggestions
-RUN if [ -z ${OH_MY_ZSH_SH_URL+x} ]; then \
-        OH_MY_ZSH_SH_URL="https://raw.githubusercontent.com/ohmyzsh/ohmyzsh/master/tools/install.sh"; \
-    fi &&\
-    if [ -z ${OH_MY_ZSH_SUGGES+x} ]; then \
-        OH_MY_ZSH_SUGGES="https://github.com/zsh-users/zsh-autosuggestions"; \
-    fi &&\
-    sh -c "$(curl -fsSL ${OH_MY_ZSH_SH_URL})" &&\
-    git clone "${OH_MY_ZSH_SUGGES}" ~/.oh-my-zsh/plugins/zsh-autosuggestions &&\
-    echo "source ~/.oh-my-zsh/plugins/zsh-autosuggestions/zsh-autosuggestions.zsh" >> ~/.zshrc
-    #sed -i "s/ZSH_THEME=\"robbyrussell\"/ZSH_THEME=\"agnoster\"/g" ~/.zshrc
+ENV EDITOR=code \
+    VISUAL=code \
+    GIT_EDITOR="code --wait"
 
-ENV EDITOR=code    \
-    VISUAL=code    \
-    GIT_EDITOR="code --wait" \
-    HOME=/workspace
-WORKDIR /workspace
-ARG USERDATA=/home/$USERNAME/.openvscode-server/data
 # install extension ?ms-ceintl.vscode-language-pack-zh-hans
 RUN code-server --install-extension mhutchie.git-graph &&\
     code-server --install-extension esbenp.prettier-vscode &&\
-    code-server --install-extension humao.rest-client &&\
-    mkdir -p $USERDATA/Machine
+    code-server --install-extension humao.rest-client
 
 # config for user or machine
 COPY locale.json    $USERDATA/Machine/locale.json
-COPY settings.json $USERDATA/Machine/settings.json
+COPY settings2.json $USERDATA/Machine/settings.json
 
+# =============================================================================================
+RUN chown -R $USERNAME:$USERNAME /workspace &&\
+    chown -R $USERNAME:$USERNAME ${VSC_HOME}
+
+USER $USERNAME
 #EXPOSE 7000
