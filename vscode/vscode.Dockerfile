@@ -1,6 +1,5 @@
 # 推荐一个最小安装版, alpine无法运行vsc的node
 # FROM alpine:3
-# FROM debian:buster-slim
 FROM ubuntu:focal
 
 LABEL maintainer="suisrc@outlook.com"
@@ -15,12 +14,8 @@ ARG S6_APP=https://github.com/just-containers/s6-overlay/releases/download/${S6_
 ARG S6_CFG=https://github.com/just-containers/s6-overlay/releases/download/${S6_RELEASE}/s6-overlay-noarch.tar.xz
 
 # linux and softs
-# apk add --no-cache openssh bash vim curl jq tar git #apline软件
-# dumb-init #使用s6代替
-RUN apt update && apt install --no-install-recommends -y \
-    sudo ca-certificates curl git procps jq bash net-tools iputils-ping zsh vim nano ntpdate locales openssh-client xz-utils libatomic1 &&\
-    sed -i "s/# zh_CN.UTF-8 UTF-8/zh_CN.UTF-8 UTF-8/g" /etc/locale.gen && locale-gen &&\
-    rm -rf /tmp/* /var/tmp/* /var/lib/apt/lists/*
+RUN apk add --no-cache --virtual .build-deps-yarn curl gnupg openssh bash vim jq tar git xz &&\
+    apk del .build-deps-yarn && rm -rf /tmp/* /var/tmp/*
 
 # =============================================================================================
 # s6-overlay
