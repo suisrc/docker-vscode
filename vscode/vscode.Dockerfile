@@ -79,10 +79,9 @@ ENV EDITOR=code \
     GIT_EDITOR="code --wait"
 
 # install extension ?ms-ceintl.vscode-language-pack-zh-hans
-RUN code-server --install-extension \
-    mhutchie.git-graph \
-    esbenp.prettier-vscode \
-    humao.rest-client
+RUN code-server --install-extension mhutchie.git-graph &&\
+    code-server --install-extension esbenp.prettier-vscode &&\
+    code-server --install-extension humao.rest-client
 
 # config for user or machine
 COPY locale.json    $USERDATA/Machine/locale.json
