@@ -73,3 +73,11 @@ echo "deb ${LINUX_MIRRORS}/ubuntu/ focal-proposed main restricted universe multi
 echo "deb-src ${LINUX_MIRRORS}/ubuntu/ focal-proposed main restricted universe multiverse" >>/etc/apt/sources.list &&\
 echo "deb ${LINUX_MIRRORS}/ubuntu/ focal-backports main restricted universe multiverse" >>/etc/apt/sources.list &&\
 echo "deb-src ${LINUX_MIRRORS}/ubuntu/ focal-backports main restricted universe multiverse" >>/etc/apt/sources.list;
+
+# alpine
+
+apk add kubectl
+
+a. /etc/apk/repositories
+b. dl-cdn.alpinelinux.org => mirrors.aliyun.com
+https://mirrors.aliyun.com/alpine/edge/testing

@@ -1,4 +1,4 @@
-# 推荐一个最小安装版, alpine无法运行vsc的node
+# 最小安装版, 这是一个工具，不能作为开发环境的基础环境使用，因此这里只提供root身份
 FROM node:14-alpine
 
 LABEL maintainer="suisrc@outlook.com"
@@ -70,7 +70,7 @@ RUN if [ -z ${VSC_URL+x} ]; then \
     sed -i 's/"$0"/"$(readlink -f $0)"/' ${VSC_HOME}/bin/remote-cli/code &&\
     ln -s ${VSC_HOME}/bin/remote-cli/code /usr/bin/code &&\
     rm -f ${VSC_HOME}/node && ln -s /usr/local/bin/node ${VSC_HOME}/node &&\
-    ln -s /lib/libc.musl-x86_64.so.1 /lib/ld-linux-x86-64.so.2 &&\
+    ln -s /lib/ld-musl-x86_64.so.1 /lib/ld-linux-x86-64.so.2 &&\
     rm -rf /tmp/*
 
 
