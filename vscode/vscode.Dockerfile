@@ -69,7 +69,7 @@ RUN if [ -z ${VSC_URL+x} ]; then \
     cp ${VSC_HOME}/bin/remote-cli/openvscode-server ${VSC_HOME}/bin/remote-cli/code &&\
     sed -i 's/"$0"/"$(readlink -f $0)"/' ${VSC_HOME}/bin/remote-cli/code &&\
     ln -s ${VSC_HOME}/bin/remote-cli/code /usr/bin/code &&\
-    rm -f ${VSC_HOME}/node && ls -s /usr/local/bin/node ${VSC_HOME}/node &&\
+    rm -f ${VSC_HOME}/node && cp /usr/local/bin/node ${VSC_HOME}/node &&\
     rm -rf /tmp/*
 
 
