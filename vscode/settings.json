@@ -1,5 +1,4 @@
 {
-    "terminal.integrated.shell.linux": "/bin/zsh",
     "terminal.integrated.fontFamily": "Consolas",
     "terminal.integrated.scrollback": 10000,
     "terminal.integrated.defaultProfile.linux": "zsh",

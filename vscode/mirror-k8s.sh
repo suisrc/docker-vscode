@@ -37,7 +37,7 @@ LINUX_MIRRORS=http://mirrors.aliyun.com &&\
 curl -fsSL ${LINUX_MIRRORS}/repo/Centos-7.repo -o /etc/yum.repos.d/CentOS-Base.repo &&\
 sed -i -e '/mirrors.cloud.aliyuncs.com/d' -e '/mirrors.aliyuncs.com/d' /etc/yum.repos.d/CentOS-Base.repo &&\
 sed -i 's/gpgcheck=1/gpgcheck=0/g' /etc/yum.repos.d/CentOS-Base.repo &&\
-url -fsSL ${LINUX_MIRRORS}/repo/epel-7.repo -o /etc/yum.repos.d/epel.repo;
+curl -fsSL ${LINUX_MIRRORS}/repo/epel-7.repo -o /etc/yum.repos.d/epel.repo;
 
 echo "[kubernetes]" >> /etc/yum.repos.d/kubernetes.repo &&\
 echo "name=Kubernetes" >> /etc/yum.repos.d/kubernetes.repo &&\
@@ -73,3 +73,11 @@ echo "deb ${LINUX_MIRRORS}/ubuntu/ focal-proposed main restricted universe multi
 echo "deb-src ${LINUX_MIRRORS}/ubuntu/ focal-proposed main restricted universe multiverse" >>/etc/apt/sources.list &&\
 echo "deb ${LINUX_MIRRORS}/ubuntu/ focal-backports main restricted universe multiverse" >>/etc/apt/sources.list &&\
 echo "deb-src ${LINUX_MIRRORS}/ubuntu/ focal-backports main restricted universe multiverse" >>/etc/apt/sources.list;
+
+# alpine
+
+apk add kubectl
+
+a. /etc/apk/repositories
+b. dl-cdn.alpinelinux.org => mirrors.aliyun.com
+https://mirrors.aliyun.com/alpine/edge/testing
