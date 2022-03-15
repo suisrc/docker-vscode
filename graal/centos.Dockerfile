@@ -9,6 +9,7 @@ ARG GRAALVM_URL
 ARG MAVEN_RELEASE=3.8.5
 ARG MAVEN_URL
 
+USER root
 # install oracle graalvm-ce 
 RUN set -eux &&\
     if [ -z ${GRAALVM_URL+x} ]; then \
@@ -47,6 +48,7 @@ RUN if [ -z ${MAVEN_URL+x} ]; then \
 
 ENV MAVEN_HOME /usr/share/maven
 
+USER vscode
 # extension
 RUN code-server --install-extension redhat.vscode-yaml &&\
     code-server --install-extension redhat.vscode-xml &&\
