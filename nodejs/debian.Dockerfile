@@ -1,7 +1,8 @@
 # FROM suisrc/vscode:debian
-FROM docker.pkg.github.com/suisrc/docker-vscode/vscode:1.60.0-debian
+FROM docker.pkg.github.com/suisrc/docker-vscode/vscode:1.65.2-debian
 
-ENV NODE_VERSION v14.18.1
+USER root
+ENV NODE_VERSION v16.14.0
 
 # nodejs
 RUN echo "**** install nodejs ****" &&\
@@ -16,14 +17,14 @@ RUN echo "**** install nodejs ****" &&\
       *) echo "unsupported architecture"; exit 1 ;; \
     esac &&\
     set -ex &&\
-    curl -fsSLO --compressed "https://nodejs.org/dist/$NODE_VERSION/node-$NODE_VERSION-linux-$ARCH.tar.gz" &&\
+    curl -fsSLO --compressed "https://nodejs.org/dist/$NODE_VERSION/node-$NODE_VERSION-linux-$ARCH.tar.xz" &&\
     #curl -fsSLO --compressed "https://nodejs.org/dist/$NODE_VERSION/SHASUMS256.txt.asc" &&\
     #gpg --batch --decrypt --output SHASUMS256.txt SHASUMS256.txt.asc &&\
     #grep " node-$NODE_VERSION-linux-$ARCH.tar.xz\$" SHASUMS256.txt | sha256sum -c - &&\
-    #tar -xJf "node-$NODE_VERSION-linux-$ARCH.tar.xz" -C /usr/local --strip-components=1 --no-same-owner &&\
-    tar -xzf "node-$NODE_VERSION-linux-$ARCH.tar.gz" -C /usr/local --strip-components=1 --no-same-owner &&\
+    # xz => gz, xJ => xz
+    tar -xf "node-$NODE_VERSION-linux-$ARCH.tar.xz" -C /usr/local --strip-components=1 --no-same-owner &&\
     #rm "node-$NODE_VERSION-linux-$ARCH.tar.xz" SHASUMS256.txt.asc SHASUMS256.txt &&\
-    rm "node-$NODE_VERSION-linux-$ARCH.tar.gz"  &&\
+    rm "node-$NODE_VERSION-linux-$ARCH.tar.xz"  &&\
     ln -s /usr/local/bin/node /usr/local/bin/nodejs &&\
     # smoke tests
     node --version &&\
@@ -31,3 +32,7 @@ RUN echo "**** install nodejs ****" &&\
 
 # config china npm and aliyun yarn
 RUN npm install -g cnpm yarn tyarn
+
+USER vscode
+# extension
+RUN code-server --install-extension mubaidr.vuejs-extension-pack
