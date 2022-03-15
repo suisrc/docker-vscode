@@ -13,7 +13,7 @@ ARG S6_APP=https://github.com/just-containers/s6-overlay/releases/download/${S6_
 ARG S6_CFG=https://github.com/just-containers/s6-overlay/releases/download/${S6_RELEASE}/s6-overlay-noarch.tar.xz
 
 # linux and softs
-RUN apk add --no-cache --virtual .build-deps-yarn curl gnupg openssh bash vim jq tar git xz &&\
+RUN apk add --no-cache curl gnupg openssh bash vim jq tar git xz &&\
     rm -rf /tmp/* /var/tmp/*
 
 # =============================================================================================
