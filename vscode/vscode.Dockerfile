@@ -1,5 +1,5 @@
 # 推荐一个最小安装版, alpine无法运行vsc的node
-FROM alpine:3
+FROM node:14-alpine
 
 LABEL maintainer="suisrc@outlook.com"
 
@@ -69,6 +69,7 @@ RUN if [ -z ${VSC_URL+x} ]; then \
     cp ${VSC_HOME}/bin/remote-cli/openvscode-server ${VSC_HOME}/bin/remote-cli/code &&\
     sed -i 's/"$0"/"$(readlink -f $0)"/' ${VSC_HOME}/bin/remote-cli/code &&\
     ln -s ${VSC_HOME}/bin/remote-cli/code /usr/bin/code &&\
+    rm -f ${VSC_HOME}/node && ls -s /usr/local/bin/node ${VSC_HOME}/node &&\
     rm -rf /tmp/*
 
 
