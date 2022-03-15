@@ -1,14 +1,13 @@
 FROM debian:buster-slim
 # FROM debian:buster
 # args
-ARG GRAALVM_RELEASE=vm-21.3.0
+ARG GRAALVM_RELEASE=vm-22.0.0.2
 ARG JAVA_RELEASE=java11
 ARG GRAALVM_URL
 
 ARG MAVEN_RELEASE=3.6.3
 ARG MAVEN_URL
 
-ARG LINUX_MIRRORS
 #ARG LINUX_MIRRORS=http://mirrors.aliyun.com
 
 # set version label
