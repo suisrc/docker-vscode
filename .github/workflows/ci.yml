@@ -17,7 +17,7 @@ env:
   ALIYUN_REGISTRY: registry.cn-hongkong.aliyuncs.com
 
 jobs:
-  maven-jdk11-22_0_0_2:
+  maven-jdk11-22:
     runs-on: ubuntu-latest
 
     steps:
