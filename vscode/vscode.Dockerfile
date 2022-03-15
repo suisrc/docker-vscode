@@ -70,6 +70,7 @@ RUN if [ -z ${VSC_URL+x} ]; then \
     sed -i 's/"$0"/"$(readlink -f $0)"/' ${VSC_HOME}/bin/remote-cli/code &&\
     ln -s ${VSC_HOME}/bin/remote-cli/code /usr/bin/code &&\
     rm -f ${VSC_HOME}/node && ln -s /usr/local/bin/node ${VSC_HOME}/node &&\
+    ln -s /lib/libc.musl-x86_64.so.1 /lib/ld-linux-x86-64.so.2
     rm -rf /tmp/*
 
 
