@@ -14,7 +14,7 @@ ARG S6_CFG=https://github.com/just-containers/s6-overlay/releases/download/${S6_
 
 # linux and softs
 RUN apk add --no-cache --virtual .build-deps-yarn curl gnupg openssh bash vim jq tar git xz &&\
-    apk del .build-deps-yarn && rm -rf /tmp/* /var/tmp/*
+    rm -rf /tmp/* /var/tmp/*
 
 # =============================================================================================
 # s6-overlay
