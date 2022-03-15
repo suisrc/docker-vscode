@@ -20,8 +20,8 @@ RUN echo "**** install nodejs ****" &&\
     #curl -fsSLO --compressed "https://nodejs.org/dist/$NODE_VERSION/SHASUMS256.txt.asc" &&\
     #gpg --batch --decrypt --output SHASUMS256.txt SHASUMS256.txt.asc &&\
     #grep " node-$NODE_VERSION-linux-$ARCH.tar.xz\$" SHASUMS256.txt | sha256sum -c - &&\
-    #tar -xJf "node-$NODE_VERSION-linux-$ARCH.tar.xz" -C /usr/local --strip-components=1 --no-same-owner &&\
-    tar -xzf "node-$NODE_VERSION-linux-$ARCH.tar.xz" -C /usr/local --strip-components=1 --no-same-owner &&\
+    # xz => gz, xJ => xz
+    tar -xf "node-$NODE_VERSION-linux-$ARCH.tar.xz" -C /usr/local --strip-components=1 --no-same-owner &&\
     #rm "node-$NODE_VERSION-linux-$ARCH.tar.xz" SHASUMS256.txt.asc SHASUMS256.txt &&\
     rm "node-$NODE_VERSION-linux-$ARCH.tar.xz"  &&\
     ln -s /usr/local/bin/node /usr/local/bin/nodejs &&\

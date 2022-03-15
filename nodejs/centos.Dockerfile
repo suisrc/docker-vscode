@@ -18,7 +18,7 @@ RUN echo "**** install nodejs ****" &&\
     esac &&\
     set -ex &&\
     curl -fsSLO --compressed "https://nodejs.org/dist/$NODE_VERSION/node-$NODE_VERSION-linux-$ARCH.tar.xz" &&\
-    tar -xzf "node-$NODE_VERSION-linux-$ARCH.tar.xz" -C /usr/local --strip-components=1 --no-same-owner &&\
+    tar -xf "node-$NODE_VERSION-linux-$ARCH.tar.xz" -C /usr/local --strip-components=1 --no-same-owner &&\
     rm "node-$NODE_VERSION-linux-$ARCH.tar.xz"  &&\
     ln -s /usr/local/bin/node /usr/local/bin/nodejs &&\
     # smoke tests
