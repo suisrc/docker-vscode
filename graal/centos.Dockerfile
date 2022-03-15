@@ -28,7 +28,7 @@ RUN set -eux &&\
     rm -f graalvm-ce.tar.gz
 
 ENV PATH=/graalvm/bin:$PATH
-RUN gu install native-image
+#RUN gu install native-image
 
 ENV JDK_HOME=/graalvm
 ENV JAVA_HOME=/graalvm
