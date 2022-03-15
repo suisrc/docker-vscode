@@ -1,13 +1,14 @@
 #FROM suisrc/vscode:centos
-FROM docker.pkg.github.com/suisrc/docker-vscode/vscode:1.60.0-centos
+FROM docker.pkg.github.com/suisrc/docker-vscode/vscode:1.65.2-centos
 
 # https://github.com/AdoptOpenJDK/openjdk8-binaries/releases
 ARG JAVA_RELEASE=jdk8u292-b10_openj9-0.26.0
 ARG JAVA_URL
 
-ARG MAVEN_RELEASE=3.8.4
+ARG MAVEN_RELEASE=3.8.5
 ARG MAVEN_URL
 
+USER root
 # jdk
 RUN if [ -z ${JAVA_URL+x} ]; then \
         if [ -z ${JAVA_RELEASE+x} ]; then \
@@ -48,6 +49,7 @@ RUN if [ -z ${MAVEN_URL+x} ]; then \
 
 ENV MAVEN_HOME /usr/share/maven
 
+USER vscode
 # extension
 RUN code-server --install-extension redhat.vscode-yaml &&\
     code-server --install-extension redhat.vscode-xml &&\
