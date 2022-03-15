@@ -85,9 +85,15 @@ RUN if [ -z ${OH_MY_ZSH_SH_URL+x} ]; then \
     sh -c "$(curl -fsSL ${OH_MY_ZSH_SH_URL})" &&\
     git clone "${OH_MY_ZSH_SUGGES}" ~/.oh-my-zsh/plugins/zsh-autosuggestions &&\
     echo "source ~/.oh-my-zsh/plugins/zsh-autosuggestions/zsh-autosuggestions.zsh" >> ~/.zshrc
+    echo "source ~/.oh-my-zsh/plugins/zsh-autosuggestions/zsh-autosuggestions.zsh" >> /root/.zshrc
     #sed -i "s/ZSH_THEME=\"robbyrussell\"/ZSH_THEME=\"agnoster\"/g" ~/.zshrc
 
-ARG USERDATA=/home/$USERNAME/.openvscode-server/data
+ENV EDITOR=code    \
+    VISUAL=code    \
+    GIT_EDITOR="code --wait" \
+    HOME=/workspace
+WORKDIR /workspace
+ARG USERDATA=/workspace/.openvscode-server/data
 # install extension ?ms-ceintl.vscode-language-pack-zh-hans
 RUN code-server --install-extension mhutchie.git-graph &&\
     code-server --install-extension esbenp.prettier-vscode &&\
@@ -98,9 +104,4 @@ RUN code-server --install-extension mhutchie.git-graph &&\
 COPY locale.json    $USERDATA/Machine/locale.json
 COPY settings2.json $USERDATA/Machine/settings.json
 
-# =============================================================================================
-ENV EDITOR=code    \
-    VISUAL=code    \
-    GIT_EDITOR="code --wait"
 #EXPOSE 7000
-WORKDIR /workspace
