@@ -70,6 +70,13 @@ RUN if [ -z ${VSC_URL+x} ]; then \
     ln -s ${VSC_HOME}/bin/remote-cli/code /usr/bin/code &&\
     rm -rf /tmp/*
 
+
+ENV EDITOR=code    \
+    VISUAL=code    \
+    GIT_EDITOR="code --wait" \
+    HOME=/workspace
+WORKDIR  /workspace
+ARG USERDATA=/workspace/.openvscode-server/data
 # =============================================================================================
 USER $USERNAME
 
@@ -84,16 +91,9 @@ RUN if [ -z ${OH_MY_ZSH_SH_URL+x} ]; then \
     fi &&\
     sh -c "$(curl -fsSL ${OH_MY_ZSH_SH_URL})" &&\
     git clone "${OH_MY_ZSH_SUGGES}" ~/.oh-my-zsh/plugins/zsh-autosuggestions &&\
-    echo "source ~/.oh-my-zsh/plugins/zsh-autosuggestions/zsh-autosuggestions.zsh" >> ~/.zshrc &&\
-    sudo echo "source ~/.oh-my-zsh/plugins/zsh-autosuggestions/zsh-autosuggestions.zsh" >> /root/.zshrc
+    echo "source ~/.oh-my-zsh/plugins/zsh-autosuggestions/zsh-autosuggestions.zsh" >> ~/.zshrc
     #sed -i "s/ZSH_THEME=\"robbyrussell\"/ZSH_THEME=\"agnoster\"/g" ~/.zshrc
 
-ENV EDITOR=code    \
-    VISUAL=code    \
-    GIT_EDITOR="code --wait" \
-    HOME=/workspace
-WORKDIR /workspace
-ARG USERDATA=/workspace/.openvscode-server/data
 # install extension ?ms-ceintl.vscode-language-pack-zh-hans
 RUN code-server --install-extension mhutchie.git-graph &&\
     code-server --install-extension esbenp.prettier-vscode &&\
