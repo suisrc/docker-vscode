@@ -23,7 +23,7 @@ RUN apt update && apt install --no-install-recommends -y \
 # s6-overlay
 RUN curl -o /tmp/s6-cfg.tar.xz -L "${S6_CFG}" && tar -C / -Jxpf /tmp/s6-cfg.tar.xz &&\
     curl -o /tmp/s6-app.tar.xz -L "${S6_APP}" && tar -C / -Jxpf /tmp/s6-app.tar.xz &&\
-    rm -rf /tmp/*
+    rm -rf  /tmp/*
     #tar xzf /tmp/s6.tar.gz -C / --exclude='./bin' && tar xzf /tmp/s6.tar.gz -C /usr ./bin
 
 COPY init-* /command/
@@ -31,12 +31,31 @@ COPY init-* /command/
 COPY s6-git /etc/cont-init.d/git-init
 COPY s6-vsc /etc/services.d/vscode/run
 
+ARG USERDATA=/workspace/.openvscode-server/data
+RUN mkdir -p $USERDATA/Machine && ln -s /workspace /ws && mkdir -p ${VSC_HOME}
+
 # https://github.com/just-containers/s6-overlay
+WORKDIR   /workspace
 ENTRYPOINT ["/init"]
 
-ENV LANG=C.UTF-8 \
-    LC_ALL=C.UTF-8 \
+ENV LANG=C.UTF-8    \
+    LC_ALL=C.UTF-8  \
+    HOME=/workspace \
     S6_KEEP_ENV=true
+
+# install oh-my-zsh
+#ARG OH_MY_ZSH_SH_URL=https://gitee.com/mirrors/oh-my-zsh/raw/master/tools/install.sh
+#ARG OH_MY_ZSH_SUGGES=https://gitee.com/ncr/zsh-autosuggestions
+RUN if [ -z ${OH_MY_ZSH_SH_URL+x} ]; then \
+        OH_MY_ZSH_SH_URL="https://raw.githubusercontent.com/ohmyzsh/ohmyzsh/master/tools/install.sh"; \
+    fi &&\
+    if [ -z ${OH_MY_ZSH_SUGGES+x} ]; then \
+        OH_MY_ZSH_SUGGES="https://github.com/zsh-users/zsh-autosuggestions"; \
+    fi &&\
+    sh -c "$(curl -fsSL ${OH_MY_ZSH_SH_URL})" &&\
+    git clone "${OH_MY_ZSH_SUGGES}" ~/.oh-my-zsh/plugins/zsh-autosuggestions &&\
+    echo "source ~/.oh-my-zsh/plugins/zsh-autosuggestions/zsh-autosuggestions.zsh" >> ~/.zshrc
+    #sed -i "s/ZSH_THEME=\"robbyrussell\"/ZSH_THEME=\"agnoster\"/g" ~/.zshrc
 
 # Creating the user and usergroup
 ARG USERNAME=vscode
@@ -46,14 +65,9 @@ ARG USER_GID=$USER_UID
 RUN groupadd --gid $USER_GID $USERNAME && \
     useradd --uid $USER_UID --gid $USERNAME -m -s /bin/bash $USERNAME   && \
     echo $USERNAME ALL=\(root\) NOPASSWD:ALL > /etc/sudoers.d/$USERNAME && \
-    chmod 0440 /etc/sudoers.d/$USERNAME && \
-    chmod g+rw /home && \
-    mkdir -p   /workspace  && \
-    mkdir -p   ${VSC_HOME} && \
-    chown -R   $USERNAME:$USERNAME /workspace  && \
-    chown -R   $USERNAME:$USERNAME ${VSC_HOME} && \
-    ln    -s   /workspace /ws
+    chmod 0440 /etc/sudoers.d/$USERNAME && chmod g+rw /home
 
+# =============================================================================================
 # vscode-server
 RUN if [ -z ${VSC_URL+x} ]; then \
         if [ -z ${VSC_RELEASE+x} ]; then \
@@ -71,37 +85,22 @@ RUN if [ -z ${VSC_URL+x} ]; then \
     rm -rf /tmp/*
 
 
-ENV EDITOR=code    \
-    VISUAL=code    \
-    GIT_EDITOR="code --wait" \
-    HOME=/workspace
-WORKDIR  /workspace
-ARG USERDATA=/workspace/.openvscode-server/data
-# =============================================================================================
-USER $USERNAME
-
-# install oh-my-zsh
-#ARG OH_MY_ZSH_SH_URL=https://gitee.com/mirrors/oh-my-zsh/raw/master/tools/install.sh
-#ARG OH_MY_ZSH_SUGGES=https://gitee.com/ncr/zsh-autosuggestions
-RUN if [ -z ${OH_MY_ZSH_SH_URL+x} ]; then \
-        OH_MY_ZSH_SH_URL="https://raw.githubusercontent.com/ohmyzsh/ohmyzsh/master/tools/install.sh"; \
-    fi &&\
-    if [ -z ${OH_MY_ZSH_SUGGES+x} ]; then \
-        OH_MY_ZSH_SUGGES="https://github.com/zsh-users/zsh-autosuggestions"; \
-    fi &&\
-    sh -c "$(curl -fsSL ${OH_MY_ZSH_SH_URL})" &&\
-    git clone "${OH_MY_ZSH_SUGGES}" ~/.oh-my-zsh/plugins/zsh-autosuggestions &&\
-    echo "source ~/.oh-my-zsh/plugins/zsh-autosuggestions/zsh-autosuggestions.zsh" >> ~/.zshrc
-    #sed -i "s/ZSH_THEME=\"robbyrussell\"/ZSH_THEME=\"agnoster\"/g" ~/.zshrc
+ENV EDITOR=code \
+    VISUAL=code \
+    GIT_EDITOR="code --wait"
 
 # install extension ?ms-ceintl.vscode-language-pack-zh-hans
 RUN code-server --install-extension mhutchie.git-graph &&\
     code-server --install-extension esbenp.prettier-vscode &&\
-    code-server --install-extension humao.rest-client &&\
-    mkdir -p $USERDATA/Machine
+    code-server --install-extension humao.rest-client
 
 # config for user or machine
 COPY locale.json    $USERDATA/Machine/locale.json
 COPY settings2.json $USERDATA/Machine/settings.json
 
+# =============================================================================================
+RUN chown -R $USERNAME:$USERNAME /workspace &&\
+    chown -R $USERNAME:$USERNAME ${VSC_HOME}
+
+USER $USERNAME
 #EXPOSE 7000
