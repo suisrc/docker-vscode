@@ -13,7 +13,7 @@ ARG S6_APP=https://github.com/just-containers/s6-overlay/releases/download/${S6_
 ARG S6_CFG=https://github.com/just-containers/s6-overlay/releases/download/${S6_RELEASE}/s6-overlay-noarch.tar.xz
 
 # linux and softs
-RUN apk add --no-cache curl gnupg openssh bash zsh vim jq tar git xz spdlog &&\
+RUN apk add --no-cache curl gnupg openssh bash zsh vim jq tar git xz libc6-compat &&\
     rm -rf /tmp/* /var/tmp/*
 
 # =============================================================================================
@@ -69,7 +69,7 @@ RUN if [ -z ${VSC_URL+x} ]; then \
     cp ${VSC_HOME}/bin/remote-cli/openvscode-server ${VSC_HOME}/bin/remote-cli/code &&\
     sed -i 's/"$0"/"$(readlink -f $0)"/' ${VSC_HOME}/bin/remote-cli/code &&\
     ln -s ${VSC_HOME}/bin/remote-cli/code /usr/bin/code &&\
-    rm -f ${VSC_HOME}/node && cp /usr/local/bin/node ${VSC_HOME}/node &&\
+    rm -f ${VSC_HOME}/node && ln -s /usr/local/bin/node ${VSC_HOME}/node &&\
     rm -rf /tmp/*
 
 
