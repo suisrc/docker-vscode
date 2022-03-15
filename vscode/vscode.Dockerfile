@@ -1,6 +1,5 @@
 # 推荐一个最小安装版, alpine无法运行vsc的node
-# FROM alpine:3
-FROM ubuntu:focal
+FROM alpine:3
 
 LABEL maintainer="suisrc@outlook.com"
 
