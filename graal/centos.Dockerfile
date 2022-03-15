@@ -1,14 +1,15 @@
 #FROM suisrc/vscode:centos
-FROM docker.pkg.github.com/suisrc/docker-vscode/vscode:1.60.0-centos
+FROM docker.pkg.github.com/suisrc/docker-vscode/vscode:1.65.2-centos
 
 # https://github.com/graalvm/graalvm-ce-builds/releases
-ARG GRAALVM_RELEASE=vm-20.3.3
+ARG GRAALVM_RELEASE=vm-21.3.1
 ARG JAVA_RELEASE=java8
 ARG GRAALVM_URL
 
-ARG MAVEN_RELEASE=3.8.4
+ARG MAVEN_RELEASE=3.8.5
 ARG MAVEN_URL
 
+USER root
 # install oracle graalvm-ce 
 RUN set -eux &&\
     if [ -z ${GRAALVM_URL+x} ]; then \
@@ -27,7 +28,7 @@ RUN set -eux &&\
     rm -f graalvm-ce.tar.gz
 
 ENV PATH=/graalvm/bin:$PATH
-RUN gu install native-image
+#RUN gu install native-image
 
 ENV JDK_HOME=/graalvm
 ENV JAVA_HOME=/graalvm
@@ -47,6 +48,7 @@ RUN if [ -z ${MAVEN_URL+x} ]; then \
 
 ENV MAVEN_HOME /usr/share/maven
 
+USER vscode
 # extension
 RUN code-server --install-extension redhat.vscode-yaml &&\
     code-server --install-extension redhat.vscode-xml &&\
