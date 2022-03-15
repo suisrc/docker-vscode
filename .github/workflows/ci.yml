@@ -27,7 +27,7 @@ jobs:
         run: |
           REGISTRY_URL=$GITHUB_REGISTRY
           DOCKER_DIR=${{ github.job }}
-          DOCKER_DIR=${DOCKER_DIR%-*}
+          DOCKER_DIR=${DOCKER_DIR%%-*}
           DOCKER_VER=${{ github.job }}
           DOCKER_VER=${DOCKER_VER#*-}
           DOCKER_BOS=${DOCKER_VER%-*}
