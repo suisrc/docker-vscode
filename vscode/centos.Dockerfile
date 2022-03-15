@@ -143,7 +143,7 @@ RUN code-server --install-extension mhutchie.git-graph &&\
 
 # config for user or machine
 COPY locale.json    $USERDATA/Machine/locale.json
-COPY settings2.json $USERDATA/Machine/settings.json
+COPY settings.json $USERDATA/Machine/settings.json
 
 # =============================================================================================
 RUN chown -R $USERNAME:$USERNAME /workspace &&\
