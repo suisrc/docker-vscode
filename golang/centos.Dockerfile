@@ -9,12 +9,7 @@ USER root
 RUN curl -fSL --compressed $GO_URL | tar -xz -C /usr/local && mkdir /workspace/.go
 
 ENV GOPATH=/workspace/.go \
-    GOPROXY=https://goproxy.io,direct \
     PATH=/usr/local/go/bin:/workspace/.go/bin:$PATH
-
-# golang env
-RUN go env -w GO111MODULE=on &&\
-    go env -w GOPROXY=https://goproxy.io,direct
 
 # golang extension
 RUN go install github.com/ramya-rao-a/go-outline@latest &&\
@@ -26,7 +21,10 @@ RUN go install github.com/ramya-rao-a/go-outline@latest &&\
     go install honnef.co/go/tools/cmd/staticcheck@latest &&\
     go install golang.org/x/tools/gopls@latest; exit 0
 
-RUN chown -R vscode:vscode /workspace/.go
+# golang env
+RUN go env -w GO111MODULE=on &&\
+    go env -w GOPROXY=https://goproxy.io,direct &&\
+    chown -R vscode:vscode /workspace/.go
 USER vscode
 # vscode extension
 RUN code-server --install-extension golang.go
