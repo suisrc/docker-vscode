@@ -27,6 +27,9 @@ COPY init-* /command/
 # config s6
 COPY s6-git /etc/cont-init.d/git-init
 COPY s6-vsc /etc/services.d/vscode/run
+# copy demo
+COPY test.*   /home/test/demo/
+COPY mirror-* /home/test/mirror/
 
 ARG USERDATA=/workspace/.openvscode-server/data
 RUN mkdir /workspace && ln -s /workspace /ws && mkdir -p ${VSC_HOME}
