@@ -25,6 +25,7 @@ RUN go install github.com/ramya-rao-a/go-outline@latest &&\
 RUN go env -w GO111MODULE=on &&\
     go env -w GOPROXY=https://goproxy.io,direct &&\
     chown -R vscode:vscode /workspace/.go
+
 USER vscode
 # vscode extension
 RUN code-server --install-extension golang.go
