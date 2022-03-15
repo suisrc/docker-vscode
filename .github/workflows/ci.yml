@@ -17,7 +17,7 @@ env:
   ALIYUN_REGISTRY: registry.cn-hongkong.aliyuncs.com
 
 jobs:
-  maven-jdk11-22.0.0.2:
+  maven-jdk11-22_0_0_2:
     runs-on: ubuntu-latest
 
     steps:
@@ -38,6 +38,7 @@ jobs:
         run: |
           DOCKER_VER=${{ github.job }}
           VERSION=${DOCKER_VER#-*}
+          VERSION=${VERSION//_/.}
           REGISTRY_URL=$DOCKER_REGISTRY
 
           echo "${{ secrets.DOCKER_TOKEN }}" | docker login $REGISTRY_URL -u ${{ secrets.DOCKER_USER }} --password-stdin
@@ -50,6 +51,7 @@ jobs:
         run: |
           DOCKER_VER=${{ github.job }}
           VERSION=${DOCKER_VER#-*}
+          VERSION=${VERSION//_/.}
           REGISTRY_URL=$QUAY_REGISTRY
 
           echo "${{ secrets.QUAY_TOKEN }}" | docker login $REGISTRY_URL -u ${{ secrets.QUAY_USER }} --password-stdin
