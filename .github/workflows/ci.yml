@@ -27,17 +27,17 @@ jobs:
         run: |
           REGISTRY_URL=$GITHUB_REGISTRY
           DOCKER_DIR=${{ github.job }}
-          DOCKER_DIR=${DOCKER_DIR%*-}
+          DOCKER_DIR=${DOCKER_DIR%-*}
           DOCKER_VER=${{ github.job }}
-          DOCKER_VER=${DOCKER_VER#-*}
-          DOCKER_BOS=${DOCKER_VER%*-}
+          DOCKER_VER=${DOCKER_VER#*-}
+          DOCKER_BOS=${DOCKER_VER%-*}
 
           echo "${{ secrets.GITHUB_TOKEN }}" | docker login $REGISTRY_URL -u ${{ github.actor }} --password-stdin
-          docker build ./$DOCKER_DIR --file ./maven/jdk11.Dockerfile --tag image
+          docker build ./$DOCKER_DIR --file ./$DOCKER_DIR/$DOCKER_BOS.Dockerfile --tag image
       - name: Push docker image
         run: |
           DOCKER_VER=${{ github.job }}
-          VERSION=${DOCKER_VER#-*}
+          VERSION=${DOCKER_VER#*-}
           VERSION=${VERSION//_/.}
           REGISTRY_URL=$DOCKER_REGISTRY
 
@@ -50,7 +50,7 @@ jobs:
       - name: Push quay image
         run: |
           DOCKER_VER=${{ github.job }}
-          VERSION=${DOCKER_VER#-*}
+          VERSION=${DOCKER_VER#*-}
           VERSION=${VERSION//_/.}
           REGISTRY_URL=$QUAY_REGISTRY
 
