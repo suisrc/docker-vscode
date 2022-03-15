@@ -3,14 +3,14 @@
 # https://github.com/graalvm/graalvm-ce-builds/releases
 # https://hub.docker.com/r/suisrc/vscode
 # FROM suisrc/vscode:debian
-FROM docker.pkg.github.com/suisrc/docker-vscode/vscode:1.60.0-debian
+FROM docker.pkg.github.com/suisrc/docker-vscode/vscode:1.65.2-debian
 
 # args
-ARG GRAALVM_RELEASE=vm-20.3.3
+ARG GRAALVM_RELEASE=vm-21.3.1
 ARG JAVA_RELEASE=java8
 ARG GRAALVM_URL
 
-ARG MAVEN_RELEASE=3.8.4
+ARG MAVEN_RELEASE=3.8.5
 ARG MAVEN_URL
 
 # install oracle graalvm-ce 
