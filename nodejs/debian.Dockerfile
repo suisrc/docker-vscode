@@ -34,4 +34,4 @@ RUN npm install -g cnpm yarn tyarn
 
 USER vscode
 # extension
-RUN code-server --install-extension jcbuisson.vue
+RUN code-server --install-extension mubaidr.vuejs-extension-pack
