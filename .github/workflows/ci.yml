@@ -30,7 +30,7 @@ jobs:
           DOCKER_DIR=${DOCKER_DIR%*-}
           DOCKER_VER=${{ github.job }}
           DOCKER_VER=${DOCKER_VER#-*}
-          DOCKER_BOS=${DOCKER_VER%-*}
+          DOCKER_BOS=${DOCKER_VER%*-}
 
           echo "${{ secrets.GITHUB_TOKEN }}" | docker login $REGISTRY_URL -u ${{ github.actor }} --password-stdin
           docker build ./$DOCKER_DIR --file ./$DOCKER_DIR/$DOCKER_BOS.Dockerfile --tag image
