@@ -78,7 +78,8 @@ COPY test.*   /home/test/demo/
 COPY mirror-* /home/test/mirror/
 
 ARG USERDATA=/workspace/.openvscode-server/data
-RUN mkdir -p $USERDATA/Machine && ln -s /workspace /ws && mkdir -p ${VSC_HOME}
+RUN mkdir /workspace && ln -s /workspace /ws && mkdir -p ${VSC_HOME}
+COPY settings1.json /workspace/.vscode/settings.json
 
 # https://github.com/just-containers/s6-overlay
 WORKDIR   /workspace

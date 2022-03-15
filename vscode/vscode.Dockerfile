@@ -35,7 +35,8 @@ COPY s6-git /etc/cont-init.d/git-init
 COPY s6-vsc /etc/services.d/vscode/run
 
 ARG USERDATA=/workspace/.openvscode-server/data
-RUN mkdir -p $USERDATA/Machine && ln -s /workspace /ws && mkdir -p ${VSC_HOME}
+RUN mkdir /workspace && ln -s /workspace /ws && mkdir -p ${VSC_HOME}
+COPY settings1.json /workspace/.vscode/settings.json
 
 # https://github.com/just-containers/s6-overlay
 WORKDIR   /workspace
