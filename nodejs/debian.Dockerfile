@@ -1,6 +1,7 @@
 # FROM suisrc/vscode:debian
 FROM docker.pkg.github.com/suisrc/docker-vscode/vscode:1.65.2-debian
 
+USER root
 ENV NODE_VERSION v16.14.0
 
 # nodejs
