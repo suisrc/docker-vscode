@@ -1,4 +1,4 @@
-#!/command/execlineb -P
+#!/command/with-contenv zsh
 if [[ $GIT_USER_NAME ]]; then
     git config --global user.name "$GIT_USER_NAME"
 fi
@@ -6,18 +6,17 @@ if [[ $GIT_USER_EMAIL ]]; then
     git config --global user.email "$GIT_USER_EMAIL"
 fi
 if [[ $VSX_SERVICE_URL ]]; then
-  grep -rl open-vsx.org /vsc/**/*.js | xargs sed -i "s|https://open-vsx.org/vscode/gallery|$VSX_SERVICE_URL|g"
+    grep -rl open-vsx.org /vsc/**/*.js | xargs sed -i "s|https://open-vsx.org/vscode/gallery|$VSX_SERVICE_URL|g"
 fi
 if [[ $VSX_ITME_URL ]]; then
-  grep -rl open-vsx.org /vsc/**/*.js | xargs sed -i "s|https://open-vsx.org/vscode/item|$VSX_ITME_URL|g"
+    grep -rl open-vsx.org /vsc/**/*.js | xargs sed -i "s|https://open-vsx.org/vscode/item|$VSX_ITME_URL|g"
 fi
 if [[ $VSX_RESOURCE_URL ]]; then
-  grep -rl open-vsx.org /vsc/**/*.js | xargs sed -i "s|https://open-vsx.org/vscode/asset/{publisher}/{name}/{version}/Microsoft.VisualStudio.Code.WebResources/{path}|$VSX_RESOURCE_URL|g"
+    grep -rl open-vsx.org /vsc/**/*.js | xargs sed -i "s|https://open-vsx.org/vscode/asset/{publisher}/{name}/{version}/Microsoft.VisualStudio.Code.WebResources/{path}|$VSX_RESOURCE_URL|g"
 fi
 if [[ $VSX_MICROSOFT ]]; then
-  grep -rl open-vsx.org /vsc/**/*.js | xargs sed -i \
-  -e 's|open-vsx.org/vscode/gallery|marketplace.visualstudio.com/_apis/public/gallery|g' \
-  -e 's|open-vsx.org/vscode/item|marketplace.visualstudio.com/items|g' \
-  -e 's|open-vsx.org"|marketplace.visualstudio.com"|g' \
-  -e 's|open-vsx.org/vscode/asset/{publisher}/{name}/{version}/Microsoft.VisualStudio.Code.WebResources/{path}|{publisher}.vscode-unpkg.net/{publisher}/{name}/{version}/{path}|g'
+    grep -rl open-vsx.org /vsc/**/*.js | xargs sed -i \
+    -e 's|open-vsx.org/vscode/gallery|marketplace.visualstudio.com/_apis/public/gallery|g' \
+    -e 's|open-vsx.org/vscode/item|marketplace.visualstudio.com/items|g' \
+    -e 's|open-vsx.org/vscode/asset/{publisher}/{name}/{version}/Microsoft.VisualStudio.Code.WebResources/{path}|{publisher}.vscode-unpkg.net/{publisher}/{name}/{version}/{path}|g'
 fi
