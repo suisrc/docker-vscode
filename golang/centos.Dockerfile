@@ -22,9 +22,9 @@ RUN go install github.com/ramya-rao-a/go-outline@latest &&\
     go install golang.org/x/tools/gopls@latest; exit 0
 
 # golang env
-RUN go env -w GO111MODULE=on &&\
-    go env -w GOPROXY=https://goproxy.io,direct &&\
-    chown -R vscode:vscode /workspace/.go
+#RUN go env -w GO111MODULE=on &&\
+#    go env -w GOPROXY=https://goproxy.io,direct
+RUN chown -R vscode:vscode /workspace/.go
 
 USER vscode
 # vscode extension
