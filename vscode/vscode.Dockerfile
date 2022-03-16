@@ -25,8 +25,8 @@ RUN curl -o /tmp/s6-cfg.tar.xz -L "${S6_CFG}" && tar -C / -Jxpf /tmp/s6-cfg.tar.
 
 COPY init-* /command/
 # config s6
-COPY s6-git /etc/cont-init.d/git-init
-COPY s6-vsc /etc/services.d/vscode/run
+COPY s6-init /etc/cont-init.d/vsc
+COPY s6-vsc  /etc/services.d/vsc/run
 # copy demo
 COPY test.*   /home/test/demo/
 COPY mirror-* /home/test/mirror/
