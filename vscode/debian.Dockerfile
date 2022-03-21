@@ -64,8 +64,7 @@ COPY settings1.json /workspace/.vscode/settings.json
 WORKDIR   /workspace
 ENTRYPOINT ["/init"]
 
-ENV PATH=/command:$PATH \
-    HOME=/workspace \
+ENV HOME=/workspace \
     S6_KEEP_ENV=true
 
 # install oh-my-zsh
@@ -112,14 +111,19 @@ RUN if [ -z ${VSC_URL+x} ]; then \
     chown -R $USERNAME:$USERNAME ${VSC_HOME} &&\
     rm -rf /tmp/* /var/tmp/*
 
-
 ENV EDITOR=code \
     VISUAL=code \
     GIT_EDITOR="code --wait" \
-    EXTENSIONS="mhutchie.git-graph,esbenp.prettier-vscode,humao.rest-client"
+    EXTENSIONS=""
 
 # =============================================================================================
 USER $USERNAME
+# install extension ?ms-ceintl.vscode-language-pack-zh-hans
+RUN code-server --install-extension mhutchie.git-graph &&\
+    code-server --install-extension eamodio.gitlens &&\
+    code-server --install-extension esbenp.prettier-vscode &&\
+    code-server --install-extension humao.rest-client &&\
+    rm -rf $USERDATA/CachedExtensionVSIXs/*
 # config for user or machine
 COPY locale.json   $USERDATA/Machine/locale.json
 COPY settings.json $USERDATA/Machine/settings.json

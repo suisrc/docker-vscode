@@ -7,7 +7,7 @@ if [[ $GIT_USER_NAME ]]; then
     fi
 fi
 if [[ $VSX_MICROSOFT ]]; then
-    grep -rl open-vsx.org /vsc/**/*.js | xargs sed -i \
+    grep -rl open-vsx.org /vsc/**/*.js /vsc/*.json | xargs sed -i \
     -e 's|open-vsx.org/vscode/gallery|marketplace.visualstudio.com/_apis/public/gallery|g' \
     -e 's|open-vsx.org/vscode/item|marketplace.visualstudio.com/items|g' \
     -e 's|open-vsx.org/vscode/asset/{publisher}/{name}/{version}/Microsoft.VisualStudio.Code.WebResources/{path}|{publisher}.vscode-unpkg.net/{publisher}/{name}/{version}/{path}|g'
@@ -22,9 +22,10 @@ else
         grep -rl open-vsx.org /vsc/**/*.js | xargs sed -i "s|https://open-vsx.org/vscode/asset/{publisher}/{name}/{version}/Microsoft.VisualStudio.Code.WebResources/{path}|$VSX_RESOURCE_URL|g"
     fi
 fi
+# bash read -ra, zsh read -rA
 if [[ $EXTENSIONS ]]; then
     IFS=','
-    read -ra exts <<<"$EXTENSIONS"
+    read -rA exts <<<"$EXTENSIONS"
     for i in "${exts[@]}"; do
         code-server --install-extension $i
     done
