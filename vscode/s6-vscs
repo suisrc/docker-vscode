@@ -1,4 +1,4 @@
-#!/command/with-contenv sh
+#!/command/with-contenv bash
 if [[ $TOKEN ]]; then
     VSC_TOKEN=$TOKEN
 elif [[ $PASSWORD ]]; then
