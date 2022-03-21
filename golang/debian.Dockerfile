@@ -8,11 +8,13 @@ USER root
 # install golang
 RUN curl -fSL --compressed $GO_URL | tar -xz -C /usr/local && mkdir /workspace/.go
 
-ENV GOPATH=/workspace/.go \
-    PATH=/usr/local/go/bin:/workspace/.go/bin:$PATH
+ENV PATH=/usr/local/go/bin:/workspace/.go/bin:$PATH \
+    GOPATH=/workspace/.go
 
+USER vscode
 # golang extension
-RUN go install github.com/ramya-rao-a/go-outline@latest &&\
+RUN mkdir /workspace/.go &&\
+    go install github.com/ramya-rao-a/go-outline@latest &&\
     go install github.com/cweill/gotests/gotests@latest &&\
     go install github.com/fatih/gomodifytags@latest &&\
     go install github.com/josharian/impl@latest &&\
@@ -24,8 +26,6 @@ RUN go install github.com/ramya-rao-a/go-outline@latest &&\
 # golang env
 #RUN go env -w GO111MODULE=on &&\
 #    go env -w GOPROXY=https://goproxy.io,direct
-RUN chown -R vscode:vscode /workspace/.go
 
-USER vscode
 # vscode extension
 RUN code-server --install-extension golang.go
