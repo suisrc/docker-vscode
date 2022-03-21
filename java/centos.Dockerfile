@@ -23,14 +23,7 @@ RUN if [ -z ${JAVA_URL+x} ]; then \
     mkdir -p /usr/lib/jvm/java-adopt &&\
     curl -L ${JAVA_URL} -o /tmp/adopt-open-jdk.tar.gz &&\
     tar -xzf /tmp/adopt-open-jdk.tar.gz -C /usr/lib/jvm/java-adopt --strip-components=1 &&\
-    #ln -s /usr/lib/jvm/java-adopt/bin/java /usr/bin/java &&\
     rm -rf /tmp/*
-    # smoke tests
-    # java -version
-
-ENV PATH=/usr/lib/jvm/java-adopt/bin:$PATH
-ENV JDK_HOME=/usr/lib/jvm/java-adopt
-ENV JAVA_HOME=/usr/lib/jvm/java-adopt
 
 # mvn
 # http://mirrors.tuna.tsinghua.edu.cn/apache/maven/maven-3/${MAVEN_RELEASE}/binaries/apache-maven-${MAVEN_RELEASE}-bin.tar.gz"
@@ -44,10 +37,12 @@ RUN if [ -z ${MAVEN_URL+x} ]; then \
     sed -i -e "158d" -e "s/  <\/mirrors>/    -->\n&/g" /usr/share/maven/conf/settings.xml &&\
     ln -s /usr/share/maven/bin/mvn /usr/bin/mvn &&\
     rm -rf /tmp/* &&\
-    # smoke tests
     mvn -version
 
-ENV MAVEN_HOME /usr/share/maven
+ENV PATH=/usr/lib/jvm/java-adopt/bin:$PATH \
+    JDK_HOME=/usr/lib/jvm/java-adopt  \
+    JAVA_HOME=/usr/lib/jvm/java-adopt \
+    MAVEN_HOME /usr/share/maven
 
 USER vscode
 # extension
@@ -56,6 +51,5 @@ RUN code-server --install-extension redhat.vscode-yaml &&\
     code-server --install-extension vscjava.vscode-java-pack &&\
     code-server --install-extension gabrielbb.vscode-lombok &&\
     code-server --install-extension sonarsource.sonarlint-vscode &&\
-    code-server --install-extension cweijan.vscode-mysql-client2
-
-
+    code-server --install-extension cweijan.vscode-mysql-client2 &&\
+    rm -rf $USERDATA/CachedExtensionVSIXs/*
