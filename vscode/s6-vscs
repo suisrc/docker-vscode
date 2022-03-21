@@ -1,0 +1,15 @@
+#!/command/with-contenv sh
+if [[ $TOKEN ]]; then
+    VSC_TOKEN=$TOKEN
+elif [[ $PASSWORD ]]; then
+    VSC_TOKEN=$PASSWORD
+fi
+ARGS=""
+if [[ $VSC_TOKEN ]]; then
+    if [ $VSC_TOKEN = "none" ]; then
+        ARGS="--without-connection-token"
+    else
+        ARGS="--connection-token ${VSC_TOKEN}"
+    fi
+fi
+code-server --host ${VSC_HOST:-0.0.0.0} --port ${VSC_PORT:-7000} $ARGS

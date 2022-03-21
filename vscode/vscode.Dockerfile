@@ -3,14 +3,15 @@ FROM node:14-alpine
 
 LABEL maintainer="suisrc@outlook.com"
 
+ARG VSC_HOME=/vsc
 ARG VSC_RURL=https://github.com/gitpod-io/openvscode-server/releases
 ARG VSC_RELEASE=v1.65.2
 ARG VSC_URL=${VSC_RURL}/download/openvscode-server-${VSC_RELEASE}/openvscode-server-${VSC_RELEASE}-linux-x64.tar.gz
-ARG VSC_HOME=/vsc
 
+ARG S6_RURL=https://github.com/just-containers/s6-overlay/releases
 ARG S6_RELEASE=v3.1.0.1
-ARG S6_APP=https://github.com/just-containers/s6-overlay/releases/download/${S6_RELEASE}/s6-overlay-x86_64.tar.xz
-ARG S6_CFG=https://github.com/just-containers/s6-overlay/releases/download/${S6_RELEASE}/s6-overlay-noarch.tar.xz
+ARG S6_APP=$S6_RURL/download/${S6_RELEASE}/s6-overlay-x86_64.tar.xz
+ARG S6_CFG=$S6_RURL/download/${S6_RELEASE}/s6-overlay-noarch.tar.xz
 
 # linux and softs
 RUN apk add --no-cache curl gnupg openssh bash zsh vim jq tar git xz libc6-compat &&\
@@ -25,11 +26,13 @@ RUN curl -o /tmp/s6-cfg.tar.xz -L "${S6_CFG}" && tar -C / -Jxpf /tmp/s6-cfg.tar.
 
 COPY init-* /command/
 # config s6
-COPY s6-git /etc/cont-init.d/git-init
-COPY s6-vsc /etc/services.d/vscode/run
+COPY s6-init /etc/cont-init.d/vscs
+COPY s6-vscs /etc/services.d/vscs/run
 # copy demo
 COPY test.*   /home/test/demo/
 COPY mirror-* /home/test/mirror/
+# copy kubectl
+COPY kubectl-*  /usr/local/bin/
 
 ARG USERDATA=/workspace/.openvscode-server/data
 RUN mkdir /workspace && ln -s /workspace /ws && mkdir -p ${VSC_HOME}
@@ -39,8 +42,9 @@ COPY settings1.json /workspace/.vscode/settings.json
 WORKDIR   /workspace
 ENTRYPOINT ["/init"]
 
-ENV HOME=/workspace \
-    S6_KEEP_ENV=true
+ENV HOME=/workspace  \
+    S6_KEEP_ENV=true \
+    S6_CMD_WAIT_FOR_SERVICES_MAXTIME=0
 
 # install oh-my-zsh
 #ARG OH_MY_ZSH_SH_URL=https://gitee.com/mirrors/oh-my-zsh/raw/master/tools/install.sh
@@ -76,16 +80,20 @@ RUN if [ -z ${VSC_URL+x} ]; then \
     ln -s /lib/ld-musl-x86_64.so.1 /lib/ld-linux-x86-64.so.2 &&\
     rm -rf /tmp/*
 
-
 ENV EDITOR=code \
     VISUAL=code \
-    GIT_EDITOR="code --wait"
+    GIT_EDITOR="code --wait" \
+    EXTENSIONS=""
 
+# =============================================================================================
 # install extension ?ms-ceintl.vscode-language-pack-zh-hans
 RUN code-server --install-extension mhutchie.git-graph &&\
+    code-server --install-extension eamodio.gitlens &&\
     code-server --install-extension esbenp.prettier-vscode &&\
-    code-server --install-extension humao.rest-client
-
+    code-server --install-extension humao.rest-client &&\
+    rm -rf $USERDATA/CachedExtensionVSIXs/*
 # config for user or machine
 COPY locale.json    $USERDATA/Machine/locale.json
 COPY settings2.json $USERDATA/Machine/settings.json
+
+#EXPOSE 7000
