@@ -72,14 +72,8 @@ RUN curl -o /tmp/s6-cfg.tar.xz -L "${S6_CFG}" && tar -C / -Jxpf /tmp/s6-cfg.tar.
 
 COPY init-* /command/
 # config s6
-ARG S6_HOME=/etc/s6-overlay/s6-rc.d
-COPY s6-init       $S6_HOME/init/up
-COPY s6-vscs       $S6_HOME/vscs/run
-COPY s6-extensions $S6_HOME/exts/up
-RUN cd $S6_HOME &&\
-    echo "oneshot" > ./init/type &&\
-    echo "longrun" > ./vscs/type && echo "init" > ./vscs/dependencies &&\
-    echo "oneshot" > ./exts/type && echo "vscs" > ./exts/dependencies
+COPY s6-init /etc/cont-init.d/vscs
+COPY s6-vscs /etc/services.d/vscs/run
 # copy demo
 COPY test.*   /home/test/demo/
 COPY mirror-* /home/test/mirror/

@@ -25,19 +25,9 @@ RUN curl -o /tmp/s6-cfg.tar.xz -L "${S6_CFG}" && tar -C / -Jxpf /tmp/s6-cfg.tar.
     #tar xzf /tmp/s6.tar.gz -C / --exclude='./bin' && tar xzf /tmp/s6.tar.gz -C /usr ./bin
 
 COPY init-* /command/
-# config s6 (old)
-#COPY s6-init /etc/cont-init.d/vscs
-#COPY s6-vscs /etc/services.d/vscs/run
-# https://wiki.gentoo.org/wiki/S6-rc#Service_dependencies
-# https://github.com/just-containers/s6-overlay#writing-a-service-script
-ARG S6_HOME=/etc/s6-overlay/s6-rc.d
-COPY s6-init       $S6_HOME/init/up
-COPY s6-vscs       $S6_HOME/vscs/run
-COPY s6-extensions $S6_HOME/exts/up
-RUN cd $S6_HOME &&\
-    echo "oneshot" > ./init/type &&\
-    echo "longrun" > ./vscs/type && echo "init" > ./vscs/dependencies &&\
-    echo "oneshot" > ./exts/type && echo "vscs" > ./exts/dependencies
+# config s6
+COPY s6-init /etc/cont-init.d/vscs
+COPY s6-vscs /etc/services.d/vscs/run
 # copy demo
 COPY test.*   /home/test/demo/
 COPY mirror-* /home/test/mirror/

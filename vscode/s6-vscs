@@ -1,4 +1,12 @@
 #!/command/with-contenv bash
+if [[ $EXTENSIONS ]]; then
+    IFS=','
+    read -ra exts <<<"$EXTENSIONS"
+    for i in "${exts[@]}"; do
+        code-server --install-extension $i
+    done
+fi
+
 if [[ $TOKEN ]]; then
     VSC_TOKEN=$TOKEN
 elif [[ $PASSWORD ]]; then
