@@ -43,7 +43,7 @@ RUN if [ -z ${MAVEN_URL+x} ]; then \
 ENV PATH=/graalvm/bin:$PATH \
     JDK_HOME=/graalvm  \
     JAVA_HOME=/graalvm \
-    MAVEN_HOME /usr/share/maven
+    MAVEN_HOME=/usr/share/maven
 #RUN gu install native-image
 
 USER vscode
