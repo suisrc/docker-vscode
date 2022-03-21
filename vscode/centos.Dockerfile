@@ -88,8 +88,9 @@ COPY settings1.json /workspace/.vscode/settings.json
 WORKDIR   /workspace
 ENTRYPOINT ["/init"]
 
-ENV HOME=/workspace \
-    S6_KEEP_ENV=true
+ENV HOME=/workspace  \
+    S6_KEEP_ENV=true \
+    S6_CMD_WAIT_FOR_SERVICES_MAXTIME=0
 
 # install oh-my-zsh
 #ARG OH_MY_ZSH_SH_URL=https://gitee.com/mirrors/oh-my-zsh/raw/master/tools/install.sh
