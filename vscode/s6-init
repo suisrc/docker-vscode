@@ -22,3 +22,10 @@ else
         grep -rl open-vsx.org /vsc/**/*.js | xargs sed -i "s|https://open-vsx.org/vscode/asset/{publisher}/{name}/{version}/Microsoft.VisualStudio.Code.WebResources/{path}|$VSX_RESOURCE_URL|g"
     fi
 fi
+if [[ $EXTENSIONS ]]; then
+    IFS=','
+    read -ra exts <<<"$EXTENSIONS"
+    for i in "${exts[@]}"; do
+        code-server --install-extension $i
+    done
+fi
