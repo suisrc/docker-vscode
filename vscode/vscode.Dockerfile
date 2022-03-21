@@ -88,7 +88,6 @@ ENV EDITOR=code \
 # =============================================================================================
 # install extension ?ms-ceintl.vscode-language-pack-zh-hans
 RUN code-server --install-extension mhutchie.git-graph &&\
-    code-server --install-extension eamodio.gitlens &&\
     code-server --install-extension esbenp.prettier-vscode &&\
     code-server --install-extension humao.rest-client &&\
     rm -rf $USERDATA/CachedExtensionVSIXs/*

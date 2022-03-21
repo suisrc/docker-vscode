@@ -1,11 +1,11 @@
 #!/command/with-contenv sh
-if [[ $TOKEN ]]; then
+if [ $TOKEN ]; then
     VSC_TOKEN=$TOKEN
-elif [[ $PASSWORD ]]; then
+elif [ $PASSWORD ]; then
     VSC_TOKEN=$PASSWORD
 fi
 ARGS=""
-if [[ $VSC_TOKEN ]]; then
+if [ $VSC_TOKEN ]; then
     if [ $VSC_TOKEN = "none" ]; then
         ARGS="--without-connection-token"
     else
