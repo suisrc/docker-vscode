@@ -14,5 +14,6 @@ RUN pip3 install --upgrade pip &&\
 
 USER vscode
 # vscode extension
-RUN code-server --install-extension ms-python.python
+RUN code-server --install-extension ms-python.python &&\
+    rm -rf $USERDATA/CachedExtensionVSIXs/*
 

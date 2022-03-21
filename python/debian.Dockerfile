@@ -2,9 +2,10 @@
 FROM docker.pkg.github.com/suisrc/docker-vscode/vscode:1.65.2-debian
 
 USER root
-RUN apt-get update && apt-get install -y python3 python3-pip &&\
+RUN apt update && apt install -y python3 python3-pip &&\
     ln -s /usr/bin/python3 /usr/local/bin/py &&\
-    apt-get autoremove -y && apt-get clean && rm -rf /tmp/* /var/tmp/* /var/lib/apt/lists/*
+    apt autoremove -y && apt clean &&\
+    rm -rf /tmp/* /var/tmp/* /var/lib/apt/lists/*
 
 # python extension
 RUN pip3 install --upgrade pip &&\
@@ -14,5 +15,6 @@ RUN pip3 install --upgrade pip &&\
 
 USER vscode
 # vscode extension
-RUN code-server --install-extension ms-python.python
+RUN code-server --install-extension ms-python.python &&\
+    rm -rf $USERDATA/CachedExtensionVSIXs/*
 
