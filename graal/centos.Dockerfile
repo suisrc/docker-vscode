@@ -22,16 +22,15 @@ RUN set -eux &&\
         #    | jq -r '.assets[] | select(.browser_download_url | contains("graalvm-ce-java8-linux-amd64")) | .browser_download_url'); \
     fi &&\
     mkdir -p /graalvm &&\
-    #curl `#--fail --silent --location --retry 3` -fSL ${GRAALVM_URL} | tar -zxC /graalvm --strip-components=1 &&\
     curl -fsSL --compressed ${GRAALVM_URL} -o graalvm-ce.tar.gz &&\
     tar -xzf graalvm-ce.tar.gz -C /graalvm --strip-components=1 &&\
     rm -f graalvm-ce.tar.gz
 
-ENV PATH=/graalvm/bin:$PATH
+ENV PATH=/graalvm/bin:$PATH \
+    JDK_HOME=/graalvm  \
+    JAVA_HOME=/graalvm \
+    MAVEN_HOME=/usr/share/maven
 #RUN gu install native-image
-
-ENV JDK_HOME=/graalvm
-ENV JAVA_HOME=/graalvm
 
 # mvn
 RUN if [ -z ${MAVEN_URL+x} ]; then \
@@ -46,16 +45,13 @@ RUN if [ -z ${MAVEN_URL+x} ]; then \
     # smoke tests
     mvn -version
 
-ENV MAVEN_HOME /usr/share/maven
-
 USER vscode
 # extension
 RUN code-server --install-extension redhat.vscode-yaml &&\
     code-server --install-extension redhat.vscode-xml &&\
-    #code-server --install-extension mhutchie.git-graph &&\
-    #code-server --install-extension intellsmi.comment-translate &&\
     code-server --install-extension vscjava.vscode-java-pack &&\
     code-server --install-extension gabrielbb.vscode-lombok &&\
     code-server --install-extension sonarsource.sonarlint-vscode &&\
-    code-server --install-extension cweijan.vscode-mysql-client2
+    code-server --install-extension cweijan.vscode-mysql-client2 &&\
+    rm -rf $USERDATA/CachedExtensionVSIXs/*
 
