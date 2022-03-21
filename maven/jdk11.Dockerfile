@@ -47,6 +47,12 @@ RUN set -eux &&\
     #curl `#--fail --silent --location --retry 3` -fSL ${GRAALVM_URL} | tar -zxC /graalvm --strip-components=1
     curl -fsSL --compressed ${GRAALVM_URL} | tar -zxC /graalvm --strip-components=1
 
+ENV PATH=/graalvm/bin:$PATH \
+    JDK_HOME=/graalvm  \
+    JAVA_HOME=/graalvm \
+    MAVEN_HOME=/usr/share/maven
+RUN gu install native-image
+
 # mvn
 RUN if [ -z ${MAVEN_URL+x} ]; then \
         MAVEN_URL="https://downloads.apache.org/maven/maven-3/${MAVEN_RELEASE}/binaries/apache-maven-${MAVEN_RELEASE}-bin.tar.gz"; \
@@ -55,12 +61,6 @@ RUN if [ -z ${MAVEN_URL+x} ]; then \
     curl -fsSL ${MAVEN_URL} | tar -zxC /usr/share/maven --strip-components=1 &&\
     ln -s /usr/share/maven/bin/mvn /usr/bin/mvn &&\
     mvn -version
-
-ENV PATH=/graalvm/bin:$PATH \
-    JDK_HOME=/graalvm  \
-    JAVA_HOME=/graalvm \
-    MAVEN_HOME=/usr/share/maven
-RUN gu install native-image
 # settings.xml -> /root/.m2/settings.xml
 
 RUN mkdir /data
