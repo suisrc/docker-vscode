@@ -42,7 +42,7 @@ RUN if [ -z ${MAVEN_URL+x} ]; then \
 ENV PATH=/usr/lib/jvm/java-adopt/bin:$PATH \
     JDK_HOME=/usr/lib/jvm/java-adopt  \
     JAVA_HOME=/usr/lib/jvm/java-adopt \
-    MAVEN_HOME /usr/share/maven
+    MAVEN_HOME=/usr/share/maven
 
 USER vscode
 # extension
