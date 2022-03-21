@@ -1,5 +1,5 @@
 # docker-java-dev
-update
+
 ## hotspot
 https://github.com/AdoptOpenJDK/openjdk11-binaries/releases/tag/jdk-11.0.8+10  
 https://github.com/AdoptOpenJDK/openjdk8-binaries/tree/jdk8u262-b10  
