@@ -23,10 +23,16 @@ RUN set -eux &&\
         # https://github.com/graalvm/graalvm-ce-builds/releases/download/vm-20.0.0/graalvm-ce-java11-linux-amd64-20.0.0.tar.gz
     fi &&\
     mkdir -p /graalvm &&\
-    #curl `#--fail --silent --location --retry 3` -fSL ${GRAALVM_URL} | tar -zxC /graalvm --strip-components=1 &&\
     curl -fsL --compressed ${GRAALVM_URL} -o graalvm-ce.tar.gz &&\
     tar -xzf graalvm-ce.tar.gz -C /graalvm --strip-components=1 &&\
     rm -f graalvm-ce.tar.gz
+    #curl `#--fail --silent --location --retry 3` -fSL ${GRAALVM_URL} | tar -zxC /graalvm --strip-components=1 &&\
+
+ENV PATH=/graalvm/bin:$PATH \
+    JDK_HOME=/graalvm  \
+    JAVA_HOME=/graalvm \
+    MAVEN_HOME=/usr/share/maven
+RUN gu install native-image
 
 # mvn
 RUN if [ -z ${MAVEN_URL+x} ]; then \
@@ -40,12 +46,6 @@ RUN if [ -z ${MAVEN_URL+x} ]; then \
     ln -s /usr/share/maven/bin/mvn /usr/bin/mvn &&\
     # smoke tests
     mvn -version
-
-ENV PATH=/graalvm/bin:$PATH \
-    JDK_HOME=/graalvm  \
-    JAVA_HOME=/graalvm \
-    MAVEN_HOME=/usr/share/maven
-RUN gu install native-image
 
 USER vscode
 # extension
