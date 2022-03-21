@@ -295,10 +295,6 @@ RUN set -eux; \
 RUN docker-php-ext-configure gd --with-jpeg=/usr/include/ --with-freetype=/usr/include/ && \
     docker-php-ext-install gd pdo pdo_mysql mysqli
 
-ENTRYPOINT ["/init"]
 RUN mkdir -p "/etc/services.d/apache2" && \
-    echo "#!/usr/bin/execlineb -P\napache2-foreground" > /etc/services.d/apache2/run && \
-    chmod +x /etc/services.d/apache2/run && \
-	# 重置工作文件夹
-	echo "#!/usr/bin/execlineb -P\ncode-server --bind-addr 0.0.0.0:7000 --disable-telemetry /var/www/html" > /etc/services.d/vscode/run && \
-    chmod +x /etc/services.d/vscode/run
+    echo "#!/command/execlineb -P\napache2-foreground" > /etc/services.d/apache2/run && \
+    chmod +x /etc/services.d/apache2/run
