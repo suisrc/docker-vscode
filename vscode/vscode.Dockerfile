@@ -26,8 +26,8 @@ RUN curl -o /tmp/s6-cfg.tar.xz -L "${S6_CFG}" && tar -C / -Jxpf /tmp/s6-cfg.tar.
 
 COPY init-* /command/
 # config s6 (old)
-#COPY s6-init /etc/cont-init.d/vsc
-#COPY s6-vsc  /etc/services.d/vsc/run
+#COPY s6-init /etc/cont-init.d/vscs
+#COPY s6-vscs /etc/services.d/vscs/run
 # https://wiki.gentoo.org/wiki/S6-rc#Service_dependencies
 # https://github.com/just-containers/s6-overlay#writing-a-service-script
 ARG S6_HOME=/etc/s6-overlay/s6-rc.d
@@ -52,7 +52,8 @@ COPY settings1.json /workspace/.vscode/settings.json
 WORKDIR   /workspace
 ENTRYPOINT ["/init"]
 
-ENV HOME=/workspace \
+ENV PATH=/command;$PATH \
+    HOME=/workspace \
     S6_KEEP_ENV=true
 
 # install oh-my-zsh
