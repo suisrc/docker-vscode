@@ -6,7 +6,7 @@ ARG GO_URL=https://dl.google.com/go/go${GO_VER}.linux-amd64.tar.gz
 
 USER root
 # install golang
-RUN curl -fSL --compressed $GO_URL | tar -xz -C /usr/local && mkdir /workspace/.go
+RUN curl -fSL --compressed $GO_URL | tar -xz -C /usr/local
 
 ENV PATH=/usr/local/go/bin:/workspace/.go/bin:$PATH \
     GOPATH=/workspace/.go
