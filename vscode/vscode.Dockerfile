@@ -3,14 +3,15 @@ FROM node:14-alpine
 
 LABEL maintainer="suisrc@outlook.com"
 
+ARG VSC_HOME=/vsc
 ARG VSC_RURL=https://github.com/gitpod-io/openvscode-server/releases
 ARG VSC_RELEASE=v1.65.2
 ARG VSC_URL=${VSC_RURL}/download/openvscode-server-${VSC_RELEASE}/openvscode-server-${VSC_RELEASE}-linux-x64.tar.gz
-ARG VSC_HOME=/vsc
 
+ARG S6_RURL=https://github.com/just-containers/s6-overlay/releases
 ARG S6_RELEASE=v3.1.0.1
-ARG S6_APP=https://github.com/just-containers/s6-overlay/releases/download/${S6_RELEASE}/s6-overlay-x86_64.tar.xz
-ARG S6_CFG=https://github.com/just-containers/s6-overlay/releases/download/${S6_RELEASE}/s6-overlay-noarch.tar.xz
+ARG S6_APP=$S6_RURL/download/${S6_RELEASE}/s6-overlay-x86_64.tar.xz
+ARG S6_CFG=$S6_RURL/download/${S6_RELEASE}/s6-overlay-noarch.tar.xz
 
 # linux and softs
 RUN apk add --no-cache curl gnupg openssh bash zsh vim jq tar git xz libc6-compat &&\
@@ -24,12 +25,24 @@ RUN curl -o /tmp/s6-cfg.tar.xz -L "${S6_CFG}" && tar -C / -Jxpf /tmp/s6-cfg.tar.
     #tar xzf /tmp/s6.tar.gz -C / --exclude='./bin' && tar xzf /tmp/s6.tar.gz -C /usr ./bin
 
 COPY init-* /command/
-# config s6
-COPY s6-init /etc/cont-init.d/vsc
-COPY s6-vsc  /etc/services.d/vsc/run
+# config s6 (old)
+#COPY s6-init /etc/cont-init.d/vsc
+#COPY s6-vsc  /etc/services.d/vsc/run
+# https://wiki.gentoo.org/wiki/S6-rc#Service_dependencies
+# https://github.com/just-containers/s6-overlay#writing-a-service-script
+ARG S6_HOME=/etc/s6-overlay/s6-rc.d
+COPY s6-init       $S6_HOME/init/up
+COPY s6-vscs       $S6_HOME/vscs/run
+COPY s6-extensions $S6_HOME/exts/up
+RUN cd $S6_HOME &&\
+    echo "oneshot" > ./init/type &&\
+    echo "longrun" > ./vscs/type && echo "init" > ./vscs/dependencies &&\
+    echo "oneshot" > ./exts/type && echo "vscs" > ./exts/dependencies
 # copy demo
 COPY test.*   /home/test/demo/
 COPY mirror-* /home/test/mirror/
+# copy kubectl
+COPY kubectl-*  /usr/local/bin/
 
 ARG USERDATA=/workspace/.openvscode-server/data
 RUN mkdir /workspace && ln -s /workspace /ws && mkdir -p ${VSC_HOME}
@@ -79,12 +92,13 @@ RUN if [ -z ${VSC_URL+x} ]; then \
 
 ENV EDITOR=code \
     VISUAL=code \
-    GIT_EDITOR="code --wait"
+    GIT_EDITOR="code --wait" \
+    EXTENSIONS="mhutchie.git-graph,esbenp.prettier-vscode,humao.rest-client"
 
 # install extension ?ms-ceintl.vscode-language-pack-zh-hans
-RUN code-server --install-extension mhutchie.git-graph &&\
-    code-server --install-extension esbenp.prettier-vscode &&\
-    code-server --install-extension humao.rest-client
+#RUN code-server --install-extension mhutchie.git-graph &&\
+#    rm -rf $USERDATA/CachedExtensionVSIXs/*
+# 插件使用s6-extensions安装，基础镜像中不在提供默认插件
 
 # config for user or machine
 COPY locale.json    $USERDATA/Machine/locale.json

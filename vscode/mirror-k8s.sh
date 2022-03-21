@@ -48,6 +48,8 @@ echo "repo_gpgcheck=0" >> /etc/yum.repos.d/kubernetes.repo &&\
 echo "gpgkey=${LINUX_MIRRORS}/kubernetes/yum/doc/yum-key.gpg ${LINUX_MIRRORS}/kubernetes/yum/doc/rpm-package-key.gpg" >> /etc/yum.repos.d/kubernetes.repo &&\
 echo "" >> /etc/yum.repos.d/kubernetes.repo;
 
+yum install kubectl
+
 # debian
 mv /etc/apt/sources.list /etc/apt/sources.list.bak && \
 LINUX_MIRRORS=http://mirrors.aliyun.com &&\
@@ -59,6 +61,8 @@ echo "deb ${LINUX_MIRRORS}/debian/ buster-updates main non-free contrib" >>/etc/
 echo "deb-src ${LINUX_MIRRORS}/debian/ buster-updates main non-free contrib" >>/etc/apt/sources.list &&\
 echo "deb ${LINUX_MIRRORS}/debian/ buster-backports main non-free contrib" >>/etc/apt/sources.list &&\
 echo "deb-src ${LINUX_MIRRORS}/debian/ buster-backports main non-free contrib" >>/etc/apt/sources.list;
+
+apt install kubectl
 
 # ubuntu
 mv /etc/apt/sources.list /etc/apt/sources.list.bak && \
@@ -74,6 +78,8 @@ echo "deb-src ${LINUX_MIRRORS}/ubuntu/ focal-proposed main restricted universe m
 echo "deb ${LINUX_MIRRORS}/ubuntu/ focal-backports main restricted universe multiverse" >>/etc/apt/sources.list &&\
 echo "deb-src ${LINUX_MIRRORS}/ubuntu/ focal-backports main restricted universe multiverse" >>/etc/apt/sources.list;
 
+apt install kubectl
+
 # alpine
 
 apk add kubectl
@@ -81,3 +87,14 @@ apk add kubectl
 a. /etc/apk/repositories
 b. dl-cdn.alpinelinux.org => mirrors.aliyun.com
 https://mirrors.aliyun.com/alpine/edge/testing
+
+sed -i "s|dl-cdn.alpinelinux.org|mirrors.aliyun.com|g" /etc/apk/repositories
+
+apk add --no-cache kubectl
+
+# k8s扩展
+
+使用kubectl时候, 可以以kubectl-[command]方式定义kubectl的krew插件, 之后通过kubectl command方式调用
+
+kubectl-ssh: 可以管理集群中任何一个节点，而不需要密码登录, (kubectl-ssh)[https://github.com/luksa/kubectl-plugins]
+kubectl ssh node [node-name]
