@@ -23,6 +23,11 @@ RUN if [ -z ${JAVA_URL+x} ]; then \
     tar -xzf /tmp/adopt-open-jdk.tar.gz -C /usr/lib/jvm/java-adopt --strip-components=1 &&\
     rm -rf /tmp/*
 
+ENV PATH=/usr/lib/jvm/java-adopt/bin:$PATH \
+    JDK_HOME=/usr/lib/jvm/java-adopt  \
+    JAVA_HOME=/usr/lib/jvm/java-adopt \
+    MAVEN_HOME=/usr/share/maven
+
 # mvn
 # http://mirrors.tuna.tsinghua.edu.cn/apache/maven/maven-3/${MAVEN_RELEASE}/binaries/apache-maven-${MAVEN_RELEASE}-bin.tar.gz"
 # https://downloads.apache.org/maven/maven-3/${MAVEN_RELEASE}/binaries/apache-maven-${MAVEN_RELEASE}-bin.tar.gz
@@ -36,11 +41,6 @@ RUN if [ -z ${MAVEN_URL+x} ]; then \
     ln -s /usr/share/maven/bin/mvn /usr/bin/mvn &&\
     rm -rf /tmp/* &&\
     mvn -version
-
-ENV PATH=/usr/lib/jvm/java-adopt/bin:$PATH \
-    JDK_HOME=/usr/lib/jvm/java-adopt  \
-    JAVA_HOME=/usr/lib/jvm/java-adopt \
-    MAVEN_HOME=/usr/share/maven
 
 USER vscode
 # extension
