@@ -94,7 +94,8 @@ COPY settings1.json /workspace/.vscode/settings.json
 WORKDIR   /workspace
 ENTRYPOINT ["/init"]
 
-ENV HOME=/workspace \
+ENV PATH=/command:$PATH \
+    HOME=/workspace \
     S6_KEEP_ENV=true
 
 # install oh-my-zsh
