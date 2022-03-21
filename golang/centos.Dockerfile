@@ -1,4 +1,4 @@
-FROM docker.pkg.github.com/suisrc/docker-vscode/vscode:1.65.2.2-centos
+FROM docker.pkg.github.com/suisrc/docker-vscode/vscode:1.65.2-centos
 
 # https://golang.google.cn/dl/
 ARG GO_VER=1.17.8
@@ -28,4 +28,5 @@ RUN mkdir /workspace/.go &&\
 #    go env -w GOPROXY=https://goproxy.io,direct
 
 # vscode extension
-RUN code-server --install-extension golang.go
+RUN code-server --install-extension golang.go &&\
+    rm -rf $USERDATA/CachedExtensionVSIXs/*
