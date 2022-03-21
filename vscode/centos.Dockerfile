@@ -33,7 +33,7 @@ RUN curl -fSL $GIT_URL -o /tmp/git-autoconf.tar.gz &&\
     cd /tmp/git-autoconf && make prefix=/usr/local && make prefix=/usr/local install &&\
     mv /usr/bin/git  /usr/bin/git_old &&\
     ln -s /usr/local/bin/git  /usr/bin/git &&\
-    git version && rm -rf /tmp/*
+    git version && rm -rf /tmp/* /var/tmp/*
 
 # sqlite版本低, 无法和django兼容(python框架，为后面扩展)
 RUN curl -fSL $SQLITE_URL -o /tmp/sqlite-autoconf.tar.gz &&\
@@ -42,7 +42,7 @@ RUN curl -fSL $SQLITE_URL -o /tmp/sqlite-autoconf.tar.gz &&\
     mv /usr/bin/sqlite3  /usr/bin/sqlite3_old &&\
     ln -s /usr/local/bin/sqlite3   /usr/bin/sqlite3 &&\
     echo "/usr/local/lib" > /etc/ld.so.conf.d/sqlite3.conf && ldconfig &&\
-    sqlite3 -version && rm -rf /tmp/*
+    sqlite3 -version && rm -rf /tmp/* /var/tmp/*
 
 # install sarasa-gothic
 # ARG FONT_URL
@@ -61,13 +61,13 @@ RUN if [ -z ${FONT_URL+x} ]; then \
     cd /usr/share/fonts/truetype/sarasa-gothic &&\
     7za x /tmp/sarasa-gothic-ttf.7z &&\
     fc-cache -f -v &&\
-    rm -rf /tmp/*
+    rm -rf /tmp/* /var/tmp/*
 
 # =============================================================================================
 # s6-overlay
 RUN curl -o /tmp/s6-cfg.tar.xz -L "${S6_CFG}" && tar -C / -Jxpf /tmp/s6-cfg.tar.xz &&\
     curl -o /tmp/s6-app.tar.xz -L "${S6_APP}" && tar -C / -Jxpf /tmp/s6-app.tar.xz &&\
-    rm -rf  /tmp/*
+    rm -rf /tmp/* /var/tmp/*
     #tar xzf /tmp/s6.tar.gz -C / --exclude='./bin' && tar xzf /tmp/s6.tar.gz -C /usr ./bin
 
 COPY init-* /command/
@@ -138,7 +138,9 @@ RUN if [ -z ${VSC_URL+x} ]; then \
     cp ${VSC_HOME}/bin/remote-cli/openvscode-server ${VSC_HOME}/bin/remote-cli/code &&\
     sed -i 's/"$0"/"$(readlink -f $0)"/' ${VSC_HOME}/bin/remote-cli/code &&\
     ln -s ${VSC_HOME}/bin/remote-cli/code /usr/bin/code &&\
-    rm -rf /tmp/*
+    chown -R $USERNAME:$USERNAME /workspace &&\
+    chown -R $USERNAME:$USERNAME ${VSC_HOME} &&\
+    rm -rf /tmp/* /var/tmp/*
 
 
 ENV EDITOR=code \
@@ -146,13 +148,10 @@ ENV EDITOR=code \
     GIT_EDITOR="code --wait" \
     EXTENSIONS="mhutchie.git-graph,esbenp.prettier-vscode,humao.rest-client"
 
+# =============================================================================================
+USER $USERNAME
 # config for user or machine
-COPY locale.json    $USERDATA/Machine/locale.json
+COPY locale.json   $USERDATA/Machine/locale.json
 COPY settings.json $USERDATA/Machine/settings.json
 
-# =============================================================================================
-RUN chown -R $USERNAME:$USERNAME /workspace &&\
-    chown -R $USERNAME:$USERNAME ${VSC_HOME}
-
-USER $USERNAME
 #EXPOSE 7000

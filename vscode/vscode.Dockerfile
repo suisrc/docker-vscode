@@ -95,11 +95,14 @@ ENV EDITOR=code \
     GIT_EDITOR="code --wait" \
     EXTENSIONS="mhutchie.git-graph,esbenp.prettier-vscode,humao.rest-client"
 
+# =============================================================================================
 # install extension ?ms-ceintl.vscode-language-pack-zh-hans
-#RUN code-server --install-extension mhutchie.git-graph &&\
-#    rm -rf $USERDATA/CachedExtensionVSIXs/*
+# RUN code-server --install-extension mhutchie.git-graph &&\
+#     rm -rf $USERDATA/CachedExtensionVSIXs/*
 # 插件使用s6-extensions安装，基础镜像中不在提供默认插件
 
 # config for user or machine
 COPY locale.json    $USERDATA/Machine/locale.json
 COPY settings2.json $USERDATA/Machine/settings.json
+
+#EXPOSE 7000
