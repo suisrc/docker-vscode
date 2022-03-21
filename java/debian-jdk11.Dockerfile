@@ -48,8 +48,6 @@ RUN code-server --install-extension redhat.vscode-yaml &&\
     code-server --install-extension redhat.vscode-xml &&\
     code-server --install-extension vscjava.vscode-java-pack &&\
     code-server --install-extension gabrielbb.vscode-lombok &&\
-    code-server --install-extension sonarsource.sonarlint-vscode &&\
-    code-server --install-extension cweijan.vscode-mysql-client2 &&\
     rm -rf $USERDATA/CachedExtensionVSIXs/*
 
 
