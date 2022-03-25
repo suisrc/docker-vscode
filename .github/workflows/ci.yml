@@ -6,7 +6,7 @@ on:
   #release:
   #  types: [published]
   push:
-    branches: [ dev-vscode ]
+    branches: [ dev-vscode-cdr ]
 
 env:
   GITHUB_IMAGE_NAME: vscode
