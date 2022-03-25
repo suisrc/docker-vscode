@@ -3,23 +3,20 @@ FROM node:14-alpine
 
 LABEL maintainer="suisrc@outlook.com"
 
-ARG VSC_RURL=https://github.com/coder/code-server/releases
-ARG VSC_RELEASE=4.2.0
-ARG VSC_URL=${VSC_RURL}/download/v${VSC_RELEASE}/code-server-${VSC_RELEASE}-linux-amd64.tar.gz
 ARG VSC_HOME=/vsc
-
-ARG S6_RURL=https://github.com/just-containers/s6-overlay/releases
+ARG VSC_RELEASE=4.2.0
 ARG S6_RELEASE=v3.1.0.1
-ARG S6_APP=$S6_RURL/download/${S6_RELEASE}/s6-overlay-x86_64.tar.xz
-ARG S6_CFG=$S6_RURL/download/${S6_RELEASE}/s6-overlay-noarch.tar.xz
 
 # linux and softs
-RUN apk add --no-cache curl gnupg openssh bash zsh vim jq tar git xz libc6-compat &&\
+RUN apk add --no-cache curl gnupg openssh bash zsh jq tar git xz libc6-compat &&\
     rm -rf /tmp/* /var/tmp/*
 
 # =============================================================================================
 # s6-overlay
-RUN curl -o /tmp/s6-cfg.tar.xz -L "${S6_CFG}" && tar -C / -Jxpf /tmp/s6-cfg.tar.xz &&\
+RUN S6_RURL="https://github.com/just-containers/s6-overlay/releases" &&\
+    S6_APP="${S6_RURL}/download/${S6_RELEASE}/s6-overlay-x86_64.tar.xz" &&\
+    S6_CFG="${S6_RURL}/download/${S6_RELEASE}/s6-overlay-noarch.tar.xz" &&\
+    curl -o /tmp/s6-cfg.tar.xz -L "${S6_CFG}" && tar -C / -Jxpf /tmp/s6-cfg.tar.xz &&\
     curl -o /tmp/s6-app.tar.xz -L "${S6_APP}" && tar -C / -Jxpf /tmp/s6-app.tar.xz &&\
     rm -rf  /tmp/*
     #tar xzf /tmp/s6.tar.gz -C / --exclude='./bin' && tar xzf /tmp/s6.tar.gz -C /usr ./bin
@@ -63,7 +60,9 @@ RUN if [ -z ${OH_MY_ZSH_SH_URL+x} ]; then \
 
 # =============================================================================================
 # vscode-server
-RUN if [ -z ${VSC_URL+x} ]; then \
+RUN VSC_RURL="https://github.com/coder/code-server/releases" &&\
+    VSC_URL="${VSC_RURL}/download/v${VSC_RELEASE}/code-server-${VSC_RELEASE}-linux-amd64.tar.gz" &&\
+    if [ -z ${VSC_URL+x} ]; then \
         if [ -z ${VSC_RELEASE+x} ]; then \
             VSC_RELEASE=$(curl -sX GET "${VSC_RURL}/latest" \
             | awk '/tag_name/{print $4;exit}' FS='[""]'); \
@@ -80,12 +79,9 @@ RUN if [ -z ${VSC_URL+x} ]; then \
     rm -rf /tmp/*
 
 ENV EXTENSIONS=""
-
 # =============================================================================================
 # install extension ?ms-ceintl.vscode-language-pack-zh-hans
 RUN code-server --install-extension mhutchie.git-graph &&\
-    code-server --install-extension esbenp.prettier-vscode &&\
-    code-server --install-extension humao.rest-client &&\
     rm -rf $USERDATA/CachedExtensionVSIXs/*
 # config for user or machine
 COPY locale.json    $USERDATA/Machine/locale.json

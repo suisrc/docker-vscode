@@ -2,15 +2,9 @@ FROM debian:buster-slim
 
 LABEL maintainer="suisrc@outlook.com"
 
-ARG VSC_RURL=https://github.com/coder/code-server/releases
-ARG VSC_RELEASE=4.2.0
-ARG VSC_URL=${VSC_RURL}/download/v${VSC_RELEASE}/code-server-${VSC_RELEASE}-linux-amd64.tar.gz
 ARG VSC_HOME=/vsc
-
-ARG S6_RURL=https://github.com/just-containers/s6-overlay/releases
+ARG VSC_RELEASE=4.2.0
 ARG S6_RELEASE=v3.1.0.1
-ARG S6_APP=$S6_RURL/download/${S6_RELEASE}/s6-overlay-x86_64.tar.xz
-ARG S6_CFG=$S6_RURL/download/${S6_RELEASE}/s6-overlay-noarch.tar.xz
 
 # update linux
 RUN apt update && apt install --no-install-recommends -y \
@@ -20,10 +14,8 @@ RUN apt update && apt install --no-install-recommends -y \
     rm -rf /tmp/* /var/tmp/* /var/lib/apt/lists/*
 
 # install sarasa-gothic
-# ARG FONT_URL
-# ARG FONT_RELEASE
-ARG FONT_RURL=https://api.github.com/repos/suisrc/Sarasa-Gothic/releases
-RUN if [ -z ${FONT_URL+x} ]; then \
+RUN FONT_RURL="https://api.github.com/repos/suisrc/Sarasa-Gothic/releases" &&\
+    if [ -z ${FONT_URL+x} ]; then \
         if [ -z ${FONT_RELEASE+x} ]; then \
             FONT_RELEASE=$(curl -sX GET "${FONT_RURL}/latest" \
             | awk '/tag_name/{print $4;exit}' FS='[""]'); \
@@ -40,9 +32,11 @@ RUN if [ -z ${FONT_URL+x} ]; then \
 
 # =============================================================================================
 # s6-overlay
-RUN curl -o /tmp/s6-cfg.tar.xz -L "${S6_CFG}" && tar -C / -Jxpf /tmp/s6-cfg.tar.xz &&\
+RUN S6_RURL="https://github.com/just-containers/s6-overlay/releases" &&\
+    S6_APP="${S6_RURL}/download/${S6_RELEASE}/s6-overlay-x86_64.tar.xz" &&\
+    S6_CFG="${S6_RURL}/download/${S6_RELEASE}/s6-overlay-noarch.tar.xz" &&\
+    curl -o /tmp/s6-cfg.tar.xz -L "${S6_CFG}" && tar -C / -Jxpf /tmp/s6-cfg.tar.xz &&\
     curl -o /tmp/s6-app.tar.xz -L "${S6_APP}" && tar -C / -Jxpf /tmp/s6-app.tar.xz &&\
-    mkdir -p /home/test/{demo,mirror} &&\
     rm -rf /tmp/* /var/tmp/*
     #tar xzf /tmp/s6.tar.gz -C / --exclude='./bin' && tar xzf /tmp/s6.tar.gz -C /usr ./bin
 
@@ -55,6 +49,8 @@ COPY test.*   /home/test/demo/
 COPY mirror-* /home/test/mirror/
 # copy kubectl
 COPY kubectl-*  /usr/local/bin/
+# fix shell
+COPY profile /etc/profile
 
 ARG USERDATA=/workspace/.local/share/code-server
 RUN mkdir /workspace && ln -s /workspace /ws && mkdir -p ${VSC_HOME}
@@ -85,11 +81,8 @@ RUN if [ -z ${OH_MY_ZSH_SH_URL+x} ]; then \
 
 # Creating the user and usergroup
 ARG USERNAME=vscode
-ARG USER_UID=1000
-ARG USER_GID=$USER_UID
-
-RUN groupadd --gid $USER_GID $USERNAME && \
-    useradd --uid $USER_UID --gid $USERNAME -m -s /bin/bash $USERNAME   && \
+RUN groupadd --gid 1000 $USERNAME && \
+    useradd  --uid 1000 --gid $USERNAME -m -s /bin/bash $USERNAME   && \
     echo $USERNAME ALL=\(root\) NOPASSWD:ALL > /etc/sudoers.d/$USERNAME && \
     chmod 0440 /etc/sudoers.d/$USERNAME && chmod g+rw /home
 
@@ -100,7 +93,9 @@ RUN groupadd --gid $USER_GID $USERNAME && \
 #     tar -xf "node-$NODE_VERSION-linux-x64.tar.xz" -C /usr/local --strip-components=1 --no-same-owner &&\
 #     rm "node-$NODE_VERSION-linux-x64.tar.xz"  && node --version && npm  --version
 # vscode-server
-RUN if [ -z ${VSC_URL+x} ]; then \
+RUN VSC_RURL="https://github.com/coder/code-server/releases" &&\
+    VSC_URL="${VSC_RURL}/download/v${VSC_RELEASE}/code-server-${VSC_RELEASE}-linux-amd64.tar.gz" &&\
+    if [ -z ${VSC_URL+x} ]; then \
         if [ -z ${VSC_RELEASE+x} ]; then \
             VSC_RELEASE=$(curl -sX GET "${VSC_RURL}/latest" \
             | awk '/tag_name/{print $4;exit}' FS='[""]'); \
@@ -115,7 +110,6 @@ RUN if [ -z ${VSC_URL+x} ]; then \
     rm -rf /tmp/* /var/tmp/*
 
 ENV EXTENSIONS=""
-
 # =============================================================================================
 USER $USERNAME
 # install extension ?ms-ceintl.vscode-language-pack-zh-hans

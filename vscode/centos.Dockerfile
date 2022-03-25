@@ -2,22 +2,9 @@ FROM centos:7
 
 LABEL maintainer="suisrc@outlook.com"
 
-ARG VSC_RURL=https://github.com/coder/code-server/releases
-ARG VSC_RELEASE=4.2.0
-ARG VSC_URL=${VSC_RURL}/download/v${VSC_RELEASE}/code-server-${VSC_RELEASE}-linux-amd64.tar.gz
 ARG VSC_HOME=/vsc
-
-ARG S6_RURL=https://github.com/just-containers/s6-overlay/releases
+ARG VSC_RELEASE=4.2.0
 ARG S6_RELEASE=v3.1.0.1
-ARG S6_APP=$S6_RURL/download/${S6_RELEASE}/s6-overlay-x86_64.tar.xz
-ARG S6_CFG=$S6_RURL/download/${S6_RELEASE}/s6-overlay-noarch.tar.xz
-
-# https://github.com/git/git/releases
-ARG GIT_RELEASE=v2.33.1
-ARG GIT_URL=https://github.com/git/git/archive/${GIT_RELEASE}.tar.gz
-
-# https://www.sqlite.org/download.html
-ARG SQLITE_URL=https://www.sqlite.org/2022/sqlite-autoconf-3380100.tar.gz
 
 #ARG LINUX_MIRRORS=http://mirrors.aliyun.com
 # update linux
@@ -28,7 +15,9 @@ RUN yum clean all && yum install -y epel-release && yum makecache && yum update 
 # localedef -c -f UTF-8 -i zh_CN.UTF8
 
 # git版本低， 无法和vscode兼容
-RUN curl -fSL $GIT_URL -o /tmp/git-autoconf.tar.gz &&\
+# https://github.com/git/git/releases
+RUN GIT_URL="https://github.com/git/git/archive/v2.33.1.tar.gz" &&\
+    curl -fSL $GIT_URL -o /tmp/git-autoconf.tar.gz &&\
     mkdir /tmp/git-autoconf && tar -zxf /tmp/git-autoconf.tar.gz -C /tmp/git-autoconf --strip-components=1 &&\
     cd /tmp/git-autoconf && make prefix=/usr/local && make prefix=/usr/local install &&\
     mv /usr/bin/git  /usr/bin/git_old &&\
@@ -36,7 +25,9 @@ RUN curl -fSL $GIT_URL -o /tmp/git-autoconf.tar.gz &&\
     git version && rm -rf /tmp/* /var/tmp/*
 
 # sqlite版本低, 无法和django兼容(python框架，为后面扩展)
-RUN curl -fSL $SQLITE_URL -o /tmp/sqlite-autoconf.tar.gz &&\
+# https://www.sqlite.org/download.html
+RUN SQLITE_URL="https://www.sqlite.org/2022/sqlite-autoconf-3380100.tar.gz" &&\
+    curl -fSL $SQLITE_URL -o /tmp/sqlite-autoconf.tar.gz &&\
     mkdir /tmp/sqlite-autoconf && tar -zxf /tmp/sqlite-autoconf.tar.gz -C /tmp/sqlite-autoconf --strip-components=1 &&\
     cd /tmp/sqlite-autoconf && ./configure --prefix=/usr/local && make && make install &&\
     mv /usr/bin/sqlite3  /usr/bin/sqlite3_old &&\
@@ -45,10 +36,8 @@ RUN curl -fSL $SQLITE_URL -o /tmp/sqlite-autoconf.tar.gz &&\
     sqlite3 -version && rm -rf /tmp/* /var/tmp/*
 
 # install sarasa-gothic
-# ARG FONT_URL
-# ARG FONT_RELEASE
-ARG FONT_RURL=https://api.github.com/repos/suisrc/Sarasa-Gothic/releases
-RUN if [ -z ${FONT_URL+x} ]; then \
+RUN FONT_RURL="https://api.github.com/repos/suisrc/Sarasa-Gothic/releases" &&\
+    if [ -z ${FONT_URL+x} ]; then \
         if [ -z ${FONT_RELEASE+x} ]; then \
             FONT_RELEASE=$(curl -sX GET "${FONT_RURL}/latest" \
             | awk '/tag_name/{print $4;exit}' FS='[""]'); \
@@ -65,7 +54,10 @@ RUN if [ -z ${FONT_URL+x} ]; then \
 
 # =============================================================================================
 # s6-overlay
-RUN curl -o /tmp/s6-cfg.tar.xz -L "${S6_CFG}" && tar -C / -Jxpf /tmp/s6-cfg.tar.xz &&\
+RUN S6_RURL="https://github.com/just-containers/s6-overlay/releases" &&\
+    S6_APP="${S6_RURL}/download/${S6_RELEASE}/s6-overlay-x86_64.tar.xz" &&\
+    S6_CFG="${S6_RURL}/download/${S6_RELEASE}/s6-overlay-noarch.tar.xz" &&\
+    curl -o /tmp/s6-cfg.tar.xz -L "${S6_CFG}" && tar -C / -Jxpf /tmp/s6-cfg.tar.xz &&\
     curl -o /tmp/s6-app.tar.xz -L "${S6_APP}" && tar -C / -Jxpf /tmp/s6-app.tar.xz &&\
     rm -rf /tmp/* /var/tmp/*
     #tar xzf /tmp/s6.tar.gz -C / --exclude='./bin' && tar xzf /tmp/s6.tar.gz -C /usr ./bin
@@ -109,11 +101,8 @@ RUN if [ -z ${OH_MY_ZSH_SH_URL+x} ]; then \
 
 # Creating the user and usergroup
 ARG USERNAME=vscode
-ARG USER_UID=1000
-ARG USER_GID=$USER_UID
-
-RUN groupadd --gid $USER_GID $USERNAME && \
-    useradd --uid $USER_UID --gid $USERNAME -m -s /bin/bash $USERNAME   && \
+RUN groupadd --gid 1000 $USERNAME && \
+    useradd  --uid 1000 --gid $USERNAME -m -s /bin/bash $USERNAME   && \
     echo $USERNAME ALL=\(root\) NOPASSWD:ALL > /etc/sudoers.d/$USERNAME && \
     chmod 0440 /etc/sudoers.d/$USERNAME && chmod g+rw /home
 
@@ -125,7 +114,9 @@ ENV NODE_EXTRA_CA_CERTS=/etc/ssl/certs/ca-bundle.crt
 #     tar -xf "node-$NODE_VERSION-linux-x64.tar.xz" -C /usr/local --strip-components=1 --no-same-owner &&\
 #     rm "node-$NODE_VERSION-linux-x64.tar.xz"  && node --version && npm  --version
 # vscode-server
-RUN if [ -z ${VSC_URL+x} ]; then \
+RUN VSC_RURL="https://github.com/coder/code-server/releases" &&\
+    VSC_URL="${VSC_RURL}/download/v${VSC_RELEASE}/code-server-${VSC_RELEASE}-linux-amd64.tar.gz" &&\
+    if [ -z ${VSC_URL+x} ]; then \
         if [ -z ${VSC_RELEASE+x} ]; then \
             VSC_RELEASE=$(curl -sX GET "${VSC_RURL}/latest" \
             | awk '/tag_name/{print $4;exit}' FS='[""]'); \
@@ -140,7 +131,6 @@ RUN if [ -z ${VSC_URL+x} ]; then \
     rm -rf /tmp/* /var/tmp/*
 
 ENV EXTENSIONS=""
-
 # =============================================================================================
 USER $USERNAME
 # install extension ?ms-ceintl.vscode-language-pack-zh-hans
