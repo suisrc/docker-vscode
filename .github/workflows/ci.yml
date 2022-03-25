@@ -75,7 +75,7 @@ jobs:
           docker tag image $IMAGE_ID:$VERSION
           docker push $IMAGE_ID:$VERSION
 
-  dibian-one:
+  debian-one:
     runs-on: ubuntu-latest
 
     steps:

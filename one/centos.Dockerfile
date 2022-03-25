@@ -28,7 +28,7 @@ RUN if [ -z ${JAVA_URL+x} ]; then \
         JAVA_URL=$(curl -sX GET "https://api.github.com/repos/AdoptOpenJDK/openjdk11-binaries/releases/tags/${JAVA_VERSION}" \
             | jq -r 'first(.assets[] | select(.browser_download_url | contains("jdk_x64_linux_openj9_") and endswith(".tar.gz") ) | .browser_download_url)'); \
     fi &&\
-    mkdir -p /usr/lib/jvm/java-adopt && curl -fSL --compressed ${JAVA_URL} | tar -xz -C /usr/lib/jvm/java-adopt --strip-components=1 &&
+    mkdir -p /usr/lib/jvm/java-adopt && curl -fSL --compressed ${JAVA_URL} | tar -xz -C /usr/lib/jvm/java-adopt --strip-components=1 &&\
     /usr/lib/jvm/java-adopt/bin/java -version
 
 ENV PATH=/usr/lib/jvm/java-adopt/bin:$PATH \
@@ -50,7 +50,6 @@ RUN if [ -z ${MAVEN_URL+x} ]; then \
 #     rm -rf /tmp/* /var/tmp/* /var/cache/yum
 
 # ==============================================================================================================
-
 USER vscode
 # golang extension
 RUN mkdir /workspace/.go &&\
