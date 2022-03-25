@@ -9,7 +9,7 @@ ENV GO_VERSION=1.18 \
 
 # ==============================================================================================================
 # https://golang.google.cn/dl/
-RUN curl -fSL --compressed "https://dl.google.com/go/go${GO_VERSION}.linux-amd64.tar.gz" | tar -xz -C /usr/local && go version
+RUN curl -fSL --compressed "https://dl.google.com/go/go${GO_VERSION}.linux-amd64.tar.gz" | tar -xz -C /usr/local
 ENV PATH=/usr/local/go/bin:/workspace/.go/bin:$PATH \
     GOPATH=/workspace/.go
 
