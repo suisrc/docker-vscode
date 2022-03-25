@@ -73,10 +73,9 @@ RUN if [ -z ${VSC_URL+x} ]; then \
     fi &&\
     curl -o /tmp/vsc.tar.gz -L "${VSC_URL}" && mkdir -p ${VSC_HOME} && tar xzf /tmp/vsc.tar.gz -C ${VSC_HOME}/ --strip-components=1 && \
     ln -s ${VSC_HOME}/bin/code-server /usr/bin/code-server &&\
-    rm -f ${VSC_HOME}/node ${VSC_HOME}/lib/node ${VSC_HOME}/lib/vscode/node &&\
-    ln -s /usr/local/bin/node ${VSC_HOME}/node &&\
-    ln -s /usr/local/bin/node ${VSC_HOME}/lib/node &&\
-    ln -s /usr/local/bin/node ${VSC_HOME}/lib/vscode/node &&\
+    rm -f ${VSC_HOME}/node            && ln -s /usr/local/bin/node ${VSC_HOME}/node &&\
+    rm -f ${VSC_HOME}/lib/node        && ln -s /usr/local/bin/node ${VSC_HOME}/lib/node &&\
+    rm -f ${VSC_HOME}/lib/vscode/node && ln -s /usr/local/bin/node ${VSC_HOME}/lib/vscode/node &&\
     ln -s /lib/ld-musl-x86_64.so.1 /lib/ld-linux-x86-64.so.2 &&\
     rm -rf /tmp/*
 
