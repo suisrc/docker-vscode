@@ -107,12 +107,6 @@ RUN if [ -z ${OH_MY_ZSH_SH_URL+x} ]; then \
     sed -i "1iZSH_DISABLE_COMPFIX=true" ~/.zshrc
     #sed -i "s/ZSH_THEME=\"robbyrussell\"/ZSH_THEME=\"agnoster\"/g" ~/.zshrc
 
-# https://nodejs.org/en/
-ENV NODE_VERSION v16.14.2
-RUN curl -fsSLO --compressed "https://nodejs.org/dist/$NODE_VERSION/node-$NODE_VERSION-linux-x64.tar.xz" &&\
-    tar -xf "node-$NODE_VERSION-linux-x64.tar.xz" -C /usr/local --strip-components=1 --no-same-owner &&\
-    rm "node-$NODE_VERSION-linux-x64.tar.xz"  && node --version && npm  --version
-
 # Creating the user and usergroup
 ARG USERNAME=vscode
 ARG USER_UID=1000
@@ -125,6 +119,11 @@ RUN groupadd --gid $USER_GID $USERNAME && \
 
 ENV NODE_EXTRA_CA_CERTS=/etc/ssl/certs/ca-bundle.crt
 # =============================================================================================
+# https://nodejs.org/en/
+# ENV NODE_VERSION v14.19.1
+# RUN curl -fsSLO --compressed "https://nodejs.org/dist/$NODE_VERSION/node-$NODE_VERSION-linux-x64.tar.xz" &&\
+#     tar -xf "node-$NODE_VERSION-linux-x64.tar.xz" -C /usr/local --strip-components=1 --no-same-owner &&\
+#     rm "node-$NODE_VERSION-linux-x64.tar.xz"  && node --version && npm  --version
 # vscode-server
 RUN if [ -z ${VSC_URL+x} ]; then \
         if [ -z ${VSC_RELEASE+x} ]; then \
@@ -136,10 +135,8 @@ RUN if [ -z ${VSC_URL+x} ]; then \
     fi &&\
     curl -o /tmp/vsc.tar.gz -L "${VSC_URL}" && mkdir -p ${VSC_HOME} && tar xzf /tmp/vsc.tar.gz -C ${VSC_HOME}/ --strip-components=1 && \
     ln -s ${VSC_HOME}/bin/code-server /usr/bin/code-server && \
-    rm -f ${VSC_HOME}/node            && ln -s /usr/local/bin/node ${VSC_HOME}/node && \
-    rm -f ${VSC_HOME}/lib/node        && ln -s /usr/local/bin/node ${VSC_HOME}/lib/node && \
-    rm -f ${VSC_HOME}/lib/vscode/node && ln -s /usr/local/bin/node ${VSC_HOME}/lib/vscode/node && \
-    chown -R $USERNAME:$USERNAME /workspace && chown -R $USERNAME:$USERNAME ${VSC_HOME} && \
+    chown -R $USERNAME:$USERNAME /workspace && \
+    chown -R $USERNAME:$USERNAME ${VSC_HOME} && \
     rm -rf /tmp/* /var/tmp/*
 
 ENV EXTENSIONS=""
