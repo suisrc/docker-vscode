@@ -16,7 +16,7 @@ RUN curl -fSL --compressed "https://dl.google.com/go/go${GO_VERSION}.linux-amd64
 # ==============================================================================================================
 # https://nodejs.org/en/
 RUN curl -fSL --compressed "https://nodejs.org/dist/v${NODE_VERSION}/node-v$NODE_VERSION-linux-x64.tar.xz" | tar -xJ -C /usr/local --strip-components=1 --no-same-owner &&\
-    npm install -g cnpm yarn tyarn && node --version && npm --version
+    npm install -g yarn && node --version && npm --version
 
 # ==============================================================================================================
 ENV PATH=/usr/lib/jvm/java-adopt/bin:$PATH \
