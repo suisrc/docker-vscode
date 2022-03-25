@@ -15,7 +15,7 @@ ENV PATH=/usr/local/go/bin:/workspace/.go/bin:$PATH \
 
 # ==============================================================================================================
 # https://nodejs.org/en/
-RUN curl -fSL --compressed "https://nodejs.org/dist/v${NODE_VERSION}/node-v$NODE_VERSION-linux-x64.tar.xz" | tar -x -C /usr/local --strip-components=1 --no-same-owner &&\
+RUN curl -fSL --compressed "https://nodejs.org/dist/v${NODE_VERSION}/node-v$NODE_VERSION-linux-x64.tar.xz" | tar -xJ -C /usr/local --strip-components=1 --no-same-owner &&\
     npm install -g cnpm yarn tyarn && node --version && npm --version
 
 # ==============================================================================================================
