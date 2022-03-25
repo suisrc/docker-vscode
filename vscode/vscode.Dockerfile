@@ -4,9 +4,9 @@ FROM node:14-alpine
 LABEL maintainer="suisrc@outlook.com"
 
 ARG VSC_HOME=/vsc
-ARG VSC_RURL=https://github.com/gitpod-io/openvscode-server/releases
-ARG VSC_RELEASE=v1.65.2
-ARG VSC_URL=${VSC_RURL}/download/openvscode-server-${VSC_RELEASE}/openvscode-server-${VSC_RELEASE}-linux-x64.tar.gz
+ARG VSC_RURL=https://github.com/coder/code-server/releases
+ARG VSC_RELEASE=v4.2.0
+ARG VSC_URL=${VSC_RURL}/download/${VSC_RELEASE}/code-server-${VSC_RELEASE}-linux-amd64.tar.gz
 
 ARG S6_RURL=https://github.com/just-containers/s6-overlay/releases
 ARG S6_RELEASE=v3.1.0.1
@@ -72,18 +72,15 @@ RUN if [ -z ${VSC_URL+x} ]; then \
             | jq -r '.assets[] | select(.browser_download_url | contains("-linux-x64.tar.gz")) | .browser_download_url'); \
     fi &&\
     curl -o /tmp/vsc.tar.gz -L "${VSC_URL}" && mkdir -p ${VSC_HOME} && tar xzf /tmp/vsc.tar.gz -C ${VSC_HOME}/ --strip-components=1 && \
-    ln -s ${VSC_HOME}/bin/openvscode-server /usr/bin/code-server &&\
-    cp ${VSC_HOME}/bin/remote-cli/openvscode-server ${VSC_HOME}/bin/remote-cli/code &&\
-    sed -i 's/"$0"/"$(readlink -f $0)"/' ${VSC_HOME}/bin/remote-cli/code &&\
-    ln -s ${VSC_HOME}/bin/remote-cli/code /usr/bin/code &&\
-    rm -f ${VSC_HOME}/node && ln -s /usr/local/bin/node ${VSC_HOME}/node &&\
+    ln -s ${VSC_HOME}/bin/code-server /usr/bin/code-server &&\
+    rm -f ${VSC_HOME}/node ${VSC_HOME}/lib/node ${VSC_HOME}/lib/vscode/node &&\
+    ln -s /usr/local/bin/node ${VSC_HOME}/node &&\
+    ln -s /usr/local/bin/node ${VSC_HOME}/lib/node &&\
+    ln -s /usr/local/bin/node ${VSC_HOME}/lib/vscode/node &&\
     ln -s /lib/ld-musl-x86_64.so.1 /lib/ld-linux-x86-64.so.2 &&\
     rm -rf /tmp/*
 
-ENV EDITOR=code \
-    VISUAL=code \
-    GIT_EDITOR="code --wait" \
-    EXTENSIONS=""
+ENV EXTENSIONS=""
 
 # =============================================================================================
 # install extension ?ms-ceintl.vscode-language-pack-zh-hans
