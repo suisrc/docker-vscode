@@ -8,10 +8,10 @@ ENV GO_VERSION=1.18 \
     MAVEN_VERSION=3.8.5
 
 # ==============================================================================================================
-# https://golang.google.cn/dl/
-RUN curl -fSL --compressed "https://dl.google.com/go/go${GO_VERSION}.linux-amd64.tar.gz" | tar -xz -C /usr/local
 ENV PATH=/usr/local/go/bin:/workspace/.go/bin:$PATH \
     GOPATH=/workspace/.go
+# https://golang.google.cn/dl/
+RUN curl -fSL --compressed "https://dl.google.com/go/go${GO_VERSION}.linux-amd64.tar.gz" | tar -xz -C /usr/local && /usr/local/go/bin/go version
 
 # ==============================================================================================================
 # https://nodejs.org/en/
@@ -19,6 +19,10 @@ RUN curl -fSL --compressed "https://nodejs.org/dist/v${NODE_VERSION}/node-v$NODE
     npm install -g cnpm yarn tyarn && node --version && npm --version
 
 # ==============================================================================================================
+ENV PATH=/usr/lib/jvm/java-adopt/bin:$PATH \
+    JDK_HOME=/usr/lib/jvm/java-adopt  \
+    JAVA_HOME=/usr/lib/jvm/java-adopt \
+    MAVEN_HOME=/usr/share/maven
 # https://github.com/AdoptOpenJDK/openjdk11-binaries/releases
 RUN if [ -z ${JAVA_URL+x} ]; then \
         if [ -z ${JAVA_VERSION+x} ]; then \
@@ -30,11 +34,6 @@ RUN if [ -z ${JAVA_URL+x} ]; then \
     fi &&\
     mkdir -p /usr/lib/jvm/java-adopt && curl -fSL --compressed ${JAVA_URL} | tar -xz -C /usr/lib/jvm/java-adopt --strip-components=1 &&\
     /usr/lib/jvm/java-adopt/bin/java -version
-
-ENV PATH=/usr/lib/jvm/java-adopt/bin:$PATH \
-    JDK_HOME=/usr/lib/jvm/java-adopt  \
-    JAVA_HOME=/usr/lib/jvm/java-adopt \
-    MAVEN_HOME=/usr/share/maven
 
 # http://mirrors.tuna.tsinghua.edu.cn/apache/maven/maven-3/${MAVEN_VERSION}/binaries/apache-maven-${MAVEN_VERSION}-bin.tar.gz"
 # https://downloads.apache.org/maven/maven-3/${MAVEN_VERSION}/binaries/apache-maven-${MAVEN_VERSION}-bin.tar.gz
