@@ -3,8 +3,8 @@ FROM debian:buster-slim
 LABEL maintainer="suisrc@outlook.com"
 
 ARG VSC_RURL=https://github.com/coder/code-server/releases
-ARG VSC_RELEASE=v4.2.0
-ARG VSC_URL=${VSC_RURL}/download/${VSC_RELEASE}/code-server-${VSC_RELEASE}-linux-amd64.tar.gz
+ARG VSC_RELEASE=4.2.0
+ARG VSC_URL=${VSC_RURL}/download/v${VSC_RELEASE}/code-server-${VSC_RELEASE}-linux-amd64.tar.gz
 ARG VSC_HOME=/vsc
 
 ARG S6_RURL=https://github.com/just-containers/s6-overlay/releases
