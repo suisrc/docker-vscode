@@ -49,7 +49,7 @@ RUN if [ -z ${MAVEN_URL+x} ]; then \
     fi &&\
     mkdir /usr/local/maven &&\
     curl -fSL --compressed ${MAVEN_URL} | \
-    tar -xz -C /usr/local --strip-components=1 &&\
+    tar -xz -C /usr/local/maven --strip-components=1 &&\
     sed -i -e "158d" -e "s/  <\/mirrors>/    -->\n&/g" /usr/local/maven/conf/settings.xml &&\
     mvn -version
 
