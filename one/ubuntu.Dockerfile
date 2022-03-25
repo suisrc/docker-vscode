@@ -42,7 +42,6 @@ RUN if [ -z ${JAVA_URL+x} ]; then \
     tar -xz -C /usr/local/java --strip-components=1 &&\
     java -version
 
-ENV 
 # http://mirrors.tuna.tsinghua.edu.cn/apache/maven/maven-3/${MAVEN_VERSION}/binaries/apache-maven-${MAVEN_VERSION}-bin.tar.gz"
 # https://downloads.apache.org/maven/maven-3/${MAVEN_VERSION}/binaries/apache-maven-${MAVEN_VERSION}-bin.tar.gz
 RUN if [ -z ${MAVEN_URL+x} ]; then \
