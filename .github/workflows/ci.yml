@@ -6,7 +6,7 @@ on:
   #release:
   #  types: [published]
   push:
-    branches: [ dev-one ]
+    branches: [ dev-one-e ]
 
 env:
   GITHUB_IMAGE_NAME: vscode
@@ -18,8 +18,8 @@ env:
   ALIYUN_REGISTRY: registry.cn-hongkong.aliyuncs.com
 
 jobs:
-  # all-in-one, 提供js, java, golang支持, 暂时只提供JDK11版本
-  centos-one:
+  # all-in-one-exts, 提供js, java, golang支持, 暂时只提供JDK11版本
+  centos-onee:
     runs-on: ubuntu-latest
 
     steps:
@@ -75,7 +75,7 @@ jobs:
           docker tag image $IMAGE_ID:$VERSION
           docker push $IMAGE_ID:$VERSION
 
-  debian-one:
+  debian-onee:
     runs-on: ubuntu-latest
 
     steps:
@@ -131,7 +131,7 @@ jobs:
           docker tag image $IMAGE_ID:$VERSION
           docker push $IMAGE_ID:$VERSION
 
-  ubuntu-one:
+  ubuntu-onee:
     runs-on: ubuntu-latest
 
     steps:
