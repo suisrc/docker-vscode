@@ -7,5 +7,4 @@ RUN code-server --install-extension MS-CEINTL.vscode-language-pack-zh-hans &&\
     code-server --install-extension vscjava.vscode-java-pack &&\
     code-server --install-extension gabrielbb.vscode-lombok &&\
     code-server --install-extension bungcip.better-toml &&\
-    code-server --install-extension jcbuisson.vue &&\
     rm -rf $USERDATA/CachedExtensionVSIXs/*
