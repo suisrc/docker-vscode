@@ -1,4 +1,4 @@
-FROM quay.io/suisrc//vscode:1.64.2-cdr-debian-one
+FROM quay.io/suisrc/vscode:1.64.2-cdr-debian-one
 
 # vscode extension
 RUN code-server --install-extension MS-CEINTL.vscode-language-pack-zh-hans &&\
