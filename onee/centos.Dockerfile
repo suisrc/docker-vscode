@@ -1,4 +1,4 @@
-FROM docker.pkg.github.com/suisrc/docker-vscode/vscode:1.64.2-cdr-centos-one
+FROM quay.io/suisrc/vscode:1.64.2-cdr-centos-one
 
 # vscode extension
 RUN code-server --install-extension MS-CEINTL.vscode-language-pack-zh-hans &&\
