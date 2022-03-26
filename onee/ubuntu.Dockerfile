@@ -8,3 +8,4 @@ RUN code-server --install-extension MS-CEINTL.vscode-language-pack-zh-hans &&\
     code-server --install-extension gabrielbb.vscode-lombok &&\
     code-server --install-extension bungcip.better-toml &&\
     rm -rf $USERDATA/CachedExtensionVSIXs/*
+ADD locale.json /workspace/.local/share/code-server/Machine/
