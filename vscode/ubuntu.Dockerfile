@@ -102,7 +102,7 @@ RUN VSC_RURL="https://github.com/gitpod-io/openvscode-server/releases" &&\
             | jq -r '.assets[] | select(.browser_download_url | contains("-linux-x64.tar.gz")) | .browser_download_url'); \
     fi &&\
     curl -o /tmp/vsc.tar.gz -L "${VSC_URL}" && mkdir -p ${VSC_HOME} && tar xzf /tmp/vsc.tar.gz -C ${VSC_HOME}/ --strip-components=1 && \
-    ln -s ${VSC_HOME}/bin/code-server /usr/bin/code-server && \
+    ln -s ${VSC_HOME}/bin/openvscode-server /usr/bin/code-server &&\
     chown -R $USERNAME:$USERNAME /workspace && \
     chown -R $USERNAME:$USERNAME ${VSC_HOME} && \
     rm -rf /tmp/* /var/tmp/*
