@@ -1,9 +1,9 @@
-FROM docker.pkg.github.com/suisrc/docker-vscode/vscode:1.64.2-cdr-centos
+FROM docker.pkg.github.com/suisrc/docker-vscode/vscode:1.66.1-centos
 
 RUN  mkdir -p /workspace/.go/bin
 USER root
 
-ENV GO_VERSION=1.18 \
+ENV GO_VERSION=1.17.8 \
     NODE_VERSION=16.14.2 \
     JAVA_VERSION=jdk-11.0.11+9_openj9-0.26.0 \
     MAVEN_VERSION=3.8.5 \
