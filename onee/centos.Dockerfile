@@ -1,5 +1,6 @@
 FROM quay.io/suisrc/vscode:1.66.1-centos-one
 
+ENV USERDATA=/workspace/.openvscode-server/data
 # vscode extension
 RUN code-server --install-extension golang.go &&\
     code-server --install-extension redhat.vscode-xml &&\
