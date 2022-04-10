@@ -4,22 +4,19 @@ FROM node:14-alpine
 LABEL maintainer="suisrc@outlook.com"
 
 ARG VSC_HOME=/vsc
-ARG VSC_RURL=https://github.com/gitpod-io/openvscode-server/releases
-ARG VSC_RELEASE=v1.65.2
-ARG VSC_URL=${VSC_RURL}/download/openvscode-server-${VSC_RELEASE}/openvscode-server-${VSC_RELEASE}-linux-x64.tar.gz
-
-ARG S6_RURL=https://github.com/just-containers/s6-overlay/releases
+ARG VSC_RELEASE=v1.66.1
 ARG S6_RELEASE=v3.1.0.1
-ARG S6_APP=$S6_RURL/download/${S6_RELEASE}/s6-overlay-x86_64.tar.xz
-ARG S6_CFG=$S6_RURL/download/${S6_RELEASE}/s6-overlay-noarch.tar.xz
 
 # linux and softs
-RUN apk add --no-cache curl gnupg openssh bash zsh vim jq tar git xz libc6-compat &&\
+RUN apk add --no-cache curl gnupg openssh bash zsh jq tar git xz libc6-compat &&\
     rm -rf /tmp/* /var/tmp/*
 
 # =============================================================================================
 # s6-overlay
-RUN curl -o /tmp/s6-cfg.tar.xz -L "${S6_CFG}" && tar -C / -Jxpf /tmp/s6-cfg.tar.xz &&\
+RUN S6_RURL="https://github.com/just-containers/s6-overlay/releases" &&\
+    S6_APP="${S6_RURL}/download/${S6_RELEASE}/s6-overlay-x86_64.tar.xz" &&\
+    S6_CFG="${S6_RURL}/download/${S6_RELEASE}/s6-overlay-noarch.tar.xz" &&\
+    curl -o /tmp/s6-cfg.tar.xz -L "${S6_CFG}" && tar -C / -Jxpf /tmp/s6-cfg.tar.xz &&\
     curl -o /tmp/s6-app.tar.xz -L "${S6_APP}" && tar -C / -Jxpf /tmp/s6-app.tar.xz &&\
     rm -rf  /tmp/*
     #tar xzf /tmp/s6.tar.gz -C / --exclude='./bin' && tar xzf /tmp/s6.tar.gz -C /usr ./bin
@@ -63,7 +60,9 @@ RUN if [ -z ${OH_MY_ZSH_SH_URL+x} ]; then \
 
 # =============================================================================================
 # vscode-server
-RUN if [ -z ${VSC_URL+x} ]; then \
+RUN VSC_RURL="https://github.com/gitpod-io/openvscode-server/releases" &&\
+    VSC_URL="${VSC_RURL}/download/openvscode-server-${VSC_RELEASE}/openvscode-server-${VSC_RELEASE}-linux-x64.tar.gz" &&\
+    if [ -z ${VSC_URL+x} ]; then \
         if [ -z ${VSC_RELEASE+x} ]; then \
             VSC_RELEASE=$(curl -sX GET "${VSC_RURL}/latest" \
             | awk '/tag_name/{print $4;exit}' FS='[""]'); \
@@ -73,23 +72,17 @@ RUN if [ -z ${VSC_URL+x} ]; then \
     fi &&\
     curl -o /tmp/vsc.tar.gz -L "${VSC_URL}" && mkdir -p ${VSC_HOME} && tar xzf /tmp/vsc.tar.gz -C ${VSC_HOME}/ --strip-components=1 && \
     ln -s ${VSC_HOME}/bin/openvscode-server /usr/bin/code-server &&\
-    cp ${VSC_HOME}/bin/remote-cli/openvscode-server ${VSC_HOME}/bin/remote-cli/code &&\
-    sed -i 's/"$0"/"$(readlink -f $0)"/' ${VSC_HOME}/bin/remote-cli/code &&\
-    ln -s ${VSC_HOME}/bin/remote-cli/code /usr/bin/code &&\
+    #cp ${VSC_HOME}/bin/remote-cli/openvscode-server ${VSC_HOME}/bin/remote-cli/code &&\
+    #sed -i 's/"$0"/"$(readlink -f $0)"/' ${VSC_HOME}/bin/remote-cli/code &&\
+    #ln -s ${VSC_HOME}/bin/remote-cli/code /usr/bin/code &&\
     rm -f ${VSC_HOME}/node && ln -s /usr/local/bin/node ${VSC_HOME}/node &&\
     ln -s /lib/ld-musl-x86_64.so.1 /lib/ld-linux-x86-64.so.2 &&\
     rm -rf /tmp/*
 
-ENV EDITOR=code \
-    VISUAL=code \
-    GIT_EDITOR="code --wait" \
-    EXTENSIONS=""
-
+ENV EXTENSIONS=""
 # =============================================================================================
 # install extension ?ms-ceintl.vscode-language-pack-zh-hans
 RUN code-server --install-extension mhutchie.git-graph &&\
-    code-server --install-extension esbenp.prettier-vscode &&\
-    code-server --install-extension humao.rest-client &&\
     rm -rf $USERDATA/CachedExtensionVSIXs/*
 # config for user or machine
 COPY locale.json    $USERDATA/Machine/locale.json
