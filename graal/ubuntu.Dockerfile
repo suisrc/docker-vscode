@@ -1,4 +1,4 @@
-FROM docker.pkg.github.com/suisrc/docker-vscode/vscode:1.65.2-cdr-debian
+FROM docker.pkg.github.com/suisrc/docker-vscode/vscode:1.65.2-cdr-ubuntu
 
 USER root
 
