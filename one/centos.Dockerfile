@@ -1,4 +1,4 @@
-FROM docker.pkg.github.com/suisrc/docker-vscode/vscode:1.66.1-centos
+FROM docker.pkg.github.com/suisrc/docker-vscode/vscode:1.65.2-cdr-centos
 
 RUN  mkdir -p /workspace/.go/bin
 USER root
@@ -14,18 +14,19 @@ ENV GO_VERSION=1.17.8 \
     PATH=/usr/local/golang/bin:/usr/local/node/bin:/usr/local/java/bin:/usr/local/maven/bin:/workspace/.go/bin:$PATH
 
 # ==============================================================================================================
+# https://nodejs.org/en/
+RUN mkdir /usr/local/node && \
+    curl -fSL --compressed "https://nodejs.org/dist/v${NODE_VERSION}/node-v$NODE_VERSION-linux-x64.tar.xz" | \
+    tar -xJ -C /usr/local/node --strip-components=1 &&\
+    npm install -g yarn && node --version && npm --version
+    
+# ==============================================================================================================
 # https://golang.google.cn/dl/
 RUN mkdir /usr/local/golang && \
     curl -fSL --compressed "https://dl.google.com/go/go${GO_VERSION}.linux-amd64.tar.gz" | \
     tar -xz -C /usr/local/golang --strip-components=1 &&\
     go version
 
-# ==============================================================================================================
-# https://nodejs.org/en/
-RUN mkdir /usr/local/node && \
-    curl -fSL --compressed "https://nodejs.org/dist/v${NODE_VERSION}/node-v$NODE_VERSION-linux-x64.tar.xz" | \
-    tar -xJ -C /usr/local/node --strip-components=1 &&\
-    npm install -g yarn && node --version && npm --version
 
 # ==============================================================================================================
 # https://github.com/AdoptOpenJDK/openjdk11-binaries/releases
