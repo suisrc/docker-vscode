@@ -31,7 +31,7 @@ COPY mirror-* /home/test/mirror/
 # copy kubectl
 COPY kubectl-*  /usr/local/bin/
 
-ARG USERDATA=/workspace/.openvscode-server/data
+ENV USERDATA=/workspace/.openvscode-server/data
 RUN mkdir /workspace && ln -s /workspace /ws && mkdir -p ${VSC_HOME}
 COPY settings1.json /workspace/.vscode/settings.json
 

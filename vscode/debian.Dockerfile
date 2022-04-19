@@ -52,7 +52,7 @@ COPY kubectl-*  /usr/local/bin/
 # fix shell
 COPY profile /etc/profile
 
-ARG USERDATA=/workspace/.openvscode-server/data
+ENV USERDATA=/workspace/.openvscode-server/data
 RUN mkdir /workspace && ln -s /workspace /ws && mkdir -p ${VSC_HOME}
 COPY settings1.json /workspace/.vscode/settings.json
 
