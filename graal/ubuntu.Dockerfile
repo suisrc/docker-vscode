@@ -2,7 +2,8 @@ FROM docker.pkg.github.com/suisrc/docker-vscode/vscode:1.65.2-cdr-ubuntu
 
 USER root
 
-ENV GRAALVM_RELEASE=vm-22.0.0.2 \
+ENV JAVA_VERSION=11
+    GRAALVM_RELEASE=22.0.0.2 \
     MAVEN_RELEASE=3.8.5 \
     JDK_HOME=/usr/local/graal \
     JAVA_HOME=/usr/local/graal \
@@ -10,13 +11,14 @@ ENV GRAALVM_RELEASE=vm-22.0.0.2 \
     PATH=/usr/local/graal/bin:/usr/local/maven/bin:$PATH
 
 # install oracle graalvm-ce 
+# https://github.com/graalvm/graalvm-ce-builds/releases/download/vm-22.0.0.2/graalvm-ce-java11-linux-amd64-22.0.0.2.tar.gz
 RUN set -eux &&\
     if [ -z ${GRAALVM_URL+x} ]; then \
         if [ -z ${GRAALVM_RELEASE+x} ]; then \
             GRAALVM_RELEASE=$(curl -sX GET "https://api.github.com/repos/graalvm/graalvm-ce-builds/releases/latest" \
             | awk '/tag_name/{print $4;exit}' FS='[""]'); \
         fi && \
-        GRAALVM_URL="https://github.com/graalvm/graalvm-ce-builds/releases/download/${GRAALVM_RELEASE}/graalvm-ce-${JAVA_RELEASE}-linux-amd64-${GRAALVM_RELEASE##*-}.tar.gz"; \
+        GRAALVM_URL="https://github.com/graalvm/graalvm-ce-builds/releases/download/vm-${GRAALVM_RELEASE}/graalvm-ce-java${JAVA_VERSION}-linux-amd64-${GRAALVM_RELEASE}.tar.gz"; \
         #GRAALVM_URL=$(curl -sX GET "https://api.github.com/repos/graalvm/graalvm-ce-builds/releases/tags/${GRAALVM_RELEASE}" \
         #    | jq -r '.assets[] | select(.browser_download_url | contains("graalvm-ce-java11-linux-amd64")) | .browser_download_url'); \
         # https://github.com/graalvm/graalvm-ce-builds/releases/download/vm-20.0.0/graalvm-ce-java11-linux-amd64-20.0.0.tar.gz
