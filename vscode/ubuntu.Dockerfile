@@ -3,7 +3,7 @@ FROM ubuntu:focal
 LABEL maintainer="suisrc@outlook.com"
 
 ARG VSC_HOME=/vsc
-ARG VSC_RELEASE=4.2.0
+ARG VSC_RELEASE=4.3.0
 ARG S6_RELEASE=v3.1.0.1
 
 # update linux
