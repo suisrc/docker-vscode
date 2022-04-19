@@ -1,6 +1,5 @@
-FROM quay.io/suisrc/vscode:1.66.1-debian-one
+FROM quay.io/suisrc/vscode:1.65.2-cdr-debian-one
 
-ENV USERDATA=/workspace/.openvscode-server/data
 # vscode extension
 RUN code-server --install-extension golang.go &&\
     code-server --install-extension redhat.vscode-xml &&\
