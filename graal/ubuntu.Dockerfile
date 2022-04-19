@@ -22,7 +22,7 @@ RUN set -eux &&\
         # https://github.com/graalvm/graalvm-ce-builds/releases/download/vm-20.0.0/graalvm-ce-java11-linux-amd64-20.0.0.tar.gz
     fi &&\
     mkdir /usr/local/graal &&\
-    curl -fsSL --compressed ${GRAALVM_URL} | &&\
+    curl -fsSL --compressed ${GRAALVM_URL} |\
     tar -xz -C /usr/local/graal --strip-components=1 &&\
     java -version
     #curl `#--fail --silent --location --retry 3` -fSL ${GRAALVM_URL} | tar -zxC /graalvm --strip-components=1 &&\
