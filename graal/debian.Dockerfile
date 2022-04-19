@@ -2,7 +2,7 @@ FROM docker.pkg.github.com/suisrc/docker-vscode/vscode:1.65.2-cdr-debian
 
 USER root
 
-ENV JAVA_VERSION=11
+ENV JAVA_VERSION=11 \
     GRAALVM_RELEASE=22.0.0.2 \
     MAVEN_RELEASE=3.8.5 \
     JDK_HOME=/usr/local/graal \
