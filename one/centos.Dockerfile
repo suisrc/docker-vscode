@@ -1,25 +1,17 @@
-FROM docker.pkg.github.com/suisrc/docker-vscode/vscode:1.65.2-cdr-centos
+FROM docker.pkg.github.com/suisrc/docker-vscode/vscode:1.66.2-cdr-centos
 
 RUN  mkdir -p /workspace/.go/bin
 USER root
 
-ENV GO_VERSION=1.17.8 \
-    NODE_VERSION=16.14.2 \
-    JAVA_VERSION=jdk-11.0.11+9_openj9-0.26.0 \
+ENV GO_VERSION=1.18.2 \
+    JAVA_VERSION=jdk-11.0.15+10_openj9-0.32.0 \
     MAVEN_VERSION=3.8.5 \
     GOPATH=/workspace/.go \
     JDK_HOME=/usr/local/java \
     JAVA_HOME=/usr/local/java \
     MAVEN_HOME=/usr/local/maven \
     PATH=/usr/local/golang/bin:/usr/local/node/bin:/usr/local/java/bin:/usr/local/maven/bin:/workspace/.go/bin:$PATH
-
-# ==============================================================================================================
-# https://nodejs.org/en/
-RUN mkdir /usr/local/node && \
-    curl -fSL --compressed "https://nodejs.org/dist/v${NODE_VERSION}/node-v$NODE_VERSION-linux-x64.tar.xz" | \
-    tar -xJ -C /usr/local/node --strip-components=1 &&\
-    npm install -g yarn && node --version && npm --version
-    
+ 
 # ==============================================================================================================
 # https://golang.google.cn/dl/
 RUN mkdir /usr/local/golang && \
@@ -30,13 +22,14 @@ RUN mkdir /usr/local/golang && \
 
 # ==============================================================================================================
 # https://github.com/AdoptOpenJDK/openjdk11-binaries/releases
+# https://github.com/AdoptOpenJDK/semeru11-binaries/releases/**/ibm-semeru-open-jdk_x64_linux_11.0.15_10_openj9-0.32.0.tar.gz
 RUN if [ -z ${JAVA_URL+x} ]; then \
         if [ -z ${JAVA_VERSION+x} ]; then \
-            JAVA_VERSION=$(curl -sX GET "https://api.github.com/repos/AdoptOpenJDK/openjdk11-binaries/releases/latest" \
+            JAVA_VERSION=$(curl -sX GET "https://api.github.com/repos/AdoptOpenJDK/semeru11-binaries/releases/latest" \
             | awk '/tag_name/{print $4;exit}' FS='[""]'); \
         fi && \
-        JAVA_URL=$(curl -sX GET "https://api.github.com/repos/AdoptOpenJDK/openjdk11-binaries/releases/tags/${JAVA_VERSION}" \
-            | jq -r 'first(.assets[] | select(.browser_download_url | contains("jdk_x64_linux_openj9_") and endswith(".tar.gz") ) | .browser_download_url)'); \
+        JAVA_URL=$(curl -sX GET "https://api.github.com/repos/AdoptOpenJDK/semeru11-binaries/releases/tags/${JAVA_VERSION}" \
+            | jq -r 'first(.assets[] | select(.browser_download_url | contains("jdk_x64_linux_") and endswith(".tar.gz") ) | .browser_download_url)'); \
     fi &&\
     mkdir /usr/local/java && \
     curl -fSL --compressed ${JAVA_URL} | \
