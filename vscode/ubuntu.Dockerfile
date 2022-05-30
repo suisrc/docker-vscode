@@ -105,8 +105,8 @@ RUN VSC_RURL="https://github.com/coder/code-server/releases" &&\
     fi &&\
     curl -o /tmp/vsc.tar.gz -L "${VSC_URL}" && mkdir -p ${VSC_HOME} && tar xzf /tmp/vsc.tar.gz -C ${VSC_HOME}/ --strip-components=1 && \
     ln -s ${VSC_HOME}/bin/code-server /usr/bin/code-server && \
-    rm -f ${VSC_HOME}/node            && ln -s /usr/local/bin/node ${VSC_HOME}/node &&\
-    rm -f ${VSC_HOME}/lib/node        && ln -s /usr/local/bin/node ${VSC_HOME}/lib/node &&\
+    rm -f ${VSC_HOME}/node            && ln -s /usr/local/node/bin/node ${VSC_HOME}/node &&\
+    rm -f ${VSC_HOME}/lib/node        && ln -s /usr/local/node/bin/node ${VSC_HOME}/lib/node &&\
     rm -f ${VSC_HOME}/lib/coder-cloud-agent &&\
     chown -R $USERNAME:$USERNAME /workspace && \
     chown -R $USERNAME:$USERNAME ${VSC_HOME} && \
