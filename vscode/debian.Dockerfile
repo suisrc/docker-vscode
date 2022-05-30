@@ -88,7 +88,7 @@ RUN groupadd --gid 1000 $USERNAME && \
 
 # =============================================================================================
 # https://nodejs.org/en/
-ENV NODE_VERSION 16.15.0 \
+ENV NODE_VERSION=16.15.0 \
     PATH=/usr/local/node/bin:$PATH
 RUN mkdir /usr/local/node && \
     curl -fSL --compressed "https://nodejs.org/dist/v${NODE_VERSION}/node-v$NODE_VERSION-linux-x64.tar.xz" | \
