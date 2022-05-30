@@ -1,4 +1,4 @@
-FROM quay.io/suisrc/vscode:1.65.2-cdr-ubuntu-one
+FROM quay.io/suisrc/vscode:1.66.2-cdr-ubuntu-one
 
 # vscode extension
 RUN code-server --install-extension golang.go &&\
