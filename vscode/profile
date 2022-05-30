@@ -25,3 +25,6 @@ if [ -d /etc/profile.d ]; then
   done
   unset i
 fi
+
+# ssh 连接会导致环境变量消失, 在docker中,可以通过进程ID=1上的环境变量还原
+# export $(cat /proc/1/environ |tr '\0' '\n' | xargs)

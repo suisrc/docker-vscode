@@ -1,10 +1,10 @@
 # 最小安装版, 这是一个工具，不能作为开发环境的基础环境使用，因此这里只提供root身份
-FROM node:14-alpine
+FROM node:16-alpine
 
 LABEL maintainer="suisrc@outlook.com"
 
 ARG VSC_HOME=/vsc
-ARG VSC_RELEASE=4.3.0
+ARG VSC_RELEASE=4.4.0
 ARG S6_RELEASE=v3.1.0.1
 
 # linux and softs
@@ -74,7 +74,7 @@ RUN VSC_RURL="https://github.com/coder/code-server/releases" &&\
     ln -s ${VSC_HOME}/bin/code-server /usr/bin/code-server &&\
     rm -f ${VSC_HOME}/node            && ln -s /usr/local/bin/node ${VSC_HOME}/node &&\
     rm -f ${VSC_HOME}/lib/node        && ln -s /usr/local/bin/node ${VSC_HOME}/lib/node &&\
-    rm -f ${VSC_HOME}/lib/vscode/node && ln -s /usr/local/bin/node ${VSC_HOME}/lib/vscode/node &&\
+    rm -f ${VSC_HOME}/lib/coder-cloud-agent &&\
     ln -s /lib/ld-musl-x86_64.so.1 /lib/ld-linux-x86-64.so.2 &&\
     rm -rf /tmp/*
 
