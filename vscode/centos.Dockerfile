@@ -3,8 +3,8 @@ FROM centos:7
 LABEL maintainer="suisrc@outlook.com"
 
 ARG VSC_HOME=/vsc
-ARG VSC_RELEASE=4.4.0
-ARG S6_RELEASE=v3.1.0.1
+ARG VSC_RELEASE=4.5.0
+ARG S6_RELEASE=v3.1.1.2
 
 #ARG LINUX_MIRRORS=http://mirrors.aliyun.com
 # update linux

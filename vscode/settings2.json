@@ -10,5 +10,7 @@
     "editor.fontSize": 16,
     "editor.fontLigatures": true,
     "explorer.confirmDelete": false,
+    "extensions.autoUpdate": false,
+    "extensions.autoCheckUpdates": false,
     "workbench.colorTheme": "Default Dark+"
 }
