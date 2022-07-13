@@ -9,7 +9,7 @@ USER vscode
 # vscode extension
 RUN code-server --install-extension golang.go &&\
     code-server --install-extension redhat.vscode-xml &&\
-    code-server --install-extension vscjava.vscode-java-pack@0.23.2022062900 &&\
+    code-server --install-extension vscjava.vscode-java-pack@0.23.0 &&\
     code-server --install-extension vscjava.vscode-lombok &&\
     code-server --install-extension bungcip.better-toml &&\
     code-server --install-extension octref.vetur &&\
