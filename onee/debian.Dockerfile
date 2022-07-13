@@ -1,4 +1,4 @@
-FROM quay.io/suisrc/vscode:1.66.2-cdr-debian-one
+FROM quay.io/suisrc/vscode:1.68.1-cdr-debian-one
 
 # vscode extension
 RUN code-server --install-extension golang.go &&\
