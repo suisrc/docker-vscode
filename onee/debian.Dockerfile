@@ -1,7 +1,7 @@
 FROM quay.io/suisrc/vscode:1.68.1-cdr-debian-one
 
 USER root
-RUN grep -rl open-vsx.org /vsc/**/*.js /vsc/**/*.json | xargs sed -i \
+RUN zsh -c grep -rl open-vsx.org /vsc/**/*.js /vsc/**/*.json /vsc/**/*.map | xargs sed -i \
     -e 's|open-vsx.org/vscode/gallery|marketplace.visualstudio.com/_apis/public/gallery|g' \
     -e 's|open-vsx.org/vscode/item|marketplace.visualstudio.com/items|g' \
     -e 's|open-vsx.org/vscode/asset/{publisher}/{name}/{version}/Microsoft.VisualStudio.Code.WebResources/{path}|{publisher}.vscode-unpkg.net/{publisher}/{name}/{version}/{path}|g'
