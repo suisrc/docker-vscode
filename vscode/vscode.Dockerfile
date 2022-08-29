@@ -4,8 +4,8 @@ FROM node:16-alpine
 LABEL maintainer="suisrc@outlook.com"
 
 ARG VSC_HOME=/vsc
-ARG VSC_RELEASE=4.5.0
-ARG S6_RELEASE=v3.1.1.2
+ARG VSC_RELEASE=4.6.0
+ARG S6_RELEASE=v3.1.2.0
 
 # linux and softs
 RUN apk add --no-cache curl gnupg openssh bash zsh jq tar git xz libc6-compat &&\
