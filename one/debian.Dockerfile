@@ -1,10 +1,10 @@
-FROM docker.pkg.github.com/suisrc/docker-vscode/vscode:1.68.1-cdr-debian
+FROM docker.pkg.github.com/suisrc/docker-vscode/vscode:1.70.1-cdr-debian
 
 RUN  mkdir -p /workspace/.go/bin
 USER root
 
-ENV GO_VERSION=1.18.4 \
-    JAVA_VERSION=jdk-11.0.15+10_openj9-0.32.0 \
+ENV GO_VERSION=1.19 \
+    JAVA_VERSION=jdk-11.0.16.1+1_openj9-0.33.1 \
     MAVEN_VERSION=3.8.6 \
     GOPATH=/workspace/.go \
     JDK_HOME=/usr/local/java \
