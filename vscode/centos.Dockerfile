@@ -16,7 +16,7 @@ RUN yum clean all && yum install -y epel-release && yum makecache && yum update 
 
 # git版本低， 无法和vscode兼容
 # https://github.com/git/git/releases
-RUN GIT_URL="https://github.com/git/git/archive/v2.35.2.tar.gz" &&\
+RUN GIT_URL="https://github.com/git/git/archive/v2.33.4.tar.gz" &&\
     curl -fSL $GIT_URL -o /tmp/git-autoconf.tar.gz &&\
     mkdir /tmp/git-autoconf && tar -zxf /tmp/git-autoconf.tar.gz -C /tmp/git-autoconf --strip-components=1 &&\
     cd /tmp/git-autoconf && make prefix=/usr/local && make prefix=/usr/local install &&\
