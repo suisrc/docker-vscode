@@ -1,10 +1,10 @@
-FROM docker.pkg.github.com/suisrc/docker-vscode/vscode:1.70.1-cdr-centos
+FROM docker.pkg.github.com/suisrc/docker-vscode/vscode:1.73.1-cdr-centos
 
 RUN  mkdir -p /workspace/.go/bin
 USER root
 
-ENV GO_VERSION=1.19 \
-    JAVA_VERSION=jdk-11.0.16.1+1_openj9-0.33.1 \
+ENV GO_VERSION=1.19.4 \
+    JAVA_VERSION=jdk-11.0.17+8_openj9-0.35.0 \
     MAVEN_VERSION=3.8.6 \
     GOPATH=/workspace/.go \
     JDK_HOME=/usr/local/java \
