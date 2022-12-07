@@ -3,8 +3,8 @@ FROM centos:7
 LABEL maintainer="suisrc@outlook.com"
 
 ARG VSC_HOME=/vsc
-ARG VSC_RELEASE=4.6.0
-ARG S6_RELEASE=v3.1.2.0
+ARG VSC_RELEASE=4.9.0
+ARG S6_RELEASE=v3.1.2.1
 
 #ARG LINUX_MIRRORS=http://mirrors.aliyun.com
 # update linux
@@ -16,7 +16,7 @@ RUN yum clean all && yum install -y epel-release && yum makecache && yum update 
 
 # git版本低， 无法和vscode兼容
 # https://github.com/git/git/releases
-RUN GIT_URL="https://github.com/git/git/archive/v2.33.4.tar.gz" &&\
+RUN GIT_URL="https://github.com/git/git/archive/v2.38.1.tar.gz" &&\
     curl -fSL $GIT_URL -o /tmp/git-autoconf.tar.gz &&\
     mkdir /tmp/git-autoconf && tar -zxf /tmp/git-autoconf.tar.gz -C /tmp/git-autoconf --strip-components=1 &&\
     cd /tmp/git-autoconf && make prefix=/usr/local && make prefix=/usr/local install &&\
@@ -26,7 +26,7 @@ RUN GIT_URL="https://github.com/git/git/archive/v2.33.4.tar.gz" &&\
 
 # sqlite版本低, 无法和django兼容(python框架，为后面扩展)
 # https://www.sqlite.org/download.html
-RUN SQLITE_URL="https://www.sqlite.org/2022/sqlite-autoconf-3390200.tar.gz" &&\
+RUN SQLITE_URL="https://www.sqlite.org/2022/sqlite-autoconf-3400000.tar.gz" &&\
     curl -fSL $SQLITE_URL -o /tmp/sqlite-autoconf.tar.gz &&\
     mkdir /tmp/sqlite-autoconf && tar -zxf /tmp/sqlite-autoconf.tar.gz -C /tmp/sqlite-autoconf --strip-components=1 &&\
     cd /tmp/sqlite-autoconf && ./configure --prefix=/usr/local && make && make install &&\
@@ -109,7 +109,7 @@ RUN groupadd --gid 1000 $USERNAME && \
 ENV NODE_EXTRA_CA_CERTS=/etc/ssl/certs/ca-bundle.crt
 # =============================================================================================
 # https://nodejs.org/en/
-ENV NODE_VERSION=16.17.0 \
+ENV NODE_VERSION=16.18.1 \
     PATH=/usr/local/node/bin:$PATH
 RUN mkdir /usr/local/node && \
     curl -fSL --compressed "https://nodejs.org/dist/v${NODE_VERSION}/node-v$NODE_VERSION-linux-x64.tar.xz" | \

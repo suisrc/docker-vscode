@@ -3,8 +3,8 @@ FROM ubuntu:focal
 LABEL maintainer="suisrc@outlook.com"
 
 ARG VSC_HOME=/vsc
-ARG VSC_RELEASE=4.6.0
-ARG S6_RELEASE=v3.1.2.0
+ARG VSC_RELEASE=4.9.0
+ARG S6_RELEASE=v3.1.2.1
 
 # update linux
 RUN apt update && apt install --no-install-recommends -y \
@@ -86,7 +86,7 @@ RUN groupadd --gid 1000 $USERNAME && \
 
 # =============================================================================================
 # https://nodejs.org/en/
-ENV NODE_VERSION=16.17.0 \
+ENV NODE_VERSION=16.18.1 \
     PATH=/usr/local/node/bin:$PATH
 RUN mkdir /usr/local/node && \
     curl -fSL --compressed "https://nodejs.org/dist/v${NODE_VERSION}/node-v$NODE_VERSION-linux-x64.tar.xz" | \
