@@ -3,8 +3,8 @@ FROM ubuntu:focal
 LABEL maintainer="suisrc@outlook.com"
 
 ARG VSC_HOME=/vsc
-ARG VSC_RELEASE=v1.66.1
-ARG S6_RELEASE=v3.1.0.1
+ARG VSC_RELEASE=v1.73.1
+ARG S6_RELEASE=v3.1.2.1
 
 # update linux
 RUN apt update && apt install --no-install-recommends -y \
@@ -86,10 +86,13 @@ RUN groupadd --gid 1000 $USERNAME && \
 
 # =============================================================================================
 # https://nodejs.org/en/
-# ENV NODE_VERSION v14.19.1
-# RUN curl -fsSLO --compressed "https://nodejs.org/dist/$NODE_VERSION/node-$NODE_VERSION-linux-x64.tar.xz" &&\
-#     tar -xf "node-$NODE_VERSION-linux-x64.tar.xz" -C /usr/local --strip-components=1 --no-same-owner &&\
-#     rm "node-$NODE_VERSION-linux-x64.tar.xz"  && node --version && npm  --version
+ENV NODE_VERSION=16.18.1 \
+    PATH=/usr/local/node/bin:$PATH
+RUN mkdir /usr/local/node && \
+    curl -fSL --compressed "https://nodejs.org/dist/v${NODE_VERSION}/node-v$NODE_VERSION-linux-x64.tar.xz" | \
+    tar -xJ -C /usr/local/node --strip-components=1 &&\
+    npm install -g yarn && node --version && npm --version
+
 # vscode-server
 RUN VSC_RURL="https://github.com/gitpod-io/openvscode-server/releases" &&\
     VSC_URL="${VSC_RURL}/download/openvscode-server-${VSC_RELEASE}/openvscode-server-${VSC_RELEASE}-linux-x64.tar.gz" &&\
@@ -102,7 +105,10 @@ RUN VSC_RURL="https://github.com/gitpod-io/openvscode-server/releases" &&\
             | jq -r '.assets[] | select(.browser_download_url | contains("-linux-x64.tar.gz")) | .browser_download_url'); \
     fi &&\
     curl -o /tmp/vsc.tar.gz -L "${VSC_URL}" && mkdir -p ${VSC_HOME} && tar xzf /tmp/vsc.tar.gz -C ${VSC_HOME}/ --strip-components=1 && \
-    ln -s ${VSC_HOME}/bin/openvscode-server /usr/bin/code-server &&\
+    ln   -s ${VSC_HOME}/bin/openvscode-server /usr/bin/code-server &&\
+    sed  -i 's/"$0"/"$(readlink -f $0)"/' ${VSC_HOME}/bin/openvscode-server &&\
+    sed  -i 's/"$0"/"$(readlink -f $0)"/' ${VSC_HOME}/bin/remote-cli/openvscode-server &&\
+    rm   -f ${VSC_HOME}/node && ln -s /usr/local/bin/node ${VSC_HOME}/node &&\
     chown -R $USERNAME:$USERNAME /workspace && \
     chown -R $USERNAME:$USERNAME ${VSC_HOME} && \
     rm -rf /tmp/* /var/tmp/*

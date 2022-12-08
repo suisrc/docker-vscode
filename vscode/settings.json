@@ -11,6 +11,7 @@
     "editor.fontLigatures": true,
     "explorer.confirmDelete": false,
     "files.autoSave": "off",
-    "workbench.colorTheme": "Default Dark+",
-    "extensions.autoUpdate": false
+    "extensions.autoUpdate": false,
+    "extensions.autoCheckUpdates": false,
+    "workbench.colorTheme": "Default Dark+"
 }

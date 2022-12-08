@@ -7,7 +7,7 @@ if [ $GIT_USER_NAME ]; then
     fi
 fi
 if [ $VSX_MICROSOFT ]; then
-    grep -rl open-vsx.org /vsc/**/*.js /vsc/*.json | xargs sed -i \
+    grep -rl open-vsx.org /vsc/**/*.js /vsc/*.json /vsc/**/*.json /vsc/**/*.map | xargs sed -i \
     -e 's|open-vsx.org/vscode/gallery|marketplace.visualstudio.com/_apis/public/gallery|g' \
     -e 's|open-vsx.org/vscode/item|marketplace.visualstudio.com/items|g' \
     -e 's|open-vsx.org/vscode/asset/{publisher}/{name}/{version}/Microsoft.VisualStudio.Code.WebResources/{path}|{publisher}.vscode-unpkg.net/{publisher}/{name}/{version}/{path}|g'

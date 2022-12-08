@@ -4,8 +4,8 @@ FROM node:14-alpine
 LABEL maintainer="suisrc@outlook.com"
 
 ARG VSC_HOME=/vsc
-ARG VSC_RELEASE=v1.66.1
-ARG S6_RELEASE=v3.1.0.1
+ARG VSC_RELEASE=v1.73.1
+ARG S6_RELEASE=v3.1.2.1
 
 # linux and softs
 RUN apk add --no-cache curl gnupg openssh bash zsh jq tar git xz libc6-compat &&\
@@ -60,6 +60,11 @@ RUN if [ -z ${OH_MY_ZSH_SH_URL+x} ]; then \
 
 # =============================================================================================
 # vscode-server
+# curl -o /tmp/vsc.tar.gz -L "${VSC_URL}" && mkdir -p ${VSC_HOME} && tar xzf /tmp/vsc.tar.gz -C ${VSC_HOME}/ --strip-components=1 && \
+# ln   -s ${VSC_HOME}/bin/openvscode-server /usr/bin/code-server &&\
+# sed  -i 's/"$0"/"$(readlink -f $0)"/' ${VSC_HOME}/bin/openvscode-server &&\
+# sed  -i 's/"$0"/"$(readlink -f $0)"/' ${VSC_HOME}/bin/remote-cli/openvscode-server &&\
+# rm   -f ${VSC_HOME}/node && ln -s /usr/local/bin/node ${VSC_HOME}/node &&\
 RUN VSC_RURL="https://github.com/gitpod-io/openvscode-server/releases" &&\
     VSC_URL="${VSC_RURL}/download/openvscode-server-${VSC_RELEASE}/openvscode-server-${VSC_RELEASE}-linux-x64.tar.gz" &&\
     if [ -z ${VSC_URL+x} ]; then \
@@ -71,13 +76,12 @@ RUN VSC_RURL="https://github.com/gitpod-io/openvscode-server/releases" &&\
             | jq -r '.assets[] | select(.browser_download_url | contains("-linux-x64.tar.gz")) | .browser_download_url'); \
     fi &&\
     curl -o /tmp/vsc.tar.gz -L "${VSC_URL}" && mkdir -p ${VSC_HOME} && tar xzf /tmp/vsc.tar.gz -C ${VSC_HOME}/ --strip-components=1 && \
-    ln -s ${VSC_HOME}/bin/openvscode-server /usr/bin/code-server &&\
-    #cp ${VSC_HOME}/bin/remote-cli/openvscode-server ${VSC_HOME}/bin/remote-cli/code &&\
-    #sed -i 's/"$0"/"$(readlink -f $0)"/' ${VSC_HOME}/bin/remote-cli/code &&\
-    #ln -s ${VSC_HOME}/bin/remote-cli/code /usr/bin/code &&\
-    rm -f ${VSC_HOME}/node && ln -s /usr/local/bin/node ${VSC_HOME}/node &&\
-    ln -s /lib/ld-musl-x86_64.so.1 /lib/ld-linux-x86-64.so.2 &&\
-    rm -rf /tmp/*
+    ln   -s ${VSC_HOME}/bin/openvscode-server /usr/bin/code-server &&\
+    sed  -i 's/"$0"/"$(readlink -f $0)"/' ${VSC_HOME}/bin/openvscode-server &&\
+    sed  -i 's/"$0"/"$(readlink -f $0)"/' ${VSC_HOME}/bin/remote-cli/openvscode-server &&\
+    rm   -f ${VSC_HOME}/node && ln -s /usr/local/bin/node ${VSC_HOME}/node &&\
+    ln   -s /lib/ld-musl-x86_64.so.1 /lib/ld-linux-x86-64.so.2 &&\
+    rm  -rf /tmp/*
 
 ENV EXTENSIONS=""
 # =============================================================================================
