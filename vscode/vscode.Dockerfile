@@ -86,8 +86,8 @@ RUN VSC_RURL="https://github.com/gitpod-io/openvscode-server/releases" &&\
 ENV EXTENSIONS=""
 # =============================================================================================
 # install extension ?ms-ceintl.vscode-language-pack-zh-hans
+# code-server --install-extension MS-CEINTL.vscode-language-pack-zh-hans &&\
 RUN code-server --install-extension mhutchie.git-graph &&\
-    code-server --install-extension MS-CEINTL.vscode-language-pack-zh-hans &&\
     rm -rf $USERDATA/CachedExtensionVSIXs/*
 # config for user or machine
 # COPY locale.json    $USERDATA/Machine/locale.json

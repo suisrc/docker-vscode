@@ -124,7 +124,7 @@ RUN code-server --install-extension mhutchie.git-graph &&\
     code-server --install-extension humao.rest-client &&\
     rm -rf $USERDATA/CachedExtensionVSIXs/*
 # config for user or machine
-COPY locale.json   $USERDATA/Machine/locale.json
+# COPY locale.json   $USERDATA/Machine/locale.json
 COPY settings.json $USERDATA/Machine/settings.json
 
 #EXPOSE 7000
