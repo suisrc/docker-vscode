@@ -1,5 +1,5 @@
 # 最小安装版, 这是一个工具，不能作为开发环境的基础环境使用，因此这里只提供root身份
-FROM node:14-alpine
+FROM node:16-alpine
 
 LABEL maintainer="suisrc@outlook.com"
 
