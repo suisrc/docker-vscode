@@ -89,7 +89,7 @@ ENV EXTENSIONS=""
 RUN code-server --install-extension mhutchie.git-graph &&\
     rm -rf $USERDATA/CachedExtensionVSIXs/*
 # config for user or machine
-COPY locale.json    $USERDATA/Machine/locale.json
+# COPY locale.json    $USERDATA/Machine/locale.json
 COPY settings2.json $USERDATA/Machine/settings.json
 
 #EXPOSE 7000
