@@ -1,4 +1,4 @@
-FROM quay.io/suisrc/vscode:1.70.1-cdr-debian-one
+FROM quay.io/suisrc/vscode:1.73.1-cdr-debian-one
 
 USER root
 RUN zsh -c "grep -rl open-vsx.org /vsc/**/*.js /vsc/**/*.json /vsc/**/*.map | xargs sed -i \
