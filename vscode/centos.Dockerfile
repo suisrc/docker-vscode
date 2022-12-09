@@ -131,7 +131,7 @@ RUN VSC_RURL="https://github.com/gitpod-io/openvscode-server/releases" &&\
     ln   -s ${VSC_HOME}/bin/openvscode-server /usr/bin/code-server &&\
     sed  -i 's/"$0"/"$(readlink -f $0)"/' ${VSC_HOME}/bin/openvscode-server &&\
     sed  -i 's/"$0"/"$(readlink -f $0)"/' ${VSC_HOME}/bin/remote-cli/openvscode-server &&\
-    rm   -f ${VSC_HOME}/node && ln -s /usr/local/bin/node ${VSC_HOME}/node &&\
+    rm   -f ${VSC_HOME}/node && ln -s /usr/local/node/bin/node ${VSC_HOME}/node &&\
     chown -R $USERNAME:$USERNAME /workspace && \
     chown -R $USERNAME:$USERNAME ${VSC_HOME} && \
     rm -rf /tmp/* /var/tmp/*
