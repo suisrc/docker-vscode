@@ -11,10 +11,10 @@ on:
 env:
   GITHUB_IMAGE_NAME: vscode
   DOCKER_IMAGE_NAME: suisrc/vscode
-  DOCKER_VERSION: '1.73.1-cdr'
+  DOCKER_VERSION: '1.76.1-cdr'
   QUAY_REGISTRY: quay.io
   DOCKER_REGISTRY: docker.io
-  GITHUB_REGISTRY: docker.pkg.github.com
+  GITHUB_REGISTRY: ghcr.io
   ALIYUN_REGISTRY: registry.cn-hongkong.aliyuncs.com
 
 jobs:

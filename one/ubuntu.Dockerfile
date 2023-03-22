@@ -1,11 +1,11 @@
-FROM docker.pkg.github.com/suisrc/docker-vscode/vscode:1.73.1-cdr-ubuntu
+FROM ghcr.io/suisrc/docker-vscode/vscode:1.76.1-cdr-ubuntu
 
 RUN  mkdir -p /workspace/.go/bin
 USER root
 
-ENV GO_VERSION=1.19.4 \
-    JAVA_VERSION=jdk-11.0.17+8_openj9-0.35.0 \
-    MAVEN_VERSION=3.8.6 \
+ENV GO_VERSION=1.20.2 \
+    JAVA_VERSION=jdk-17.0.5+8_openj9-0.35.0 \
+    MAVEN_VERSION=3.9.1 \
     GOPATH=/workspace/.go \
     JDK_HOME=/usr/local/java \
     JAVA_HOME=/usr/local/java \
@@ -21,14 +21,15 @@ RUN mkdir /usr/local/golang && \
 
 # ==============================================================================================================
 # https://github.com/AdoptOpenJDK/openjdk11-binaries/releases
-# https://github.com/AdoptOpenJDK/semeru11-binaries/releases/**/ibm-semeru-open-jdk_x64_linux_11.0.15_10_openj9-0.32.0.tar.gz
+# https://github.com/AdoptOpenJDK/semeru[11,17]-binaries/releases/**/ibm-semeru-open-jdk_x64_linux_xxx.tar.gz
+# 11 => jdk-11.0.17+8_openj9-0.35.0  17 => jdk-17.0.5+8_openj9-0.35.0
 RUN if [ -z ${JAVA_URL+x} ]; then \
         if [ -z ${JAVA_VERSION+x} ]; then \
-            JAVA_VERSION=$(curl -sX GET "https://api.github.com/repos/AdoptOpenJDK/semeru11-binaries/releases/latest" \
+            JAVA_VERSION=$(curl -sX GET "https://api.github.com/repos/AdoptOpenJDK/semeru17-binaries/releases/latest" \
             | awk '/tag_name/{print $4;exit}' FS='[""]'); \
         fi && \
-        JAVA_URL=$(curl -sX GET "https://api.github.com/repos/AdoptOpenJDK/semeru11-binaries/releases/tags/${JAVA_VERSION}" \
-            | jq -r 'first(.assets[] | select(.browser_download_url | contains("jdk_x64_linux_") and endswith(".tar.gz") ) | .browser_download_url)'); \
+        JAVA_URL=$(curl -sX GET "https://api.github.com/repos/AdoptOpenJDK/semeru17-binaries/releases/tags/${JAVA_VERSION}" \
+            | jq -r 'first(.assets[] | select(.browser_download_url | contains("    ") and endswith(".tar.gz") ) | .browser_download_url)'); \
     fi &&\
     mkdir /usr/local/java && \
     curl -fSL --compressed ${JAVA_URL} | \
@@ -60,7 +61,8 @@ RUN go install github.com/ramya-rao-a/go-outline@latest &&\
     go install github.com/haya14busa/goplay/cmd/goplay@latest &&\
     go install github.com/go-delve/delve/cmd/dlv@latest &&\
     go install honnef.co/go/tools/cmd/staticcheck@latest &&\
-    go install golang.org/x/tools/gopls@latest; exit 0
+    go install golang.org/x/tools/gopls@latest &&\
+    go install github.com/google/wire/cmd/wire@latest; exit 0
 
 # python extension
 # RUN pip3 install --upgrade pip &&\
