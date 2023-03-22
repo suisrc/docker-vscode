@@ -4,5 +4,10 @@
   
 vs online:  
 https://github.com/gitpod-io/openvscode-server/releases
+
+vs coder:
+https://github.com/coder/code-server/releases
+
 vs code:  
 https://github.com/microsoft/vscode/releases
+

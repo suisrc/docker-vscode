@@ -92,6 +92,9 @@ sed -i "s|dl-cdn.alpinelinux.org|mirrors.aliyun.com|g" /etc/apk/repositories
 
 apk add --no-cache kubectl
 
+# 上海交通大学镜像
+https://mirrors.sjtug.sjtu.edu.cn
+
 # k8s扩展
 
 使用kubectl时候, 可以以kubectl-[command]方式定义kubectl的krew插件, 之后通过kubectl command方式调用
