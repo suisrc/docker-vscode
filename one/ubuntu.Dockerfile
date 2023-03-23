@@ -29,7 +29,7 @@ RUN if [ -z ${JAVA_URL+x} ]; then \
             | awk '/tag_name/{print $4;exit}' FS='[""]'); \
         fi && \
         JAVA_URL=$(curl -sX GET "https://api.github.com/repos/AdoptOpenJDK/semeru17-binaries/releases/tags/${JAVA_VERSION}" \
-            | jq -r 'first(.assets[] | select(.browser_download_url | contains("    ") and endswith(".tar.gz") ) | .browser_download_url)'); \
+            | jq -r 'first(.assets[] | select(.browser_download_url | contains("jdk_x64_linux_") and endswith(".tar.gz") ) | .browser_download_url)'); \
     fi &&\
     mkdir /usr/local/java && \
     curl -fSL --compressed ${JAVA_URL} | \
