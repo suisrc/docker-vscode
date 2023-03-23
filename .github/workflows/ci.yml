@@ -9,12 +9,11 @@ on:
     branches: [ dev-one-e ]
 
 env:
-  GITHUB_IMAGE_NAME: vscode
-  DOCKER_IMAGE_NAME: suisrc/vscode
-  DOCKER_VERSION: '1.73.1-cdr'
+  IMAGE_NAME: suisrc/vscode
+  IMAGE_VERSION: '1.76.1-cdr'
   QUAY_REGISTRY: quay.io
   DOCKER_REGISTRY: docker.io
-  GITHUB_REGISTRY: docker.pkg.github.com
+  GITHUB_REGISTRY: ghcr.io
   ALIYUN_REGISTRY: registry.cn-hongkong.aliyuncs.com
 
 jobs:
@@ -35,15 +34,28 @@ jobs:
 
           echo "${{ secrets.GITHUB_TOKEN }}" | docker login $REGISTRY_URL -u ${{ github.actor }} --password-stdin
           docker build ./$DOCKER_DIR --file ./$DOCKER_DIR/$DOCKER_BOS.Dockerfile --tag image
+          
+      - name: Push github image
+        run: |
+          REGISTRY_URL=$GITHUB_REGISTRY
+          echo "${{ secrets.GITHUB_TOKEN }}" | docker login $REGISTRY_URL -u ${{ github.actor }} --password-stdin
+
+          IMAGE_ID=$REGISTRY_URL/$IMAGE_NAME
+          echo IMAGE_ID=$IMAGE_ID
+          VERSION=$IMAGE_VERSION-${{ github.job }}
+          echo VERSION=$VERSION
+
+          docker tag image $IMAGE_ID:$VERSION
+          docker push $IMAGE_ID:$VERSION
 
       - name: Push docker image
         run: |
           REGISTRY_URL=$DOCKER_REGISTRY
           echo "${{ secrets.DOCKER_TOKEN }}" | docker login $REGISTRY_URL -u ${{ secrets.DOCKER_USER }} --password-stdin
 
-          IMAGE_ID=$REGISTRY_URL/$DOCKER_IMAGE_NAME
+          IMAGE_ID=$REGISTRY_URL/$IMAGE_NAME
           echo IMAGE_ID=$IMAGE_ID
-          VERSION=$DOCKER_VERSION-${{ github.job }}
+          VERSION=$IMAGE_VERSION-${{ github.job }}
           echo VERSION=$VERSION
 
           docker tag image $IMAGE_ID:$VERSION
@@ -54,9 +66,9 @@ jobs:
           REGISTRY_URL=$QUAY_REGISTRY
           echo "${{ secrets.QUAY_TOKEN }}" | docker login $REGISTRY_URL -u ${{ secrets.QUAY_USER }} --password-stdin
 
-          IMAGE_ID=$REGISTRY_URL/$DOCKER_IMAGE_NAME
+          IMAGE_ID=$REGISTRY_URL/$IMAGE_NAME
           echo IMAGE_ID=$IMAGE_ID
-          VERSION=$DOCKER_VERSION-${{ github.job }}
+          VERSION=$IMAGE_VERSION-${{ github.job }}
           echo VERSION=$VERSION
 
           docker tag image $IMAGE_ID:$VERSION
@@ -67,9 +79,9 @@ jobs:
           REGISTRY_URL=$ALIYUN_REGISTRY
           echo "${{ secrets.ALIYUN_TOKEN }}" | docker login $REGISTRY_URL -u ${{ secrets.ALIYUN_USER }} --password-stdin
 
-          IMAGE_ID=$REGISTRY_URL/$DOCKER_IMAGE_NAME
+          IMAGE_ID=$REGISTRY_URL/$IMAGE_NAME
           echo IMAGE_ID=$IMAGE_ID
-          VERSION=$DOCKER_VERSION-${{ github.job }}
+          VERSION=$IMAGE_VERSION-${{ github.job }}
           echo VERSION=$VERSION
 
           docker tag image $IMAGE_ID:$VERSION
@@ -91,15 +103,28 @@ jobs:
 
           echo "${{ secrets.GITHUB_TOKEN }}" | docker login $REGISTRY_URL -u ${{ github.actor }} --password-stdin
           docker build ./$DOCKER_DIR --file ./$DOCKER_DIR/$DOCKER_BOS.Dockerfile --tag image
+          
+      - name: Push github image
+        run: |
+          REGISTRY_URL=$GITHUB_REGISTRY
+          echo "${{ secrets.GITHUB_TOKEN }}" | docker login $REGISTRY_URL -u ${{ github.actor }} --password-stdin
+
+          IMAGE_ID=$REGISTRY_URL/$IMAGE_NAME
+          echo IMAGE_ID=$IMAGE_ID
+          VERSION=$IMAGE_VERSION-${{ github.job }}
+          echo VERSION=$VERSION
+
+          docker tag image $IMAGE_ID:$VERSION
+          docker push $IMAGE_ID:$VERSION
 
       - name: Push docker image
         run: |
           REGISTRY_URL=$DOCKER_REGISTRY
           echo "${{ secrets.DOCKER_TOKEN }}" | docker login $REGISTRY_URL -u ${{ secrets.DOCKER_USER }} --password-stdin
 
-          IMAGE_ID=$REGISTRY_URL/$DOCKER_IMAGE_NAME
+          IMAGE_ID=$REGISTRY_URL/$IMAGE_NAME
           echo IMAGE_ID=$IMAGE_ID
-          VERSION=$DOCKER_VERSION-${{ github.job }}
+          VERSION=$IMAGE_VERSION-${{ github.job }}
           echo VERSION=$VERSION
 
           docker tag image $IMAGE_ID:$VERSION
@@ -110,9 +135,9 @@ jobs:
           REGISTRY_URL=$QUAY_REGISTRY
           echo "${{ secrets.QUAY_TOKEN }}" | docker login $REGISTRY_URL -u ${{ secrets.QUAY_USER }} --password-stdin
 
-          IMAGE_ID=$REGISTRY_URL/$DOCKER_IMAGE_NAME
+          IMAGE_ID=$REGISTRY_URL/$IMAGE_NAME
           echo IMAGE_ID=$IMAGE_ID
-          VERSION=$DOCKER_VERSION-${{ github.job }}
+          VERSION=$IMAGE_VERSION-${{ github.job }}
           echo VERSION=$VERSION
 
           docker tag image $IMAGE_ID:$VERSION
@@ -123,9 +148,9 @@ jobs:
           REGISTRY_URL=$ALIYUN_REGISTRY
           echo "${{ secrets.ALIYUN_TOKEN }}" | docker login $REGISTRY_URL -u ${{ secrets.ALIYUN_USER }} --password-stdin
 
-          IMAGE_ID=$REGISTRY_URL/$DOCKER_IMAGE_NAME
+          IMAGE_ID=$REGISTRY_URL/$IMAGE_NAME
           echo IMAGE_ID=$IMAGE_ID
-          VERSION=$DOCKER_VERSION-${{ github.job }}
+          VERSION=$IMAGE_VERSION-${{ github.job }}
           echo VERSION=$VERSION
 
           docker tag image $IMAGE_ID:$VERSION
@@ -147,15 +172,28 @@ jobs:
 
           echo "${{ secrets.GITHUB_TOKEN }}" | docker login $REGISTRY_URL -u ${{ github.actor }} --password-stdin
           docker build ./$DOCKER_DIR --file ./$DOCKER_DIR/$DOCKER_BOS.Dockerfile --tag image
+          
+      - name: Push github image
+        run: |
+          REGISTRY_URL=$GITHUB_REGISTRY
+          echo "${{ secrets.GITHUB_TOKEN }}" | docker login $REGISTRY_URL -u ${{ github.actor }} --password-stdin
+
+          IMAGE_ID=$REGISTRY_URL/$IMAGE_NAME
+          echo IMAGE_ID=$IMAGE_ID
+          VERSION=$IMAGE_VERSION-${{ github.job }}
+          echo VERSION=$VERSION
+
+          docker tag image $IMAGE_ID:$VERSION
+          docker push $IMAGE_ID:$VERSION
 
       - name: Push docker image
         run: |
           REGISTRY_URL=$DOCKER_REGISTRY
           echo "${{ secrets.DOCKER_TOKEN }}" | docker login $REGISTRY_URL -u ${{ secrets.DOCKER_USER }} --password-stdin
 
-          IMAGE_ID=$REGISTRY_URL/$DOCKER_IMAGE_NAME
+          IMAGE_ID=$REGISTRY_URL/$IMAGE_NAME
           echo IMAGE_ID=$IMAGE_ID
-          VERSION=$DOCKER_VERSION-${{ github.job }}
+          VERSION=$IMAGE_VERSION-${{ github.job }}
           echo VERSION=$VERSION
 
           docker tag image $IMAGE_ID:$VERSION
@@ -166,9 +204,9 @@ jobs:
           REGISTRY_URL=$QUAY_REGISTRY
           echo "${{ secrets.QUAY_TOKEN }}" | docker login $REGISTRY_URL -u ${{ secrets.QUAY_USER }} --password-stdin
 
-          IMAGE_ID=$REGISTRY_URL/$DOCKER_IMAGE_NAME
+          IMAGE_ID=$REGISTRY_URL/$IMAGE_NAME
           echo IMAGE_ID=$IMAGE_ID
-          VERSION=$DOCKER_VERSION-${{ github.job }}
+          VERSION=$IMAGE_VERSION-${{ github.job }}
           echo VERSION=$VERSION
 
           docker tag image $IMAGE_ID:$VERSION
@@ -179,9 +217,9 @@ jobs:
           REGISTRY_URL=$ALIYUN_REGISTRY
           echo "${{ secrets.ALIYUN_TOKEN }}" | docker login $REGISTRY_URL -u ${{ secrets.ALIYUN_USER }} --password-stdin
 
-          IMAGE_ID=$REGISTRY_URL/$DOCKER_IMAGE_NAME
+          IMAGE_ID=$REGISTRY_URL/$IMAGE_NAME
           echo IMAGE_ID=$IMAGE_ID
-          VERSION=$DOCKER_VERSION-${{ github.job }}
+          VERSION=$IMAGE_VERSION-${{ github.job }}
           echo VERSION=$VERSION
 
           docker tag image $IMAGE_ID:$VERSION
