@@ -9,7 +9,6 @@ on:
     branches: [ dev-one ]
 
 env:
-  GITHUB_IMAGE_NAME: vscode
   DOCKER_IMAGE_NAME: suisrc/vscode
   DOCKER_VERSION: '1.76.1-cdr'
   QUAY_REGISTRY: quay.io

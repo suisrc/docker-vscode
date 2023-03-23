@@ -1,4 +1,4 @@
-FROM ghcr.io/suisrc/docker-vscode/vscode:1.76.1-cdr-ubuntu
+FROM ghcr.io/suisrc/vscode:1.76.1-cdr-ubuntu
 
 RUN  mkdir -p /workspace/.go/bin
 USER root
@@ -44,7 +44,7 @@ RUN if [ -z ${MAVEN_URL+x} ]; then \
     mkdir /usr/local/maven &&\
     curl -fSL --compressed ${MAVEN_URL} | \
     tar -xz -C /usr/local/maven --strip-components=1 &&\
-    sed -i -e "158d" -e "s/  <\/mirrors>/    -->\n&/g" /usr/local/maven/conf/settings.xml &&\
+    sed -i -e "159d" -e "s/  <\/mirrors>/    -->\n&/g" /usr/local/maven/conf/settings.xml &&\
     mvn -version
 
 # ==============================================================================================================

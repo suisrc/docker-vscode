@@ -1,11 +1,11 @@
-FROM ghcr.io/suisrc/docker-vscode/vscode:1.76.1-cdr-centos
+FROM ghcr.io/suisrc/vscode:1.76.1-cdr-centos
 
 RUN  mkdir -p /workspace/.go/bin
 USER root
 
 ENV GO_VERSION=1.20.2 \
     JAVA_VERSION=jdk-17.0.5+8_openj9-0.35.0 \
-    MAVEN_VERSION=3.8.6 \
+    MAVEN_VERSION=3.9.1 \
     GOPATH=/workspace/.go \
     JDK_HOME=/usr/local/java \
     JAVA_HOME=/usr/local/java \
@@ -45,7 +45,7 @@ RUN if [ -z ${MAVEN_URL+x} ]; then \
     mkdir /usr/local/maven &&\
     curl -fSL --compressed ${MAVEN_URL} | \
     tar -xz -C /usr/local/maven --strip-components=1 &&\
-    sed -i -e "158d" -e "s/  <\/mirrors>/    -->\n&/g" /usr/local/maven/conf/settings.xml &&\
+    sed -i -e "159d" -e "s/  <\/mirrors>/    -->\n&/g" /usr/local/maven/conf/settings.xml &&\
     mvn -version
 
 # ==============================================================================================================
