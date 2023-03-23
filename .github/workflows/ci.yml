@@ -17,7 +17,7 @@ env:
   ALIYUN_REGISTRY: registry.cn-hongkong.aliyuncs.com
 
 jobs:
-  # all-in-one-exts, 提供js, java, golang支持, 暂时只提供JDK11版本
+  # all-in-one-exts, 提供js, java, golang支持, 暂时只提供JDK17版本
   centos-onee:
     runs-on: ubuntu-latest
 
