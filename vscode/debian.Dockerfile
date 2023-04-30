@@ -1,4 +1,4 @@
-FROM debian:debian-slim
+FROM debian:bullseye-slim
 
 LABEL maintainer="suisrc@outlook.com"
 
