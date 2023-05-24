@@ -94,7 +94,7 @@ RUN groupadd --gid 1000 $USERNAME && \
     useradd  --uid 1000 --gid $USERNAME -m -s /bin/bash $USERNAME && \
     echo $USERNAME ALL=\(root\) NOPASSWD:ALL > /etc/sudoers.d/$USERNAME && \
     echo "$USERNAME:abc123" | chpasswd && usermod -aG sudo $USERNAME && \
-    mkdir /home/$USERNAME && chown 1000:1000 /home/$USERNAME
+    mkdir /home/$USERNAME && chown 1000:1000 /home/$USERNAME && \
     chmod 0440 /etc/sudoers.d/$USERNAME && chmod g+rw /home
 
 # install KasmVNC
