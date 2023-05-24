@@ -2,12 +2,6 @@ FROM ghcr.io/suisrc/webtop:0.0.1-base-debian
 
 ARG VNC_RELEASE=1.1.0
 
-# copy openresty resource
-COPY --from=openresty /usr/local/openresty /usr/local/openresty
-COPY --from=openresty /etc/nginx /etc/nginx
-# COPY --from=openresty /var/run/openresty /var/run/openresty
-# COPY --from=openresty /www /www -> /usr/local/openresty/nginx/html/
-
 # update linux
 RUN apt update && \
     DEBIAN_FRONTEND=noninteractive \

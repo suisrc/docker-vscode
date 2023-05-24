@@ -69,6 +69,7 @@ jobs:
           docker tag image $IMAGE_ID:$VERSION
           docker push $IMAGE_ID:$VERSION
 
+
       # - name: Push aliyun image
       #   run: |
       #     REGISTRY_URL=$ALIYUN_REGISTRY
