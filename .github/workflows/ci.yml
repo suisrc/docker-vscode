@@ -6,11 +6,11 @@ on:
   #release:
   #  types: [published]
   push:
-    branches: [ kasm-debian ]
+    branches: [ base-debian ]
 
 env:
   IMAGE_NAME: suisrc/webtop
-  IMAGE_VERSION: '0.0.1'
+  IMAGE_VERSION: '0.0.1-base-'
   GITHUB_REGISTRY: ghcr.io
   DOCKER_REGISTRY: docker.io
   QUAY_REGISTRY: quay.io
