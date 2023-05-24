@@ -19,7 +19,6 @@ RUN apt update && \
     echo "**** install base module ****" && \
     DEBIAN_FRONTEND=noninteractive \
     apt install --no-install-recommends -y \
-    autoclean \
     bash \
     binutils \
     ca-certificates \
