@@ -154,7 +154,7 @@ RUN if [ -z ${EDGE_RELEASE+x} ]; then \
 
 # install vscode
 # ??替代  https://github.com/VSCodium/vscodium/releases/download/1.78.2.23132/codium_1.78.2.23132_amd64.deb
-RUN CODE_URL="vscode.deb https://update.code.visualstudio.com/latest/linux-deb-x64/stable" &&\
+RUN CODE_URL="https://update.code.visualstudio.com/latest/linux-deb-x64/stable" &&\
     curl -o /tmp/vscode.deb -L "${CODE_URL}" &&\
     apt update && apt install -y /tmp/vscode.deb &&\
     rm -rf /tmp/* /var/tmp/* /var/lib/apt/lists/*
