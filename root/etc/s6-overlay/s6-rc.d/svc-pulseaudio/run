@@ -1,4 +1,4 @@
-#!/usr/bin/with-contenv bash
+#!/command/with-contenv bash
 
 exec s6-setuidgid wsc \
   /usr/bin/pulseaudio \

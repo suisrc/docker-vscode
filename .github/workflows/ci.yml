@@ -43,10 +43,10 @@ jobs:
           docker tag image $IMAGE_ID:$VERSION
           docker push $IMAGE_ID:$VERSION
 
-      - name: Push quay image
+      - name: Push docker image
         run: |
-          REGISTRY_URL=$QUAY_REGISTRY
-          echo "${{ secrets.QUAY_TOKEN }}" | docker login $REGISTRY_URL -u ${{ secrets.QUAY_USER }} --password-stdin
+          REGISTRY_URL=$DOCKER_REGISTRY
+          echo "${{ secrets.DOCKER_TOKEN }}" | docker login $REGISTRY_URL -u ${{ secrets.DOCKER_USER }} --password-stdin
 
           IMAGE_ID=$REGISTRY_URL/$IMAGE_NAME
           echo IMAGE_ID=$IMAGE_ID
@@ -56,10 +56,10 @@ jobs:
           docker tag image $IMAGE_ID:$VERSION
           docker push $IMAGE_ID:$VERSION
 
-      - name: Push docker image
+      - name: Push quay image
         run: |
-          REGISTRY_URL=$DOCKER_REGISTRY
-          echo "${{ secrets.DOCKER_TOKEN }}" | docker login $REGISTRY_URL -u ${{ secrets.DOCKER_USER }} --password-stdin
+          REGISTRY_URL=$QUAY_REGISTRY
+          echo "${{ secrets.QUAY_TOKEN }}" | docker login $REGISTRY_URL -u ${{ secrets.QUAY_USER }} --password-stdin
 
           IMAGE_ID=$REGISTRY_URL/$IMAGE_NAME
           echo IMAGE_ID=$IMAGE_ID

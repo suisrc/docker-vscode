@@ -117,7 +117,8 @@ RUN S6_RURL="https://github.com/just-containers/s6-overlay/releases" &&\
 
 ENV HOME=/home/$USERNAME  \
     S6_KEEP_ENV=true \
-    S6_CMD_WAIT_FOR_SERVICES_MAXTIME=0
+    S6_CMD_WAIT_FOR_SERVICES_MAXTIME=0 \
+    PATH="$PATH:/usr/local/openresty/luajit/bin:/usr/local/openresty/nginx/sbin:/usr/local/openresty/bin:/command" \
 
 COPY /root/ /
 

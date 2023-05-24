@@ -1,4 +1,4 @@
-#!/usr/bin/with-contenv bash
+#!/command/with-contenv bash
 
 # Pass gpu flags if mounted
 if ls /dev/dri/renderD* 1> /dev/null 2>&1; then
@@ -12,7 +12,7 @@ if [ -z ${NOVNC_IP+x} ]; then
 fi
 
 exec s6-setuidgid wsc \
-  /usr/local/bin/Xvnc $DISPLAY \
+  /usr/bin/Xvnc $DISPLAY \
     ${HW3D} \
     -PublicIP ${NOVNC_IP} \
     -drinode ${DRINODE} \
