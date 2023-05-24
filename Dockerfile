@@ -99,7 +99,7 @@ RUN groupadd --gid 1000 $USERNAME && \
 
 # install KasmVNC
 # https://github.com/kasmtech/KasmVNC/releases
-RUN VNC_URL="https://github.com/kasmtech/KasmVNC/releases/download/v${VNC_RELEASE}/kasmvncserver_bullseye_${VNC_RELEASE}_amd64.deb"
+RUN VNC_URL="https://github.com/kasmtech/KasmVNC/releases/download/v${VNC_RELEASE}/kasmvncserver_bullseye_${VNC_RELEASE}_amd64.deb" && \
     curl -o /tmp/kasmvncserver.deb -L "${VNC_URL}" && \
     apt install -y /tmp/kasmvncserver.deb && \
     ln -s /usr/local/share/kasmvnc /usr/share/kasmvnc && \
@@ -155,7 +155,7 @@ RUN if [ -z ${EDGE_BUILD+x} ]; then \
 
 # install vscode
 # ??替代  https://github.com/VSCodium/vscodium/releases/download/1.78.2.23132/codium_1.78.2.23132_amd64.deb
-RUN CODE_RURL="vscode.deb https://update.code.visualstudio.com/latest/linux-deb-x64/stable"
+RUN CODE_RURL="vscode.deb https://update.code.visualstudio.com/latest/linux-deb-x64/stable" &&\
     curl -o /tmp/vscode.deb -L "${CODE_RURL}" &&\
     apt install -y /tmp/vscode.deb &&\
     rm -rf /tmp/* /var/tmp/* /var/lib/apt/lists/*
