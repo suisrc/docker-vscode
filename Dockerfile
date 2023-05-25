@@ -96,20 +96,22 @@ RUN if [ -z ${EDGE_RELEASE+x} ]; then \
     EDGE_URL="https://packages.microsoft.com/repos/edge/pool/main/m/microsoft-edge-stable/$EDGE_RELEASE" &&\
     curl -o /tmp/msedge.deb -L "${EDGE_URL}" &&\
     apt update && apt install -y /tmp/msedge.deb &&\
+    cp /usr/share/applications/microsoft-edge.desktop $HOME/Desktop/msedge.desktop &&\
     apt autoclean -y && \
     rm -rf /tmp/* /var/tmp/* /var/lib/apt/lists/*
+# 禁用沙盒
 # sed -i 's|"\$@"| --no-sandbox  &|' /opt/microsoft/msedge/microsoft-edge
-# cp /usr/share/applications/microsoft-edge.desktop $HOME/Desktop/msedge.desktop
 
 # # 安装 vscode
 # # ??替代  https://github.com/VSCodium/vscodium/releases/download/1.78.2.23132/codium_1.78.2.23132_amd64.deb
-# RUN CODE_URL="https://update.code.visualstudio.com/latest/linux-deb-x64/stable" &&\
-#     curl -o /tmp/vscode.deb -L "${CODE_URL}" &&\
-#     apt update && apt install -y /tmp/vscode.deb &&\
-#     apt autoclean -y && \
-#     rm -rf /tmp/* /var/tmp/* /var/lib/apt/lists/*
-# # sed -i 's#/usr/share/code/code#& --no-sandbox##' /usr/share/applications/code.desktop
-# # cp /usr/share/applications/code.desktop $HOME/Desktop/vscode.desktop
+RUN CODE_URL="https://update.code.visualstudio.com/latest/linux-deb-x64/stable" &&\
+    curl -o /tmp/vscode.deb -L "${CODE_URL}" &&\
+    apt update && apt install -y /tmp/vscode.deb &&\
+    cp /usr/share/applications/code.desktop $HOME/Desktop/vscode.desktop &&\
+    apt autoclean -y && \
+    rm -rf /tmp/* /var/tmp/* /var/lib/apt/lists/*
+# 禁用沙盒
+# sed -i 's#/usr/share/code/code#& --no-sandbox##' /usr/share/applications/code.desktop
 
 # 重新定义启动脚本， 这只是一个demo
 # 系统中保留了/dockerstartup/kasm_startup.sh脚本，没有定义, 是kasm官方预览
