@@ -7,6 +7,7 @@ if [ `cat /etc/apt/sources.list | grep -c sjtu` -eq 0 ]; then
       -e "s|deb.debian.org|mirrors.sjtug.sjtu.edu.cn|g" \
       -e "s|security.debian.org|mirrors.sjtug.sjtu.edu.cn|g" \
       -e "s|archive.ubuntu.com|mirrors.sjtug.sjtu.edu.cn|g" \
+      -e "s|security.ubuntu.com|mirrors.sjtug.sjtu.edu.cn|g" \
       /etc/apt/sources.list;
     echo "change to sjtu mirror...";
 else 

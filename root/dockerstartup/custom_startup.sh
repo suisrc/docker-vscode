@@ -1,21 +1,35 @@
 #!/bin/bash
 
+
+
 # 等待桌面环境启动完成
 # /usr/bin/desktop_ready
+
+# 处理默认bus， edge需要，其他应用不清楚
+sudo rm -f /run/dbus/pid /run/dbus/system_bus_socket && sudo mkdir -p /run/dbus/ && \
+sudo /usr/bin/dbus-daemon --system --address=unix:path=/run/dbus/system_bus_socket && \
+sudo chmod a+r /run/dbus/system_bus_socket
 
 # 如果没有nginx进程，启动nginx
 # /usr/local/openresty/nginx/sbin/nginx -> /usr/local/bin/nginx
 if [ ! `pgrep nginx` ]; then
     echo "nginx is not running, start it..."
-    nginx -g "daemon off;" &
+    sudo nginx -g "daemon off;" &
 else
     echo "nginx is running, no need to start"
 fi
 
 # 监控nginx配置文件变化，自动reload
+last_time=
 inotifywait -e modify,move,create,delete -mr --timefmt '%d/%m/%y %H:%M' --format '%T' /etc/nginx/conf.d/ | while read date time; do
+    # 如果最后修改的时间和当前时间相同，不执行
+    if [[ "$last_time" == "$time" ]]; then
+        continue
+    fi
+    last_time=$time
+    # 执行更改处理
     echo "At ${time} on ${date}, config file update detected."
-    nginx -s reload
+    sudo nginx -s reload
 done
 
 ##  # dict to store processes
