@@ -1,0 +1,36 @@
+#!/usr/bin/env bash
+
+
+#####################################################################
+# fix kasmvnc.conf
+NGINX_CONFIG=/etc/nginx/conf.d/kasmvnc.conf
+KASM_CERT_FM=/home/kasm-user/.vnc
+
+# user passed env vars
+CH1PORT="${NOVNC_PORT:-7000}"
+CH2PORT="${NOVNC_PORT:-7001}"
+VNCUSER="kasm_user"
+# VNCUSER="${NOVNC_USER:-kasm_user}"
+
+# # create self signed cert
+# if [ ! -f "${KASM_CERT_FM}/cert.pem" ]; then
+#   mkdir -p ${KASM_CERT_FM}
+#   openssl req -new -x509 \
+#     -days 3650 -nodes \
+#     -out    ${KASM_CERT_FM}/cert.pem \
+#     -keyout ${KASM_CERT_FM}/cert.key \
+#     -subj "/C=CN/ST=LN/L=DL/O=suisrc/OU=SSC/CN=*"
+#   chmod 600 ${KASM_CERT_FM}/cert.key
+#   chown -R 1000:1000 ${KASM_CERT_FM}
+# fi
+
+# modify nginx config
+sed -i "s/7000/$CH1PORT/g" ${NGINX_CONFIG}
+sed -i "s/7001/$CH2PORT/g" ${NGINX_CONFIG}
+if [ ! -z ${DISABLE_IPV6+x} ]; then
+  sed -i '/listen \[::\]/d' ${NGINX_CONFIG}
+fi
+if [ ! -z ${VNC_PW+x} ]; then
+  printf "${VNCUSER}:$(openssl passwd -apr1 ${VNC_PW})\n" > /etc/nginx/.htpasswd
+  sed -i 's/##//g' ${NGINX_CONFIG}
+fi
