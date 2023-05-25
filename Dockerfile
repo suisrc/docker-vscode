@@ -1,4 +1,4 @@
-FROM suisrc/openresty:1.21.4.1-hp-3 as openresty
+FROM suisrc/openresty:1.21.4.1-hu-3 as openresty
 
 
 ######### Build Container Image ###########
@@ -61,6 +61,7 @@ RUN apt update && \
     zlib1g-dev \
     && \
     pip3 install --upgrade pip && \
+    echo kasm-user ALL=\(root\) NOPASSWD:ALL > /etc/sudoers.d/kasm-user && \
     apt autoclean -y && \
     rm -rf /tmp/* /var/tmp/* /var/lib/apt/lists/*
 

@@ -5,7 +5,7 @@
 
 # 如果没有nginx进程，启动nginx
 # /usr/local/openresty/nginx/sbin/nginx -> /usr/local/bin/nginx
-if [ ! pgrep nginx ]; then
+if [ ! `pgrep nginx` ]; then
     echo "nginx is not running, start it..."
     nginx -g "daemon off;" &
 else
