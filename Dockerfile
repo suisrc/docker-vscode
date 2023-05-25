@@ -116,10 +116,10 @@ RUN if [ -z ${EDGE_RELEASE+x} ]; then \
 # custom_startup.sh 在kasm_startup.sh之前执行
 
 # https://github.com/kasmtech/workspaces-core-images/tree/release/1.13.1/src/common/startup_scripts
-ENTRYPOINT ["$STARTUPDIR/os_startup.sh", \
-            "$STARTUPDIR/kasm_default_profile.sh", \
-            "$STARTUPDIR/vnc_startup.sh", \
-            "$STARTUPDIR/kasm_startup.sh"]
+ENTRYPOINT ["/dockerstartup/os_startup.sh", \
+            "/dockerstartup/kasm_default_profile.sh", \
+            "/dockerstartup/vnc_startup.sh", \
+            "/dockerstartup/kasm_startup.sh"]
 ######### End Customizations ###########
 
 RUN chown 1000:0 $HOME
