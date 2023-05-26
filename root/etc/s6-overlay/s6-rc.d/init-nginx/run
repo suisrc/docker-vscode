@@ -1,13 +1,18 @@
 #!/command/with-contenv bash
 set -e
 
-
 # nginx Path
-echo "modify nginx to kasmvnc.server"
-NGINX_CONFIG=/etc/nginx/conf.d/default.conf
+NGINX_CONFIG=/etc/nginx/conf.d/kasmvnc.server.conf
 
+# 如果NGINX_CONFIG存在，跳过处理
+if [ -f ${NGINX_CONFIG} ]; then
+  echo "nginx config exists, skip modify"
+  exit 0
+fi
+
+echo "modify nginx to kasmvnc.server"
 # modify nginx config
-cp -f /defaults/nginx.conf ${NGINX_CONFIG}
+cp -f /etc/nginx/bak/kasmvnc.server.conf ${NGINX_CONFIG}
 sed -i "s/7000/${NOVNC_NGX_PORT:-7000}/" ${NGINX_CONFIG}
 sed -i "s/7001/${NOVNC_NGX_PORT:-7001}/" ${NGINX_CONFIG}
 if [ ! -z ${DISABLE_IPV6+x} ]; then
