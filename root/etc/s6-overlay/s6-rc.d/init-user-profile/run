@@ -1,4 +1,4 @@
-#!/command/with-contenv bash
+#!/etc/s6-overlay/s6-user-bash
 
 ##/usr/bin/env bash
 set -ex
@@ -54,6 +54,7 @@ fi
 verify_profile_config
 
 rm -rf $HOME/.config/pulse
+# $STARTUPDIR/set_user_permission.sh $HOME
 
 # unknown option ==> call command
 # echo -e "\n\n------------------ EXECUTE COMMAND ------------------"

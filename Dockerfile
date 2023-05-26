@@ -134,15 +134,15 @@ RUN CODE_URL="https://update.code.visualstudio.com/latest/linux-deb-x64/stable" 
 # custom_startup.sh 在kasm_startup.sh之前执行
 
 # https://github.com/kasmtech/workspaces-core-images/tree/release/1.13.1/src/common/startup_scripts
-ENTRYPOINT ["init"]
+ENTRYPOINT ["/init"]
 ######### End Customizations ###########
 
 RUN chown 1000:0 $HOME
 RUN $STARTUPDIR/set_user_permission.sh $HOME
 
+ENV KASM_USER kasm-user
 ENV HOME /home/kasm-user
 WORKDIR $HOME
 RUN mkdir -p $HOME && chown -R 1000:0 $HOME
-
 
 # USER 1000

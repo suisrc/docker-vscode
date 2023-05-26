@@ -1,4 +1,4 @@
-#!/bin/sh
+#!/bin/zsh
 
 
 echo 'Starting nginx server'
@@ -6,7 +6,7 @@ echo 'Starting nginx server'
 # /usr/local/openresty/nginx/sbin/nginx -> /usr/local/bin/nginx
 if [ ! `pgrep nginx` ]; then
     echo "nginx is not running, start it..."
-    sudo nginx -g "daemon off;" &
+    nginx -g "daemon off;" &
 else
     echo "nginx is running, no need to start"
 fi
@@ -21,5 +21,5 @@ inotifywait -e modify,move,create,delete -mr --timefmt '%d/%m/%y %H:%M' --format
     last_time=$time
     # 执行更改处理
     echo "At ${time} on ${date}, config file update detected."
-    sudo nginx -s reload
+    nginx -s reload
 done

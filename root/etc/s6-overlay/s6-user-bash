@@ -1,0 +1,2 @@
+#!/command/with-contenv bash
+exec s6-setuidgid kasm-user bash "$@"

@@ -1,7 +1,11 @@
-#!/command/with-contenv bash
+#!/etc/s6-overlay/s6-user-bash
 set -e
 
 echo 'Starting kasmvnc server'
+
+no_proxy="localhost,127.0.0.1"
+# DISPLAY=:1
+VNC_IP=$(hostname -i)
 
 BUILD_ARCH=$(uname -p)
 if [ -z ${DRINODE+x} ]; then
@@ -12,11 +16,13 @@ if [ ! -z ${HW3D+x} ]; then
   KASMVNC_HW3D="-hw3d"
 fi
 
+VNC_IP=$(hostname -i)
 DISPLAY_NUM=$(echo $DISPLAY | grep -Po ':\d+')
 
-vncserver -kill $DISPLAY &> $STARTUPDIR/vnc_startup.log \
-|| rm -rfv /tmp/.X*-lock /tmp/.X11-unix &> $STARTUPDIR/vnc_startup.log \
-|| echo "no locks present"
+# if [[ $STARTUP_COMPLETE == 0 ]]; then
+# vncserver -kill $DISPLAY &> $STARTUPDIR/vnc_startup.log \
+# || rm -rfv /tmp/.X*-lock /tmp/.X11-unix &> $STARTUPDIR/vnc_startup.log \
+# || echo "no locks present"
 
 rm -rf $HOME/.vnc/*.pid
 echo "exit 0" > $HOME/.vnc/xstartup
@@ -24,9 +30,9 @@ chmod +x $HOME/.vnc/xstartup
 
 VNCOPTIONS="$VNCOPTIONS -select-de manual"
 if [[ "${BUILD_ARCH}" =~ ^aarch64$ ]] && [[ -f /lib/aarch64-linux-gnu/libgcc_s.so.1 ]] ; then
-	LD_PRELOAD=/lib/aarch64-linux-gnu/libgcc_s.so.1 s6-setuidgid 1000 vncserver $DISPLAY $KASMVNC_HW3D -drinode $DRINODE -depth $VNC_COL_DEPTH -geometry $VNC_RESOLUTION -websocketPort $NO_VNC_PORT -httpd ${KASM_VNC_PATH}/www -sslOnly -FrameRate=$MAX_FRAME_RATE -interface 0.0.0.0 -BlacklistThreshold=0 -FreeKeyMappings $VNCOPTIONS $KASM_SVC_SEND_CUT_TEXT $KASM_SVC_ACCEPT_CUT_TEXT
+	LD_PRELOAD=/lib/aarch64-linux-gnu/libgcc_s.so.1 vncserver $DISPLAY $KASMVNC_HW3D -drinode $DRINODE -depth $VNC_COL_DEPTH -geometry $VNC_RESOLUTION -websocketPort $NO_VNC_PORT -httpd ${KASM_VNC_PATH}/www -sslOnly -FrameRate=$MAX_FRAME_RATE -interface 0.0.0.0 -BlacklistThreshold=0 -FreeKeyMappings $VNCOPTIONS $KASM_SVC_SEND_CUT_TEXT $KASM_SVC_ACCEPT_CUT_TEXT
 else
-	s6-setuidgid 1000 vncserver $DISPLAY $KASMVNC_HW3D -drinode $DRINODE -depth $VNC_COL_DEPTH -geometry $VNC_RESOLUTION -websocketPort $NO_VNC_PORT -httpd ${KASM_VNC_PATH}/www -sslOnly -FrameRate=$MAX_FRAME_RATE -interface 0.0.0.0 -BlacklistThreshold=0 -FreeKeyMappings $VNCOPTIONS $KASM_SVC_SEND_CUT_TEXT $KASM_SVC_ACCEPT_CUT_TEXT
+	vncserver $DISPLAY $KASMVNC_HW3D -drinode $DRINODE -depth $VNC_COL_DEPTH -geometry $VNC_RESOLUTION -websocketPort $NO_VNC_PORT -httpd ${KASM_VNC_PATH}/www -sslOnly -FrameRate=$MAX_FRAME_RATE -interface 0.0.0.0 -BlacklistThreshold=0 -FreeKeyMappings $VNCOPTIONS $KASM_SVC_SEND_CUT_TEXT $KASM_SVC_ACCEPT_CUT_TEXT
 fi
 
 # KASM_PROCS['kasmvnc']=$(cat $HOME/.vnc/*${DISPLAY_NUM}.pid)
@@ -43,6 +49,11 @@ else
 fi
 
 # tail vncserver logs
-tail -f $HOME/.vnc/*$DISPLAY.log &
+# tail -f $HOME/.vnc/*$DISPLAY.log &
 
-wait $kasmvnc_pid
+# wait $kasmvnc_pid
+sleep 5
+while [ kill -0 $kasmvnc_pid 2>/dev/null ]; do
+	sleep 5
+done
+echo "Kasmvnc server stopped"
