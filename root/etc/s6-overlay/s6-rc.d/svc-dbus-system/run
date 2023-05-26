@@ -1,4 +1,4 @@
-#!/bin/bash
+#!/bin/sh
 
 # 处理默认bus， edge需要，其他应用不清楚
 sudo rm -f /run/dbus/system_bus_socket && sudo mkdir -p /run/dbus/

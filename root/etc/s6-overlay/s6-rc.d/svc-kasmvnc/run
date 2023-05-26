@@ -1,6 +1,8 @@
 #!/command/with-contenv bash
 set -e
 
+echo 'Starting kasmvnc server'
+
 BUILD_ARCH=$(uname -p)
 if [ -z ${DRINODE+x} ]; then
   DRINODE="/dev/dri/renderD128"
@@ -10,17 +12,11 @@ if [ ! -z ${HW3D+x} ]; then
   KASMVNC_HW3D="-hw3d"
 fi
 
-# if [[ $DEBUG == true ]]; then
-    echo -e "\n------------------ Start KasmVNC Server ------------------------"
-# fi
-
 DISPLAY_NUM=$(echo $DISPLAY | grep -Po ':\d+')
 
-if [[ $STARTUP_COMPLETE == 0 ]]; then
-    vncserver -kill $DISPLAY &> $STARTUPDIR/vnc_startup.log \
-    || rm -rfv /tmp/.X*-lock /tmp/.X11-unix &> $STARTUPDIR/vnc_startup.log \
-    || echo "no locks present"
-fi
+vncserver -kill $DISPLAY &> $STARTUPDIR/vnc_startup.log \
+|| rm -rfv /tmp/.X*-lock /tmp/.X11-unix &> $STARTUPDIR/vnc_startup.log \
+|| echo "no locks present"
 
 rm -rf $HOME/.vnc/*.pid
 echo "exit 0" > $HOME/.vnc/xstartup
@@ -46,12 +42,7 @@ else
 	echo "Disabling of X Screensaver Functionality for $DISTRO is not required."
 fi
 
-# if [[ $DEBUG == true ]]; then
-    echo -e "\n------------------ Started Websockify  ----------------------------"
-    echo "Websockify PID: $kasmvnc_pid";
-#   echo "Websockify PID: ${KASM_PROCS['kasmvnc']}";
-# fi
+# tail vncserver logs
+tail -f $HOME/.vnc/*$DISPLAY.log &
 
 wait $kasmvnc_pid
-
-echo -e "\n------------------ KasmVNC Server Stopped ------------------------"

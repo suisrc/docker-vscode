@@ -6,47 +6,47 @@ echo "Starting System By S6-Overlay"
 #########################################################################
 # 处理服务状态
 
-if [[ ${KASM_SVC_AUDIO:-0} == 1 ]]; then
-    sudo rm /etc/s6-overlay/s6-rc.d/svc-audio-out/down
-    sudo rm /etc/s6-overlay/s6-rc.d/svc-audio-out-ws/down
-    echo "Enabling Audio Output"
-else 
-    sudo touch /etc/s6-overlay/s6-rc.d/svc-audio-out/down
-    sudo touch /etc/s6-overlay/s6-rc.d/svc-audio-out-ws/down
-    echo "Disabling Audio Output"
-fi
+# if [[ "${KASM_SVC_AUDIO}" == "1" ]]; then
+#     sudo rm -f /etc/s6-overlay/s6-rc.d/user/contents.d/svc-audio-out
+#     sudo rm -f /etc/s6-overlay/s6-rc.d/user/contents.d/svc-audio-out-ws
+#     echo "Enabling Audio Output"
+# else 
+#     sudo touch /etc/s6-overlay/s6-rc.d/user/contents.d/svc-audio-out
+#     sudo touch /etc/s6-overlay/s6-rc.d/user/contents.d/svc-audio-out-ws
+#     echo "Disabling Audio Output"
+# fi
 
-if [[ ${KASM_SVC_AUDIO_INPUT:-0} == 1]]; then
-    sudo rm /etc/s6-overlay/s6-rc.d/svc-audio-in/down
-    echo "Enabling Audio Input"
-else 
-    sudo touch /etc/s6-overlay/s6-rc.d/svc-audio-in/down
-    echo "Disabling Audio Input"
-fi
+# if [[ "${KASM_SVC_AUDIO_INPUT}" == "1" ]]; then
+#     sudo rm -f /etc/s6-overlay/s6-rc.d/user/contents.d/svc-audio-in
+#     echo "Enabling Audio Input"
+# else 
+#     sudo touch /etc/s6-overlay/s6-rc.d/user/contents.d/svc-audio-in
+#     echo "Disabling Audio Input"
+# fi
 
-if [[ ${KASM_SVC_UPLOADS:-0} == 1]]; then
-    sudo rm /etc/s6-overlay/s6-rc.d/svc-uploads/down
-    echo "Enabling Uploads"
-else 
-    sudo touch /etc/s6-overlay/s6-rc.d/svc-uploads/down
-    echo "Disabling Uploads"
-fi
+# if [[ "${KASM_SVC_UPLOADS}" == "1" ]]; then
+#     sudo rm -f /etc/s6-overlay/s6-rc.d/user/contents.d/svc-upload
+#     echo "Enabling Uploads"
+# else 
+#     sudo touch /etc/s6-overlay/s6-rc.d/user/contents.d/svc-upload
+#     echo "Disabling Uploads"
+# fi
 
-if [[ ${KASM_SVC_GAMEPAD:-0} == 1]]; then
-    sudo rm /etc/s6-overlay/s6-rc.d/svc-gamepad/down
-    echo "Enabling Gamepad"
-else 
-    sudo touch /etc/s6-overlay/s6-rc.d/svc-gamepad/down
-    echo "Disabling Gamepad"
-fi
+# if [[ "${KASM_SVC_GAMEPAD}" == "1" ]]; then
+#     sudo rm -f /etc/s6-overlay/s6-rc.d/user/contents.d/svc-gamepad
+#     echo "Enabling Gamepad"
+# else 
+#     sudo touch /etc/s6-overlay/s6-rc.d/user/contents.d/svc-gamepad
+#     echo "Disabling Gamepad"
+# fi
 
-if [[ ${START_XFCE4:-1} == 1 ]]; then
-    sudo rm /etc/s6-overlay/s6-rc.d/svc-kasmwin/down
-    echo "Enabling XFCE4"
-else 
-    sudo touch /etc/s6-overlay/s6-rc.d/svc-kasmwin/down
-    echo "Disabling XFCE4"
-fi
+# if [[ "${START_XFCE4:-1}" == "1" ]]; then
+#     sudo rm -f /etc/s6-overlay/s6-rc.d/user/contents.d/svc-kasmwin
+#     echo "Enabling XFCE4"
+# else 
+#     sudo touch /etc/s6-overlay/s6-rc.d/user/contents.d/svc-kasmwin
+#     echo "Disabling XFCE4"
+# fi
 
 #########################################################################
 # 处理证书配置
@@ -74,9 +74,10 @@ fi
 mkdir -p "$HOME/.vnc"
 PASSWD_PATH="$HOME/.kasmpasswd"
 if [[ -f $PASSWD_PATH ]]; then
-    echo -e "\n---------  purging existing VNC password settings  ---------"
+    echo -e "purging existing VNC password settings"
     rm -f $PASSWD_PATH
 fi
+
 VNC_PW_HASH=$(python3 -c "import crypt; print(crypt.crypt('${VNC_PW}', '\$5\$kasm\$'));")
 VNC_VIEW_PW_HASH=$(python3 -c "import crypt; print(crypt.crypt('${VNC_VIEW_ONLY_PW}', '\$5\$kasm\$'));")
 echo "kasm_user:${VNC_PW_HASH}:ow" > $PASSWD_PATH
