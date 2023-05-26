@@ -1,0 +1,10 @@
+[Desktop Entry]
+Version=1.0
+Type=Application
+Name=File Sidecar
+Comment=Upload/Download Files
+Exec=/usr/local/bin/file-sidecar
+Icon=applications-filesharing
+Path=/home/kasm-user
+Terminal=true
+StartupNotify=false

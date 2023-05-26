@@ -103,6 +103,14 @@ ENV S6_KEEP_ENV=true \
     S6_CMD_WAIT_FOR_SERVICES_MAXTIME=0 \
     PATH="$PATH:/command"
 
+# 安装 filebrowser
+# 默认已经提供nginx进行文件下载，如果需要上传，可以启动 filebrowser
+RUN FILE_URL="https://github.com/filebrowser/filebrowser/releases/download/v2.23.0/linux-amd64-filebrowser.tar.gz" &&\
+    curl -o /tmp/filebr.tar.gz -L "${FILE_URL}" && tar -C /tmp -zxvf /tmp/filebr.tar.gz &&\
+    mv /tmp/filebrowser /usr/local/bin/filebrowser &&\
+    cp /etc/filebrowser/filesidecar.desktop $HOME/Desktop/filesr.desktop &&\
+    rm -rf /tmp/* /var/tmp/* /var/lib/apt/lists/*
+
 # 安装 msedge
 # ??替代 apt install chromium chromium-sandbox
 RUN if [ -z ${EDGE_RELEASE+x} ]; then \
