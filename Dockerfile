@@ -2,7 +2,9 @@ FROM suisrc/openresty:1.21.4.1-hp-3 as openresty
 
 
 ######### Build Container Image ###########
-FROM kasmweb/core-debian-bullseye:1.13.1:1.13.1
+FROM kasmweb/core-debian-bullseye:1.13.1
+
+ARG S6_RELEASE=3.1.5.0
 
 LABEL maintainer="suisrc@outlook.com"
 ######### Start Customizations ###########
@@ -87,6 +89,19 @@ RUN if [ -z ${OH_MY_ZSH_SH_URL+x} ]; then \
     echo "source ~/.oh-my-zsh/plugins/zsh-autosuggestions/zsh-autosuggestions.zsh" >> ~/.zshrc &&\
     sed -i "1iZSH_DISABLE_COMPFIX=true" ~/.zshrc
     #sed -i "s/ZSH_THEME=\"robbyrussell\"/ZSH_THEME=\"agnoster\"/g" ~/.zshrc
+
+# s6-overlay
+# https://github.com/just-containers/s6-overlay/releases
+RUN S6_RURL="https://github.com/just-containers/s6-overlay/releases" &&\
+    S6_APP="${S6_RURL}/download/v${S6_RELEASE}/s6-overlay-x86_64.tar.xz" &&\
+    S6_CFG="${S6_RURL}/download/v${S6_RELEASE}/s6-overlay-noarch.tar.xz" &&\
+    curl -o /tmp/s6-cfg.tar.xz -L "${S6_CFG}" && tar -C / -Jxpf /tmp/s6-cfg.tar.xz &&\
+    curl -o /tmp/s6-app.tar.xz -L "${S6_APP}" && tar -C / -Jxpf /tmp/s6-app.tar.xz &&\
+    rm -rf /tmp/* /var/tmp/* /var/lib/apt/lists/*
+
+ENV S6_KEEP_ENV=true \
+    S6_CMD_WAIT_FOR_SERVICES_MAXTIME=0 \
+    PATH="$PATH:/command"
 
 # 安装 msedge
 # ??替代 apt install chromium chromium-sandbox
