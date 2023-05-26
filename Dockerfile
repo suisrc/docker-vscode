@@ -145,4 +145,5 @@ ENV HOME /home/kasm-user
 WORKDIR $HOME
 RUN mkdir -p $HOME && chown -R 1000:0 $HOME
 
+# 不可以迁移用户到1000上，使用s6-overlay在启动的时候，会因为权限问题无法正常启动
 # USER 1000
