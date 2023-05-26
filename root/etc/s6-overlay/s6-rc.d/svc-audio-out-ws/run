@@ -1,0 +1,5 @@
+#!/command/with-contenv bash
+set -e
+
+echo 'Starting audio websocket server'
+$STARTUPDIR/jsmpeg/kasm_audio_out-linux kasmaudio 8081 4901 ${HOME}/.vnc/self.pem ${HOME}/.vnc/self.pem "kasm_user:$VNC_PW"

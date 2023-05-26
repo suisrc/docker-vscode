@@ -1,0 +1,18 @@
+#!/command/with-contenv bash
+set -e
+
+
+# nginx Path
+echo "modify nginx to kasmvnc.server"
+NGINX_CONFIG=/etc/nginx/conf.d/default.conf
+
+# modify nginx config
+cp -f /defaults/nginx.conf ${NGINX_CONFIG}
+sed -i "s/7000/${NOVNC_NGX_PORT:-7000}/" ${NGINX_CONFIG}
+sed -i "s/7001/${NOVNC_NGX_PORT:-7001}/" ${NGINX_CONFIG}
+if [ ! -z ${DISABLE_IPV6+x} ]; then
+  sed -i '/listen \[::\]/d' ${NGINX_CONFIG}
+fi
+if [ ! -z ${VNC_PW+x} ]; then
+  sed -i 's/##//g' ${NGINX_CONFIG}
+fi

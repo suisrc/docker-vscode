@@ -1,0 +1,11 @@
+#!/command/with-contenv bash
+set -e
+
+# if [ "${START_PULSEAUDIO:-0}" == "1" ] ;
+# then
+#     echo "Starting Pulse"
+#     HOME=/var/run/pulse pulseaudio --start
+# fi
+
+echo 'Starting audio server'
+HOME=/var/run/pulse no_proxy=127.0.0.1 ffmpeg -v verbose -f pulse -fragment_size ${PULSEAUDIO_FRAGMENT_SIZE:-2000} -ar 44100 -i default -f mpegts -correct_ts_overflow 0 -codec:a mp2 -b:a 128k -ac 1 -muxdelay 0.001 http://127.0.0.1:8081/kasmaudio > /dev/null 2>&1

@@ -1,0 +1,6 @@
+#!/command/with-contenv bash
+set -e
+
+echo 'Starting gamepad server'
+$STARTUPDIR/gamepad/kasm_gamepad_server --ssl --auth-token "kasm_user:$VNC_PW" --cert ${HOME}/.vnc/self.pem --certkey ${HOME}/.vnc/self.pem
+

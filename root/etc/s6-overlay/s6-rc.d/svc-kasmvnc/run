@@ -1,0 +1,57 @@
+#!/command/with-contenv bash
+set -e
+
+BUILD_ARCH=$(uname -p)
+if [ -z ${DRINODE+x} ]; then
+  DRINODE="/dev/dri/renderD128"
+fi
+KASMVNC_HW3D=''
+if [ ! -z ${HW3D+x} ]; then
+  KASMVNC_HW3D="-hw3d"
+fi
+
+# if [[ $DEBUG == true ]]; then
+    echo -e "\n------------------ Start KasmVNC Server ------------------------"
+# fi
+
+DISPLAY_NUM=$(echo $DISPLAY | grep -Po ':\d+')
+
+if [[ $STARTUP_COMPLETE == 0 ]]; then
+    vncserver -kill $DISPLAY &> $STARTUPDIR/vnc_startup.log \
+    || rm -rfv /tmp/.X*-lock /tmp/.X11-unix &> $STARTUPDIR/vnc_startup.log \
+    || echo "no locks present"
+fi
+
+rm -rf $HOME/.vnc/*.pid
+echo "exit 0" > $HOME/.vnc/xstartup
+chmod +x $HOME/.vnc/xstartup
+
+VNCOPTIONS="$VNCOPTIONS -select-de manual"
+if [[ "${BUILD_ARCH}" =~ ^aarch64$ ]] && [[ -f /lib/aarch64-linux-gnu/libgcc_s.so.1 ]] ; then
+	LD_PRELOAD=/lib/aarch64-linux-gnu/libgcc_s.so.1 vncserver $DISPLAY $KASMVNC_HW3D -drinode $DRINODE -depth $VNC_COL_DEPTH -geometry $VNC_RESOLUTION -websocketPort $NO_VNC_PORT -httpd ${KASM_VNC_PATH}/www -sslOnly -FrameRate=$MAX_FRAME_RATE -interface 0.0.0.0 -BlacklistThreshold=0 -FreeKeyMappings $VNCOPTIONS $KASM_SVC_SEND_CUT_TEXT $KASM_SVC_ACCEPT_CUT_TEXT
+else
+	vncserver $DISPLAY $KASMVNC_HW3D -drinode $DRINODE -depth $VNC_COL_DEPTH -geometry $VNC_RESOLUTION -websocketPort $NO_VNC_PORT -httpd ${KASM_VNC_PATH}/www -sslOnly -FrameRate=$MAX_FRAME_RATE -interface 0.0.0.0 -BlacklistThreshold=0 -FreeKeyMappings $VNCOPTIONS $KASM_SVC_SEND_CUT_TEXT $KASM_SVC_ACCEPT_CUT_TEXT
+fi
+
+# KASM_PROCS['kasmvnc']=$(cat $HOME/.vnc/*${DISPLAY_NUM}.pid)
+kasmvnc_pid=$(cat $HOME/.vnc/*${DISPLAY_NUM}.pid)
+
+#Disable X11 Screensaver
+if [ "${DISTRO}" != "alpine" ]; then
+	echo "Disabling X Screensaver Functionality"
+	xset -dpms
+	xset s off
+	xset q
+else
+	echo "Disabling of X Screensaver Functionality for $DISTRO is not required."
+fi
+
+# if [[ $DEBUG == true ]]; then
+    echo -e "\n------------------ Started Websockify  ----------------------------"
+    echo "Websockify PID: $kasmvnc_pid";
+#   echo "Websockify PID: ${KASM_PROCS['kasmvnc']}";
+# fi
+
+wait $kasmvnc_pid
+
+echo -e "\n------------------ KasmVNC Server Stopped ------------------------"
