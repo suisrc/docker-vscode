@@ -4,6 +4,8 @@ FROM suisrc/openresty:1.21.4.1-hu-3 as openresty
 ######### Build Container Image ###########
 FROM kasmweb/core-ubuntu-jammy:1.13.1
 
+ARG S6_RELEASE=3.1.5.0
+
 LABEL maintainer="suisrc@outlook.com"
 ######### Start Customizations ###########
 USER root
