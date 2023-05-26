@@ -1,3 +1,20 @@
+# readme
+
+## 启动顺序
+
+svc-kasmvnc
+svc-kasmwin
+svc-audio-out-ws
+svc-audio-out
+svc-audio-in
+svc-upload
+svc-gamepad
+svc-dbus-system
+svc-nginx
+
+## init
+
+```bash /init
 #!/bin/sh -e
 
 # This is the first program launched at container start.
@@ -38,4 +55,6 @@ exec s6-overlay-suexec \
   ' /package/admin/s6-overlay-3.1.5.0/libexec/preinit' \
   '' \
   /package/admin/s6-overlay-3.1.5.0/libexec/stage0 \
-  ""
+  "$@"
+
+```

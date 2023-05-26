@@ -1,11 +1,14 @@
 #!/etc/s6-overlay/s6-user-bash
 set -e
 
+# 辅助 svc-dbus-system 修改可访问权限
+sudo chmod a+r /run/dbus/system_bus_socket
+
 echo 'Starting kasmvnc server'
 
-no_proxy="localhost,127.0.0.1"
+# no_proxy="localhost,127.0.0.1"
 # DISPLAY=:1
-VNC_IP=$(hostname -i)
+# VNC_IP=$(hostname -i)
 
 BUILD_ARCH=$(uname -p)
 if [ -z ${DRINODE+x} ]; then
@@ -20,9 +23,9 @@ VNC_IP=$(hostname -i)
 DISPLAY_NUM=$(echo $DISPLAY | grep -Po ':\d+')
 
 # if [[ $STARTUP_COMPLETE == 0 ]]; then
-# vncserver -kill $DISPLAY &> $STARTUPDIR/vnc_startup.log \
-# || rm -rfv /tmp/.X*-lock /tmp/.X11-unix &> $STARTUPDIR/vnc_startup.log \
-# || echo "no locks present"
+vncserver -kill $DISPLAY &> $STARTUPDIR/vnc_startup.log \
+|| rm -rfv /tmp/.X*-lock /tmp/.X11-unix &> $STARTUPDIR/vnc_startup.log \
+|| echo "no locks present"
 
 rm -rf $HOME/.vnc/*.pid
 echo "exit 0" > $HOME/.vnc/xstartup
@@ -53,7 +56,7 @@ fi
 
 # wait $kasmvnc_pid
 sleep 5
-while [ kill -0 $kasmvnc_pid 2>/dev/null ]; do
+while kill -0 "$kasmvnc_pid" 2>/dev/null; do
 	sleep 5
 done
 echo "Kasmvnc server stopped"

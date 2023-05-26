@@ -3,27 +3,28 @@ set -e
 
 echo 'Starting kasmwin server'
 
-no_proxy="localhost,127.0.0.1"
+# no_proxy="localhost,127.0.0.1"
 # DISPLAY=:1
-VNC_IP=$(hostname -i)
+# VNC_IP=$(hostname -i)
 
 if [ -f /opt/VirtualGL/bin/vglrun ] && [ ! -z "${KASM_EGL_CARD}" ] && [ ! -z "${KASM_RENDERD}" ] && [ -O "${KASM_RENDERD}" ] && [ -O "${KASM_EGL_CARD}" ] ; then
 	echo "Starting XFCE with VirtualGL using EGL device ${KASM_EGL_CARD}"
-	/opt/VirtualGL/bin/vglrun -d "${KASM_EGL_CARD}" /usr/bin/startxfce4 --replace &
+	exec /opt/VirtualGL/bin/vglrun -d "${KASM_EGL_CARD}" /usr/bin/startxfce4 --replace
 else
 	echo "Starting XFCE without VirtualGL"
 	if [ -f '/usr/bin/zypper' ]; then
-		/usr/bin/dbus-launch /usr/bin/startxfce4 --replace &
+		exec /usr/bin/dbus-launch /usr/bin/startxfce4 --replace
 	else
-		/usr/bin/startxfce4 --replace &
+		exec /usr/bin/startxfce4 --replace
 	fi
 fi
 
-kasmwin_pid=$!
+# startxfce4 后面没有 &， 所以这里不会执行， 同时增加exec，取代当前bash
+# kasmwin_pid=$!
 
-# wait $kasmwin_pid
-sleep 5
-while [ kill -0 $kasmwin_pid 2>/dev/null ]; do
-	sleep 5
-done
-echo "Kasmwin server stopped"
+# # wait $kasmwin_pid
+# sleep 5
+# while kill -0 "$kasmwin_pid" 2>/dev/null; do
+# 	sleep 5
+# done
+# echo "Kasmwin server stopped"
