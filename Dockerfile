@@ -1,8 +1,8 @@
-FROM suisrc/openresty:1.21.4.1-hu-3 as openresty
+FROM suisrc/openresty:1.21.4.1-hp-3 as openresty
 
 
 ######### Build Container Image ###########
-FROM kasmweb/core-ubuntu-jammy:1.13.1
+FROM kasmweb/core-debian-bullseye:1.13.1:1.13.1
 
 LABEL maintainer="suisrc@outlook.com"
 ######### Start Customizations ###########
