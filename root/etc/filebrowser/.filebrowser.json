@@ -1,0 +1,8 @@
+{
+    "port": 6907,
+    "baseURL": "/gofiles",
+    "address": "",
+    "log": "stdout",
+    "database": "/home/kasm-user/.filebrowser.db",
+    "root": "/home/kasm-user"
+}
