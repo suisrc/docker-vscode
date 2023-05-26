@@ -6,7 +6,7 @@ on:
   #release:
   #  types: [published]
   push:
-    branches: [ kasm-debian ]
+    branches: [ kasm-ubuntu ]
 
 env:
   IMAGE_NAME: suisrc/webtop
@@ -17,7 +17,7 @@ env:
   ALIYUN_REGISTRY: registry.cn-hongkong.aliyuncs.com
 
 jobs:
-  debian:
+  ubuntu:
     #if: false
     runs-on: ubuntu-latest
 
