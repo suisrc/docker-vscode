@@ -65,7 +65,7 @@ RUN apt update && \
     && \
     # pip3 install --upgrade pip && \
     echo kasm-user ALL=\(root\) NOPASSWD:ALL > /etc/sudoers.d/kasm-user && \
-    apt autoremove && apt autoclean -y && \
+    apt autoremove -y && apt autoclean -y && \
     rm -rf /tmp/* /var/tmp/* /var/lib/apt/lists/*
 
 # s6-overlay
