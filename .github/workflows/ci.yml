@@ -6,11 +6,11 @@ on:
   #release:
   #  types: [published]
   push:
-    branches: [ kasm-ubuntu ]
+    branches: [ kasm-ubuntu-lite ]
 
 env:
   IMAGE_NAME: suisrc/webtop
-  IMAGE_VERSION: '0.0.4'
+  IMAGE_VERSION: '0.0.4-lite'
   GITHUB_REGISTRY: ghcr.io
   DOCKER_REGISTRY: docker.io
   QUAY_REGISTRY: quay.io
@@ -37,7 +37,7 @@ jobs:
 
           IMAGE_ID=$REGISTRY_URL/$IMAGE_NAME
           echo IMAGE_ID=$IMAGE_ID
-          VERSION=$IMAGE_VERSION-${{ github.job }}
+          VERSION=$IMAGE_VERSION
           echo VERSION=$VERSION
 
           docker tag image $IMAGE_ID:$VERSION
@@ -50,7 +50,7 @@ jobs:
 
           IMAGE_ID=$REGISTRY_URL/$IMAGE_NAME
           echo IMAGE_ID=$IMAGE_ID
-          VERSION=$IMAGE_VERSION-${{ github.job }}
+          VERSION=$IMAGE_VERSION
           echo VERSION=$VERSION
 
           docker tag image $IMAGE_ID:$VERSION
@@ -63,7 +63,7 @@ jobs:
 
           IMAGE_ID=$REGISTRY_URL/$IMAGE_NAME
           echo IMAGE_ID=$IMAGE_ID
-          VERSION=$IMAGE_VERSION-${{ github.job }}
+          VERSION=$IMAGE_VERSION
           echo VERSION=$VERSION
 
           docker tag image $IMAGE_ID:$VERSION
@@ -77,7 +77,7 @@ jobs:
 
       #     IMAGE_ID=$REGISTRY_URL/$IMAGE_NAME
       #     echo IMAGE_ID=$IMAGE_ID
-      #     VERSION=$IMAGE_VERSION-${{ github.job }}
+      #     VERSION=$IMAGE_VERSION
       #     echo VERSION=$VERSION
 
       #     docker tag image $IMAGE_ID:$VERSION
