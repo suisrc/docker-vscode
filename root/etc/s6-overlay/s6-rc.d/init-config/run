@@ -85,3 +85,8 @@ echo "kasm_viewer:${VNC_VIEW_PW_HASH}:" >> $PASSWD_PATH
 # echo "kams_user:$(openssl passwd -apr1 ${VNC_PW}):ow" > $PASSWD_PATH
 # echo "kasm_viewer:$(openssl passwd -apr1 ${VNC_VIEW_PW_HASH}):ow" >> $PASSWD_PATH
 chmod 600 $PASSWD_PATH
+
+# 更改文件权限，否则 firefox 无法启动
+if [ "$KASM_USER" == "root" ] || [ "$KASM_USER" == "" ] ; then
+    chown root $HOME
+fi
