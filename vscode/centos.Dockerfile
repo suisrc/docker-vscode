@@ -3,7 +3,7 @@ FROM centos:7
 LABEL maintainer="suisrc@outlook.com"
 
 ARG VSC_HOME=/vsc
-ARG VSC_RELEASE=4.12.0
+ARG VSC_RELEASE=4.18.0
 ARG S6_RELEASE=v3.1.4.1
 
 #ARG LINUX_MIRRORS=http://mirrors.aliyun.com
@@ -109,7 +109,7 @@ RUN groupadd --gid 1000 $USERNAME && \
 ENV NODE_EXTRA_CA_CERTS=/etc/ssl/certs/ca-bundle.crt
 # =============================================================================================
 # https://nodejs.org/en/
-ENV NODE_VERSION=16.18.1 \
+ENV NODE_VERSION=16.20.2 \
     PATH=/usr/local/node/bin:$PATH
 RUN mkdir /usr/local/node && \
     curl -fSL --compressed "https://nodejs.org/dist/v${NODE_VERSION}/node-v$NODE_VERSION-linux-x64.tar.xz" | \

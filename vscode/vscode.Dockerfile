@@ -4,7 +4,7 @@ FROM node:16-alpine
 LABEL maintainer="suisrc@outlook.com"
 
 ARG VSC_HOME=/vsc
-ARG VSC_RELEASE=4.12.0
+ARG VSC_RELEASE=4.18.0
 ARG S6_RELEASE=v3.1.4.1
 
 # linux and softs
