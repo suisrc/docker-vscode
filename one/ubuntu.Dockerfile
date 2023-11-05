@@ -1,11 +1,11 @@
-FROM ghcr.io/suisrc/vscode:1.76.1-cdr-ubuntu
+FROM ghcr.io/suisrc/vscode:1.83.1-cdr-ubuntu
 
 RUN  mkdir -p /workspace/.go/bin
 USER root
 
-ENV GO_VERSION=1.20.2 \
-    JAVA_VERSION=jdk-17.0.5+8_openj9-0.35.0 \
-    MAVEN_VERSION=3.9.1 \
+ENV GO_VERSION=1.21.3 \
+    JAVA_VERSION=jdk-17.0.8.1+1_openj9-0.40.0 \
+    MAVEN_VERSION=3.9.5 \
     GOPATH=/workspace/.go \
     JDK_HOME=/usr/local/java \
     JAVA_HOME=/usr/local/java \
