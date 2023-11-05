@@ -1,5 +1,8 @@
 FROM centos:7
 
+# 由于一些客观的原因，不在提供centos7的更新
+# 比如node 16.20.2版本，需要跟高版本的glib
+
 LABEL maintainer="suisrc@outlook.com"
 
 ARG VSC_HOME=/vsc
@@ -109,7 +112,7 @@ RUN groupadd --gid 1000 $USERNAME && \
 ENV NODE_EXTRA_CA_CERTS=/etc/ssl/certs/ca-bundle.crt
 # =============================================================================================
 # https://nodejs.org/en/
-ENV NODE_VERSION=16.20.2 \
+ENV NODE_VERSION=16.18.1 \
     PATH=/usr/local/node/bin:$PATH
 RUN mkdir /usr/local/node && \
     curl -fSL --compressed "https://nodejs.org/dist/v${NODE_VERSION}/node-v$NODE_VERSION-linux-x64.tar.xz" | \
