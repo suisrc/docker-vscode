@@ -1,4 +1,4 @@
-FROM ghcr.io/suisrc/vscode:1.83.1-cdr-ubuntu-one
+FROM ghcr.io/suisrc/vscode:1.84.2-cdr-ubuntu-one
 
 USER root
 RUN zsh -c "grep -rl open-vsx.org /vsc/**/*.js /vsc/**/*.json /vsc/**/*.map | xargs sed -i \
