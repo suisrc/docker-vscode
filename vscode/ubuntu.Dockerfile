@@ -3,8 +3,8 @@ FROM ubuntu:jammy
 LABEL maintainer="suisrc@outlook.com"
 
 ARG VSC_HOME=/vsc
-ARG VSC_RELEASE=4.18.0
-ARG S6_RELEASE=v3.1.4.1
+ARG VSC_RELEASE=4.19.1
+ARG S6_RELEASE=v3.1.6.2
 ENV NODE_VERSION=18.18.2
 
 # update linux
