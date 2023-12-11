@@ -1,10 +1,10 @@
-FROM ghcr.io/suisrc/vscode:1.83.1-cdr-debian
+FROM ghcr.io/suisrc/vscode:1.84.2-cdr-debian
 
 RUN  mkdir -p /workspace/.go/bin
 USER root
 
-ENV GO_VERSION=1.21.3 \
-    JAVA_VERSION=jdk-17.0.8.1+1_openj9-0.40.0 \
+ENV GO_VERSION=1.21.5 \
+    JAVA_VERSION=jdk-17.0.9+9_openj9-0.41.0 \
     MAVEN_VERSION=3.9.5 \
     GOPATH=/workspace/.go \
     JDK_HOME=/usr/local/java \

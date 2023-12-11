@@ -10,7 +10,7 @@ on:
 
 env:
   IMAGE_NAME: suisrc/vscode
-  IMAGE_VERSION: '1.83.1-cdr'
+  IMAGE_VERSION: '1.84.2-cdr'
   QUAY_REGISTRY: quay.io
   DOCKER_REGISTRY: docker.io
   GITHUB_REGISTRY: ghcr.io
