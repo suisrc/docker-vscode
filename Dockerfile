@@ -17,6 +17,7 @@ RUN mkdir /out && \
   tar xf  /rootfs.tar.gz -C /out && \
   rm -rf  /out/var/log/*
 
+# https://github.com/just-containers/s6-overlay
 # set version for s6 overlay
 ARG S6_OVERLAY_VERSION="3.1.6.2"
 ARG S6_OVERLAY_ARCH="x86_64"
@@ -113,7 +114,6 @@ RUN groupadd --gid 1000 $USERNAME && \
     chmod 0440 /etc/sudoers.d/$USERNAME && chmod g+rw /home
 
 WORKDIR $HOME
-# https://github.com/just-containers/s6-overlay
 ENTRYPOINT ["/init"]
 
 # # install oh-my-zsh
