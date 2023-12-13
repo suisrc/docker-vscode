@@ -177,7 +177,7 @@ EXPOSE 7000
 # =============================================================================================
 
 # env
-ENV KASM_VERSION="1.2.0"
+ENV KASM_VERSION="1.2.0" \
     DISPLAY=:1 \
     PERL5LIB=/usr/local/bin \
     OMP_WAIT_POLICY=PASSIVE \
