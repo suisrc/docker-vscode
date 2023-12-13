@@ -57,7 +57,7 @@ ENV NODE_VERSION="18.18.2" \
     # PATH="/lsiopy/bin:$PATH" \
 
 # update linux
-RUN apt update && DEBIAN_FRONTEND=noninteractive && \
+RUN apt update && DEBIAN_FRONTEND=noninteractive \
     apt install --no-install-recommends -y \
     dpkg \
     sudo \
