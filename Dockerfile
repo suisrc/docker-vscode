@@ -57,9 +57,8 @@ ENV NODE_VERSION="18.18.2" \
     LANG="en_US.UTF-8" \
     TERM="xterm" \
     HOME="/home/$USERNAME" \
-    PATH=/usr/local/node/bin:$PATH
-    # VIRTUAL_ENV=/lsiopy \
-    # PATH="/lsiopy/bin:$PATH" \
+    PATH=/usr/local/node/bin:$PATH \
+    EXTENSIONS=""
 
 # update linux
 RUN apt update && \
@@ -125,7 +124,7 @@ RUN curl -fsSL "https://raw.githubusercontent.com/ohmyzsh/ohmyzsh/master/tools/i
     echo "source ~/.oh-my-zsh/plugins/zsh-autosuggestions/zsh-autosuggestions.zsh" >> ~/.zshrc &&\
     sed -i "1iZSH_DISABLE_COMPFIX=true" ~/.zshrc && rm -rf ~/.oh-my-zsh/plugins/zsh-autosuggestions/.git &&\
     apt-get autoremove && apt-get clean && rm -rf /tmp/* /var/tmp/* /var/lib/apt/lists/* &&\
-    chown -R $USERNAME:$USERNAME $HOME
+    chown -R $USERNAME:$USERNAME $HOME && chown -R $USERNAME:$USERNAME /usr
 
 # =============================================================================================
 # https://nodejs.org/en/
@@ -142,8 +141,6 @@ RUN VSC_RURL="https://github.com/coder/code-server/releases" &&\
     rm -f ${VSCR_BIN}/lib/coder-cloud-agent &&\
     chown -R $USERNAME:$USERNAME ${VSCR_BIN} && \
     rm -rf /tmp/* /var/tmp/*
-
-ENV EXTENSIONS=""
 
 # =============================================================================================
 # default user

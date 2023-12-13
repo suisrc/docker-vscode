@@ -1,8 +1,6 @@
 #!/bin/bash
 
-
-echo 'starting nginx server'
-# 如果没有nginx进程，启动nginx
+# echo 'starting nginx server'
 # /usr/local/openresty/nginx/sbin/nginx -> /usr/local/bin/nginx
 if [ ! `pgrep nginx` ]; then
     echo "nginx is not running, start it..."
