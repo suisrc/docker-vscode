@@ -47,7 +47,7 @@ LABEL maintainer="suisrc@outlook.com"
 
 # set environment variables
 ARG VSCR_BIN="/vsc"
-ARG USERNAME="user"
+# ARG USERNAME="user"
 
 ENV NODE_VERSION="18.19.0" \
     VSCR_VERSION="4.19.1" \
@@ -56,9 +56,10 @@ ENV NODE_VERSION="18.19.0" \
     LANGUAGE="en_US.UTF-8" \
     LANG="en_US.UTF-8" \
     TERM="xterm" \
-    HOME="/home/$USERNAME" \
     PATH=/usr/local/node/bin:$PATH \
-    EXTENSIONS=""
+    EXTENSIONS="" \
+    HOME="/wsc"
+    # HOME="/home/$USERNAME" 
 
 # update linux
 RUN apt update && \
@@ -101,18 +102,17 @@ RUN apt update && \
     fonts-noto-color-emoji &&\
     fc-cache -f -v && \
     locale-gen en_US.UTF-8 && \
-    mkdir -p /home/$USERNAME/project && \
-    ln -s /home/$USERNAME/project /ws && \
+    mkdir -p /wsc && ln -s /wsc /home/wsc && \
     ln -s /usr/local/openresty/nginx/sbin/nginx /usr/bin/nginx && \
     ln -s /usr/local/openresty/nginx/html       /www && \
     apt-get autoremove && apt-get clean && \
     rm -rf /tmp/* /var/tmp/* /var/lib/apt/lists/*
 
 # creating the user and usergroup
-RUN groupadd --gid 1000 $USERNAME && \
-    useradd  --uid 1000 --gid $USERNAME -d $HOME -m -s /bin/bash $USERNAME   && \
-    echo $USERNAME ALL=\(root\) NOPASSWD:ALL > /etc/sudoers.d/$USERNAME && \
-    chmod 0440 /etc/sudoers.d/$USERNAME && chmod g+rw /home
+# RUN groupadd --gid 1000 $USERNAME && \
+#     useradd  --uid 1000 --gid $USERNAME -d $HOME -m -s /bin/bash $USERNAME   && \
+#     echo $USERNAME ALL=\(root\) NOPASSWD:ALL > /etc/sudoers.d/$USERNAME && \
+#     chmod 0440 /etc/sudoers.d/$USERNAME && chmod g+rw /home
 
 WORKDIR $HOME
 # https://github.com/just-containers/s6-overlay
@@ -123,8 +123,8 @@ RUN curl -fsSL "https://raw.githubusercontent.com/ohmyzsh/ohmyzsh/master/tools/i
     git clone "https://github.com/zsh-users/zsh-autosuggestions" ~/.oh-my-zsh/plugins/zsh-autosuggestions &&\
     echo "source ~/.oh-my-zsh/plugins/zsh-autosuggestions/zsh-autosuggestions.zsh" >> ~/.zshrc &&\
     sed -i "1iZSH_DISABLE_COMPFIX=true" ~/.zshrc && rm -rf ~/.oh-my-zsh/plugins/zsh-autosuggestions/.git &&\
-    apt-get autoremove && apt-get clean && rm -rf /tmp/* /var/tmp/* /var/lib/apt/lists/* &&\
-    chown -R $USERNAME:$USERNAME $HOME && chown -R $USERNAME:$USERNAME /usr
+    # chown -R $USERNAME:$USERNAME $HOME && chown -R $USERNAME:$USERNAME /usr &&\
+    apt-get autoremove && apt-get clean && rm -rf /tmp/* /var/tmp/* /var/lib/apt/lists/*
 
 # =============================================================================================
 # https://nodejs.org/en/
@@ -139,12 +139,12 @@ RUN VSC_RURL="https://github.com/coder/code-server/releases" &&\
     rm -f ${VSCR_BIN}/node      && ln -s /usr/local/node/bin/node ${VSCR_BIN}/node &&\
     rm -f ${VSCR_BIN}/lib/node  && ln -s /usr/local/node/bin/node ${VSCR_BIN}/lib/node &&\
     rm -f ${VSCR_BIN}/lib/coder-cloud-agent &&\
-    chown -R $USERNAME:$USERNAME ${VSCR_BIN} && \
+    # chown -R $USERNAME:$USERNAME ${VSCR_BIN} && \
     rm -rf /tmp/* /var/tmp/*
 
 # =============================================================================================
 # default user
-USER $USERNAME
+# USER $USERNAME
 # install extension ?ms-ceintl.vscode-language-pack-zh-hans
 RUN code-server --install-extension mhutchie.git-graph &&\
     code-server --install-extension esbenp.prettier-vscode &&\
