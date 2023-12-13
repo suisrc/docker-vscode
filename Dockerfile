@@ -11,15 +11,15 @@ FROM ubuntu:jammy as kclient-stage
 RUN echo "**** install build deps ****" && \
     apt-get update && apt-get install -y gnupg && \
     curl -s https://deb.nodesource.com/gpgkey/nodesource.gpg.key | apt-key add - && \
-    echo 'deb https://deb.nodesource.com/node_18.x jammy main' > /etc/apt/sources.list.d/nodesource.list && \
-    apt-get update && apt-get install -y \
+    echo 'deb https://deb.nodesource.com/node_18.x jammy main' > /etc/apt/sources.list.d/nodesource.list
+RUN apt-get update && apt-get install -y \
     g++ \
     gcc \
     libpam0g-dev \
     libpulse-dev \
     make \
-    nodejs &&\
-    echo "**** grab source ****" && \
+    nodejs
+RUN echo "**** grab source ****" && \
     mkdir -p /kclient && \
     curl -o /tmp/kclient.tar.gz -L "https://github.com/linuxserver/kclient/archive/refs/tags/0.3.6.tar.gz" && \
     tar xf /tmp/kclient.tar.gz -C /kclient/ --strip-components=1 &&\
