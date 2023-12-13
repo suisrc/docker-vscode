@@ -9,6 +9,7 @@
 ## VSX_RESOURCE_URL = https://open-vsx.org/vscode/asset/{publisher}/{name}/{version}/Microsoft.VisualStudio.Code.WebResources/{path}
 ## EXTENSIONS = 
 
+echo 'init vscode server ...'
 if [ $GIT_USER_NAME ]; then
     git config --global user.name "$GIT_USER_NAME"
     #git config pull.rebase false
@@ -32,6 +33,7 @@ else
         grep -rl open-vsx.org /vsc/**/*.js | xargs sed -i "s|https://open-vsx.org/vscode/asset/{publisher}/{name}/{version}/Microsoft.VisualStudio.Code.WebResources/{path}|$VSX_RESOURCE_URL|g"
     fi
 fi
+echo 'install vscode extension ...'
 # bash read -ra, zsh read -rA
 if [ $EXTENSIONS ]; then
     IFS=','
@@ -40,3 +42,4 @@ if [ $EXTENSIONS ]; then
         code-server --install-extension $i
     done
 fi
+echo 'init vscode server end'

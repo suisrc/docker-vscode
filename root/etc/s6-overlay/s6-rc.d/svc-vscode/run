@@ -1,5 +1,5 @@
 #!/usr/bin/with-contenv bash
 
 ## VSC_ARGS: vscode参数
-
+echo 'start vscode server ...'
 code-server --host ${VSC_HOST:-0.0.0.0} --port ${VSC_PORT:-7000} $VSC_ARGS /wsc
