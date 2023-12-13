@@ -49,7 +49,7 @@ LABEL maintainer="suisrc@outlook.com"
 ARG VSCR_BIN="/vsc"
 ARG USERNAME="user"
 
-ENV NODE_VERSION="18.18.2" \
+ENV NODE_VERSION="18.19.0" \
     VSCR_VERSION="4.19.1" \
     S6_CMD_WAIT_FOR_SERVICES_MAXTIME="0" \
     S6_VERBOSITY=1 \
