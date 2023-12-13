@@ -124,21 +124,21 @@ ENTRYPOINT ["/init"]
 #     apt-get autoremove && apt-get clean && rm -rf /tmp/* /var/tmp/* /var/lib/apt/lists/*
 
 # =============================================================================================
-# https://nodejs.org/en/
+# install nodejs and vscode <- https://nodejs.org/en/
 RUN mkdir /usr/local/node && \
     curl -fSL --compressed "https://nodejs.org/dist/v${NODE_VERSION}/node-v$NODE_VERSION-linux-x64.tar.xz" | \
-    tar -xJ -C /usr/local/node --strip-components=1 && npm install -g yarn && node --version && npm --version
-# vscode-server
-RUN VSC_RURL="https://github.com/coder/code-server/releases" &&\
+    tar -xJ -C /usr/local/node --strip-components=1 && npm install -g yarn && node --version && npm --version && \
+    VSC_RURL="https://github.com/coder/code-server/releases" &&\
     VSC_PATH="${VSC_RURL}/download/v${VSCR_VERSION}/code-server-${VSCR_VERSION}-linux-amd64.tar.gz" &&\
     curl -o /tmp/vsc.tar.gz -L "${VSC_PATH}" && mkdir -p ${VSC_HOME} && tar xzf /tmp/vsc.tar.gz -C ${VSC_HOME}/ --strip-components=1 && \
-    rm -f ${VSC_HOME}/node      && ln -s /usr/local/node/bin/node ${VSC_HOME}/node &&\
-    rm -f ${VSC_HOME}/lib/node  && ln -s /usr/local/node/bin/node ${VSC_HOME}/lib/node &&\
-    rm -f ${VSC_HOME}/lib/coder-cloud-agent &&\
-    ${VSC_HOME}/bin/code-server --install-extension mhutchie.git-graph &&\
-    ${VSC_HOME}/bin/code-server --install-extension esbenp.prettier-vscode &&\
-    ${VSC_HOME}/bin/code-server --install-extension humao.rest-client &&\
-    rm -rf /tmp/* /var/tmp/* $HOME/.local/share/code-server/CachedExtensionVSIXs/* &&\
+    rm -f ${VSC_HOME}/node      && ln -s /usr/local/node/bin/node ${VSC_HOME}/node && \
+    rm -f ${VSC_HOME}/lib/node  && ln -s /usr/local/node/bin/node ${VSC_HOME}/lib/node && \
+    rm -f ${VSC_HOME}/lib/coder-cloud-agent && \
+    ln -s ${VSC_HOME}/bin/code-server /usr/bin/code-server && \
+    ${VSC_HOME}/bin/code-server --install-extension mhutchie.git-graph && \
+    ${VSC_HOME}/bin/code-server --install-extension esbenp.prettier-vscode && \
+    ${VSC_HOME}/bin/code-server --install-extension humao.rest-client && \
+    rm -rf /tmp/* /var/tmp/* $HOME/.local/share/code-server/CachedExtensionVSIXs/* && \
     chown -R $USERNAME:$USERNAME ${VSC_HOME} $HOME /wsc
 
 # =============================================================================================
