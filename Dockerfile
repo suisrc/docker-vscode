@@ -45,19 +45,21 @@ LABEL maintainer="suisrc@outlook.com"
 # set environment variables
 ARG VSC_HOME="/vsc"
 ARG USERNAME="user"
+
 ENV NODE_VERSION="18.18.2" \
-    VSC_VERSION="4.19.1" \
+    VSCR_VERSION="4.19.1" \
+    S6_CMD_WAIT_FOR_SERVICES_MAXTIME="0" \
+    S6_VERBOSITY=1 \
     LANGUAGE="en_US.UTF-8" \
     LANG="en_US.UTF-8" \
     TERM="xterm" \
-    S6_CMD_WAIT_FOR_SERVICES_MAXTIME="0" \
-    S6_VERBOSITY=1 \
-    HOME="/home/$USERNAME" \
+    HOME="/home/$USERNAME"
     # VIRTUAL_ENV=/lsiopy \
     # PATH="/lsiopy/bin:$PATH" \
 
 # update linux
-RUN apt update && DEBIAN_FRONTEND=noninteractive \
+RUN apt update && \
+    DEBIAN_FRONTEND=noninteractive \
     apt install --no-install-recommends -y \
     dpkg \
     sudo \
@@ -139,7 +141,7 @@ RUN mkdir /usr/local/node && \
 
 # vscode-server
 RUN VSC_RURL="https://github.com/coder/code-server/releases" &&\
-    VSC_PATH="${VSC_RURL}/download/v${VSC_VERSION}/code-server-${VSC_VERSION}-linux-amd64.tar.gz" &&\
+    VSC_PATH="${VSC_RURL}/download/v${VSCR_VERSION}/code-server-${VSCR_VERSION}-linux-amd64.tar.gz" &&\
     curl -o /tmp/vsc.tar.gz -L "${VSC_PATH}" && mkdir -p ${VSC_HOME} && tar xzf /tmp/vsc.tar.gz -C ${VSC_HOME}/ --strip-components=1 && \
     ln -s ${VSC_HOME}/bin/code-server /usr/bin/code-server && \
     rm -f ${VSC_HOME}/node            && ln -s /usr/local/node/bin/node ${VSC_HOME}/node &&\
