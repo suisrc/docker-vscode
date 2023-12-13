@@ -272,7 +272,7 @@ RUN APP_URL="https://github.com/kasmtech/KasmVNC/releases/download/v${KASM_VERSI
     rm -rf /tmp/* /var/tmp/* /var/lib/apt/lists/*
 
 # kclient
-COPY --from=kasm-stage /kclient /kclient
+COPY --from=kclient-stage /kclient /kclient
 
 
 
