@@ -291,3 +291,38 @@ RUN apt-get update && DEBIAN_FRONTEND=noninteractive \
     apt-get autoremove && apt-get clean && \
     rm -rf /tmp/* /var/tmp/* /var/lib/apt/lists/*
 
+
+# # 安装 firefox
+# # https://download-installer.cdn.mozilla.net/pub/firefox/releases/115.0.3/linux-x86_64/en-US/firefox-115.0.3.tar.bz2
+# # https://download-installer.cdn.mozilla.net/pub/firefox/releases/115.0.3/linux-x86_64/zh-CN/firefox-115.0.3.tar.bz2
+# RUN FILE_URL="https://download-installer.cdn.mozilla.net/pub/firefox/releases/115.0.3/linux-x86_64/en-US/firefox-115.0.3.tar.bz2" &&\
+#     curl -o /tmp/firefox.tar.bz2 -L "${FILE_URL}" && tar -C /opt -jxvf /tmp/firefox.tar.bz2 &&\
+#     ln -s /opt/firefox/firefox /usr/local/bin/firefox &&\
+#     update-alternatives --install /usr/bin/x-www-browser x-www-browser /usr/local/bin/firefox 100 &&\
+#     update-alternatives --config x-www-browser &&\
+#     rm -rf /tmp/* /var/tmp/* /var/lib/apt/lists/*
+
+# # 安装 msedge
+# # ??替代 apt install chromium chromium-sandbox
+# RUN if [ -z ${EDGE_RELEASE+x} ]; then \
+#         EDGE_RELEASE=$(curl -q https://packages.microsoft.com/repos/edge/pool/main/m/microsoft-edge-stable/ | grep href | grep .deb | sed 's/.*href="//g'  | cut -d '"' -f1 | sort --version-sort | tail -1); \
+#     fi &&\
+#     EDGE_URL="https://packages.microsoft.com/repos/edge/pool/main/m/microsoft-edge-stable/$EDGE_RELEASE" &&\
+#     curl -o /tmp/msedge.deb -L "${EDGE_URL}" &&\
+#     apt update && apt install -y /tmp/msedge.deb &&\
+#     cp /usr/share/applications/microsoft-edge.desktop $HOME/Desktop/msedge.desktop &&\
+#     apt autoclean -y && \
+#     rm -rf /tmp/* /var/tmp/* /var/lib/apt/lists/*
+# # 禁用沙盒
+# # sed -i 's|"\$@"| --no-sandbox  &|' /opt/microsoft/msedge/microsoft-edge
+
+# # 安装 vscode
+# # ??替代  https://github.com/VSCodium/vscodium/releases/download/1.78.2.23132/codium_1.78.2.23132_amd64.deb
+# RUN CODE_URL="https://update.code.visualstudio.com/latest/linux-deb-x64/stable" &&\
+#     curl -o /tmp/vscode.deb -L "${CODE_URL}" &&\
+#     apt update && apt install -y /tmp/vscode.deb &&\
+#     cp /usr/share/applications/code.desktop $HOME/Desktop/vscode.desktop &&\
+#     apt autoclean -y && \
+#     rm -rf /tmp/* /var/tmp/* /var/lib/apt/lists/*
+# # 禁用沙盒
+# # sed -i 's#/usr/share/code/code#& --no-sandbox##' /usr/share/applications/code.desktop

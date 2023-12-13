@@ -39,11 +39,10 @@ if [[ ! -f "${HOME}/.config/openbox/menu.xml" ]]; then
   cp /defaults/menu.xml ${HOME}/.config/openbox/menu.xml
 fi
 if [[ -f /usr/local/etc/kasmvnc/kasmvnc.yaml.lsio ]]; then
-  mv /usr/local/etc/kasmvnc/kasmvnc.yaml.lsio \
-     /usr/local/etc/kasmvnc/kasmvnc.yaml
+  sudo mv /usr/local/etc/kasmvnc/kasmvnc.yaml.lsio /usr/local/etc/kasmvnc/kasmvnc.yaml
 fi
 # XDG Home
-printf "${HOME}/.XDG" > /run/s6/container_environment/XDG_RUNTIME_DIR
+sudo printf "${HOME}/.XDG" > /run/s6/container_environment/XDG_RUNTIME_DIR
 if [ ! -d "${HOME}/.XDG" ]; then
   mkdir -p ${HOME}/.XDG
 fi
@@ -52,8 +51,9 @@ fi
 if [ "$USERNAME" == "root" ] || [ "$USERNAME" == "" ] ; then
     chown -R root:root $HOME
 else
-    chown -R $USERNAME:$USERNAME $HOME
+    sudo chown -R $USERNAME:$USERNAME $HOME
 fi
 
 # config -> home/user
-sed -i "s|/config|${HOME}|" /kclient/index.js
+sudo sed -i "s|/config|${HOME}|" /kclient/index.js
+
