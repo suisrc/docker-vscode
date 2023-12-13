@@ -135,7 +135,7 @@ RUN mkdir /usr/local/node && \
 # vscode-server
 RUN VSC_RURL="https://github.com/coder/code-server/releases" &&\
     VSC_PATH="${VSC_RURL}/download/v${VSCR_VERSION}/code-server-${VSCR_VERSION}-linux-amd64.tar.gz" &&\
-    curl -o /tmp/vsc.tar.gz -L "${VSC_PATH}" && mkdir -p ${VSCR_HOME} && tar xzf /tmp/vsc.tar.gz -C ${VSCR_BIN}/ --strip-components=1 && \
+    curl -o /tmp/vsc.tar.gz -L "${VSC_PATH}" && mkdir -p ${VSCR_BIN} && tar xzf /tmp/vsc.tar.gz -C ${VSCR_BIN}/ --strip-components=1 && \
     ln -s ${VSCR_BIN}/bin/code-server /usr/bin/code-server && \
     rm -f ${VSCR_BIN}/node      && ln -s /usr/local/node/bin/node ${VSCR_BIN}/node &&\
     rm -f ${VSCR_BIN}/lib/node  && ln -s /usr/local/node/bin/node ${VSCR_BIN}/lib/node &&\
