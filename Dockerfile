@@ -134,11 +134,12 @@ RUN VSC_RURL="https://github.com/coder/code-server/releases" &&\
     curl -o /tmp/vsc.tar.gz -L "${VSC_PATH}" && mkdir -p ${VSC_HOME} && tar xzf /tmp/vsc.tar.gz -C ${VSC_HOME}/ --strip-components=1 && \
     rm -f ${VSC_HOME}/node      && ln -s /usr/local/node/bin/node ${VSC_HOME}/node &&\
     rm -f ${VSC_HOME}/lib/node  && ln -s /usr/local/node/bin/node ${VSC_HOME}/lib/node &&\
-    rm -f ${VSC_HOME}/lib/coder-cloud-agent && chown -R $USERNAME:$USERNAME ${VSC_HOME} /wsc &&\
+    rm -f ${VSC_HOME}/lib/coder-cloud-agent &&\
     ${VSC_HOME}/bin/code-server --install-extension mhutchie.git-graph &&\
     ${VSC_HOME}/bin/code-server --install-extension esbenp.prettier-vscode &&\
     ${VSC_HOME}/bin/code-server --install-extension humao.rest-client &&\
-    rm -rf /tmp/* /var/tmp/* $HOME/.local/share/code-server/CachedExtensionVSIXs/*
+    rm -rf /tmp/* /var/tmp/* $HOME/.local/share/code-server/CachedExtensionVSIXs/* &&\
+    chown -R $USERNAME:$USERNAME ${VSC_HOME} $HOME /wsc
 
 # =============================================================================================
 EXPOSE 7000
