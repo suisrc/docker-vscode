@@ -58,8 +58,8 @@ ENV NODE_VERSION="18.19.0" \
     TERM="xterm" \
     PATH=/usr/local/node/bin:$PATH \
     EXTENSIONS="" \
-    HOME="/wsc"
-    # HOME="/home/$USERNAME" 
+    HOME="/home/user" 
+    # HOME="/wsc"
 
 # update linux
 RUN apt update && \
@@ -122,7 +122,7 @@ ENTRYPOINT ["/init"]
 RUN curl -fsSL "https://raw.githubusercontent.com/ohmyzsh/ohmyzsh/master/tools/install.sh" &&\
     git clone "https://github.com/zsh-users/zsh-autosuggestions" ~/.oh-my-zsh/plugins/zsh-autosuggestions &&\
     echo "source ~/.oh-my-zsh/plugins/zsh-autosuggestions/zsh-autosuggestions.zsh" >> ~/.zshrc &&\
-    sed -i "1iZSH_DISABLE_COMPFIX=true" ~/.zshrc && rm -rf ~/.oh-my-zsh/plugins/zsh-autosuggestions/.git &&\
+    sed -i "1iZSH_DISABLE_COMPFIX=true" ~/.zshrc &&\
     # chown -R $USERNAME:$USERNAME $HOME && chown -R $USERNAME:$USERNAME /usr &&\
     apt-get autoremove && apt-get clean && rm -rf /tmp/* /var/tmp/* /var/lib/apt/lists/*
 
