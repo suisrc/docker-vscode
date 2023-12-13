@@ -132,19 +132,13 @@ RUN mkdir /usr/local/node && \
 RUN VSC_RURL="https://github.com/coder/code-server/releases" &&\
     VSC_PATH="${VSC_RURL}/download/v${VSCR_VERSION}/code-server-${VSCR_VERSION}-linux-amd64.tar.gz" &&\
     curl -o /tmp/vsc.tar.gz -L "${VSC_PATH}" && mkdir -p ${VSC_HOME} && tar xzf /tmp/vsc.tar.gz -C ${VSC_HOME}/ --strip-components=1 && \
-    ln -s ${VSC_HOME}/bin/code-server /usr/bin/code-server && \
     rm -f ${VSC_HOME}/node      && ln -s /usr/local/node/bin/node ${VSC_HOME}/node &&\
     rm -f ${VSC_HOME}/lib/node  && ln -s /usr/local/node/bin/node ${VSC_HOME}/lib/node &&\
     rm -f ${VSC_HOME}/lib/coder-cloud-agent && chown -R $USERNAME:$USERNAME ${VSC_HOME} /wsc &&\
-    rm -rf /tmp/* /var/tmp/*
+    ${VSC_HOME}/bin/code-server --install-extension mhutchie.git-graph &&\
+    ${VSC_HOME}/bin/code-server --install-extension esbenp.prettier-vscode &&\
+    ${VSC_HOME}/bin/code-server --install-extension humao.rest-client &&\
+    rm -rf /tmp/* /var/tmp/* $HOME/.local/share/code-server/CachedExtensionVSIXs/*
 
 # =============================================================================================
-USER $USERNAME
-# install extension ?ms-ceintl.vscode-language-pack-zh-hans
-RUN code-server --install-extension mhutchie.git-graph &&\
-    code-server --install-extension esbenp.prettier-vscode &&\
-    code-server --install-extension humao.rest-client &&\
-    rm -rf $HOME/.local/share/code-server/CachedExtensionVSIXs/*
-USER root
-
 EXPOSE 7000
