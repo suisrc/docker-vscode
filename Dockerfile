@@ -176,6 +176,7 @@ ENTRYPOINT ["/init"]
 EXPOSE 7000
 
 # =============================================================================================
+# kasm (noVnc)
 
 # env
 ENV KASM_VERSION="1.2.0" \
@@ -276,5 +277,17 @@ RUN APP_URL="https://github.com/kasmtech/KasmVNC/releases/download/v${KASM_VERSI
 COPY --from=kclient-stage /kclient /kclient
 
 
+# =============================================================================================
+# desktop
 
+RUN apt-get update && DEBIAN_FRONTEND=noninteractive \
+    apt-get install --no-install-recommends -y \
+    mousepad \
+    xfce4-terminal \
+    xfce4 \
+    xubuntu-default-settings \
+    xubuntu-icon-theme && \
+    rm -f /etc/xdg/autostart/xscreensaver.desktop && \
+    apt-get autoremove && apt-get clean && \
+    rm -rf /tmp/* /var/tmp/* /var/lib/apt/lists/*
 
