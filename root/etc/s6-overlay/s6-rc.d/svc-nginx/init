@@ -1,25 +1,30 @@
 #!/usr/bin/with-contenv bash
 set -e
 
+## NGX_KASM_CONF
+## NGX_KASM_PORT
+## NGX_KASM_IPV6： 是否启用ipv6
+## PASSWORD
+
 # # nginx Path
-# NGINX_CONFIG=/etc/nginx/conf.d/kasmvnc.server.conf
+NGX_KASM_CONF=/etc/nginx/conf.d/kasmvnc.server.conf
 
-# # 如果NGINX_CONFIG存在，跳过处理
-# if [ -f ${NGINX_CONFIG} ]; then
-#   echo "nginx config exists, skip modify"
-#   exit 0
-# fi
+# 如果NGINX_CONFIG存在，跳过处理
+if [ -f ${NGX_KASM_CONF} ]; then
+  echo "[nginx] kasmvnc conf exists, skip modify"
+  exit 0
+fi
 
-# echo "modify nginx to kasmvnc.server"
-# # modify nginx config
-# cp -f /etc/nginx/bak/kasmvnc.server.conf ${NGINX_CONFIG}
-# sed -i "s/7000/${NOVNC_NGX_PORT:-7000}/" ${NGINX_CONFIG}
-# sed -i "s/7001/${NOVNC_NGX_PORT:-7001}/" ${NGINX_CONFIG}
-# if [ ! -z ${DISABLE_IPV6+x} ]; then
-#   sed -i '/listen \[::\]/d' ${NGINX_CONFIG}
-# fi
-# if [ ! -z ${VNC_PW+x} ]; then
-#   sed -i 's/##//g' ${NGINX_CONFIG}
-# fi
+echo "[nginx] create nginx conf for kasmvnc"
 
-echo "=============================init nginx"
+# 修改默认的配置内容
+cp -f /etc/nginx/demo/kasm.server.conf  ${NGX_KASM_CONF}
+sed -i "s/7001/${NGX_KASM_PORT:-7001}/" ${NGX_KASM_CONF}
+if [ ! -z ${NGX_KASM_IPV6+x} ]; then
+  sed -i '/listen \[::\]/d' ${NGX_KASM_CONF}
+fi
+
+# 使用密码验证
+if [ ! -z ${KASM_PASS+x} ]; then
+  sed -i 's/##//g' ${NGX_KASM_CONF}
+fi

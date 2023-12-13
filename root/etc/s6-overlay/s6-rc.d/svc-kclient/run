@@ -1,0 +1,5 @@
+#!/usr/bin/with-contenv with-user
+
+# NodeJS wrapper
+cd /kclient
+exec node index.js

@@ -1,7 +1,37 @@
 # syntax=docker/dockerfile:1
 # empty image=scratch
+
+# ================================================================
+# https://github.com/linuxserver/docker-baseimage-kasmvnc/pkgs/container/baseimage-kasmvnc
+# FROM ghcr.io/linuxserver/baseimage-kasmvnc:arch-version-2023-12-12 as kasm-stage
+
+# nodejs builder
+FROM ubuntu:jammy as kclient-stage
+
+RUN echo "**** install build deps ****" && \
+    apt-get update && apt-get install -y gnupg && \
+    curl -s https://deb.nodesource.com/gpgkey/nodesource.gpg.key | apt-key add - && \
+    echo 'deb https://deb.nodesource.com/node_18.x jammy main' > /etc/apt/sources.list.d/nodesource.list && \
+    apt-get update && apt-get install -y \
+    g++ \
+    gcc \
+    libpam0g-dev \
+    libpulse-dev \
+    make \
+    nodejs &&\
+    echo "**** grab source ****" && \
+    mkdir -p /kclient && \
+    curl -o /tmp/kclient.tar.gz -L "https://github.com/linuxserver/kclient/archive/refs/tags/0.3.6.tar.gz" && \
+    tar xf /tmp/kclient.tar.gz -C /kclient/ --strip-components=1 &&\
+    echo "**** install node modules ****" && \
+    cd /kclient && \
+    npm install && \
+    rm -f package-lock.json
+
+# ================================================================
 FROM suisrc/openresty:1.21.4.1-hu-3 as openresty
 
+# ================================================================
 FROM alpine:3.17 as rootfs-stage
 
 # environment
@@ -84,9 +114,9 @@ RUN apt update && \
     xz-utils \
     locales \
     inotify-tools \
-    ssl-cert \
     ca-certificates \
     openssh-server \
+    python3 \
     gcc \
     binutils \
     libxfont2 \
@@ -111,10 +141,10 @@ RUN apt update && \
 RUN groupadd --gid 1000 $USERNAME && \
     useradd  --uid 1000 --gid $USERNAME -d $HOME -m -s /bin/bash $USERNAME   && \
     echo $USERNAME ALL=\(root\) NOPASSWD:ALL > /etc/sudoers.d/$USERNAME && \
-    chmod 0440 /etc/sudoers.d/$USERNAME && chmod g+rw /home
+    chmod 0440 /etc/sudoers.d/$USERNAME && chmod g+rw /home && \
+    chown $USERNAME:$USERNAME /etc/nginx/conf.d /usr/local/openresty/nginx/html
 
 WORKDIR $HOME
-ENTRYPOINT ["/init"]
 
 # # install oh-my-zsh
 # RUN curl -fsSL "https://raw.githubusercontent.com/ohmyzsh/ohmyzsh/master/tools/install.sh" &&\
@@ -141,5 +171,109 @@ RUN mkdir /usr/local/node && \
     rm -rf /tmp/* /var/tmp/* $HOME/.local/share/code-server/CachedExtensionVSIXs/* && \
     chown -R $USERNAME:$USERNAME ${VSC_HOME} $HOME /wsc
 
-# =============================================================================================
+ENTRYPOINT ["/init"]
 EXPOSE 7000
+
+# =============================================================================================
+
+# env
+ENV KASM_VERSION="1.2.0"
+    DISPLAY=:1 \
+    PERL5LIB=/usr/local/bin \
+    OMP_WAIT_POLICY=PASSIVE \
+    GOMP_SPINCOUNT=0 \
+    PULSE_RUNTIME_PATH=/defaults \
+    NVIDIA_DRIVER_CAPABILITIES=all
+
+# update
+RUN apt update && \
+    DEBIAN_FRONTEND=noninteractive \
+    apt install --no-install-recommends -y \
+    cups \
+    cups-client \
+    cups-pdf \
+    dbus-x11 \
+    ffmpeg \
+    file \
+    fuse-overlayfs \
+    intel-media-va-driver \
+    libdatetime-perl \
+    libfontenc1 \
+    libfreetype6 \
+    libgbm1 \
+    libgcrypt20 \
+    libgl1-mesa-dri \
+    libglu1-mesa \
+    libgnutls30 \
+    libgomp1 \
+    libhash-merge-simple-perl \
+    libjpeg-turbo8 \
+    liblist-moreutils-perl \
+    libp11-kit0 \
+    libpam0g \
+    libpixman-1-0 \
+    libscalar-list-utils-perl \
+    libswitch-perl \
+    libtasn1-6 \
+    libtry-tiny-perl \
+    libwebp7 \
+    libx11-6 \
+    libxau6 \
+    libxcb1 \
+    libxcursor1 \
+    libxdmcp6 \
+    libxext6 \
+    libxfixes3 \
+    libxfont2 \
+    libxinerama1 \
+    libxshmfence1 \
+    libxtst6 \
+    libyaml-tiny-perl \
+    mesa-va-drivers \
+    openbox \
+    openssh-client \
+    openssl \
+    pciutils \
+    perl \
+    procps \
+    pulseaudio \
+    pulseaudio-utils \
+    software-properties-common \
+    ssl-cert \
+    util-linux \
+    x11-apps \
+    x11-common \
+    x11-utils \
+    x11-xkb-utils \
+    x11-xkb-utils \
+    x11-xserver-utils \
+    xauth \
+    xdg-utils \
+    xfonts-base \
+    xkb-data \
+    xserver-common \
+    xserver-xorg-core \
+    xserver-xorg-video-amdgpu \
+    xserver-xorg-video-ati \
+    xserver-xorg-video-intel \
+    xserver-xorg-video-nouveau \
+    xserver-xorg-video-qxl \
+    xterm \
+    xutils \
+    zlib1g &&\
+    apt-get autoremove && apt-get clean && \
+    rm -rf /tmp/* /var/tmp/* /var/lib/apt/lists/*
+
+# kasm vnc
+# COPY --from=kasm-stage /build-out/ /
+RUN APP_URL="https://github.com/kasmtech/KasmVNC/releases/download/v${KASM_VERSION}/kasmvncserver_jammy_${KASM_VERSION}_amd64.deb" && \
+    curl -o /tmp/app.deb -L "${APP_URL}" && dpkg -i /tmp/app.deb && \
+    apt-get autoremove && apt-get clean && \
+    rm -rf /tmp/* /var/tmp/* /var/lib/apt/lists/*
+
+# kclient
+COPY --from=kasm-stage /kclient /kclient
+
+
+
+
