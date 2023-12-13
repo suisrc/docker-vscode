@@ -54,3 +54,6 @@ if [ "$USERNAME" == "root" ] || [ "$USERNAME" == "" ] ; then
 else
     chown -R $USERNAME:$USERNAME $HOME
 fi
+
+# config -> home/user
+sed -i "s|/config|${HOME}|" /kclient/index.js
