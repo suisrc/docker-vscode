@@ -1,4 +1,0 @@
-#!/bin/bash
-
-echo "filebrowser sidecar url: [domain]/gofiles/"
-exec /usr/local/bin/filebrowser --noauth --username=kasm_user

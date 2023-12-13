@@ -1,140 +1,157 @@
+# syntax=docker/dockerfile:1
+# empty image=scratch
+
+FROM alpine:3.17 as rootfs-stage
+
+# environment
+ENV REL=jammy
+ENV ARCH=amd64
+
+# install packages
+RUN apk add --no-cache bash curl tzdata xz
+
+# grab base image
+RUN mkdir /root-out && \
+  curl -o /rootfs.tar.gz -L https://partner-images.canonical.com/core/${REL}/current/ubuntu-${REL}-core-cloudimg-${ARCH}-root.tar.gz && \
+  tar xf  /rootfs.tar.gz -C /root-out && \
+  rm -rf  /root-out/var/log/*
+
+# set version for s6 overlay
+ARG S6_OVERLAY_VERSION="3.1.6.2"
+ARG S6_OVERLAY_ARCH="x86_64"
+
+# add s6 overlay
+ADD https://github.com/just-containers/s6-overlay/releases/download/v${S6_OVERLAY_VERSION}/s6-overlay-noarch.tar.xz /tmp
+RUN tar -C /root-out -Jxpf /tmp/s6-overlay-noarch.tar.xz
+ADD https://github.com/just-containers/s6-overlay/releases/download/v${S6_OVERLAY_VERSION}/s6-overlay-${S6_OVERLAY_ARCH}.tar.xz /tmp
+RUN tar -C /root-out -Jxpf /tmp/s6-overlay-${S6_OVERLAY_ARCH}.tar.xz
+
+# add s6 optional symlinks
+ADD https://github.com/just-containers/s6-overlay/releases/download/v${S6_OVERLAY_VERSION}/s6-overlay-symlinks-noarch.tar.xz /tmp
+RUN tar -C /root-out -Jxpf /tmp/s6-overlay-symlinks-noarch.tar.xz
+ADD https://github.com/just-containers/s6-overlay/releases/download/v${S6_OVERLAY_VERSION}/s6-overlay-symlinks-arch.tar.xz /tmp
+RUN tar -C /root-out -Jxpf /tmp/s6-overlay-symlinks-arch.tar.xz
+
+
 FROM suisrc/openresty:1.21.4.1-hu-3 as openresty
 
-
-######### Build Container Image ###########
-FROM kasmweb/core-ubuntu-jammy:1.13.1
-
-ARG S6_RELEASE=3.1.5.0
+# runtime stage
+FROM scratch
+COPY --from=rootfs-stage /root-out/ /
+COPY root/ /
 
 LABEL maintainer="suisrc@outlook.com"
-######### Start Customizations ###########
-USER root
 
-ENV HOME /home/kasm-default-profile
-ENV STARTUPDIR /dockerstartup
-ENV INST_SCRIPTS $STARTUPDIR/install
+# set environment variables
+ARG VSC_HOME="/vsc"
+ARG USERNAME="user"
+ENV NODE_VERSION="18.18.2" \
+    VSC_VERSION="4.19.1" \
+    LANGUAGE="en_US.UTF-8" \
+    LANG="en_US.UTF-8" \
+    TERM="xterm" \
+    S6_CMD_WAIT_FOR_SERVICES_MAXTIME="0" \
+    S6_VERBOSITY=1 \
+    HOME="/home/$USERNAME" \
+    # VIRTUAL_ENV=/lsiopy \
+    # PATH="/lsiopy/bin:$PATH" \
+
+# update linux
+RUN apt update && DEBIAN_FRONTEND=noninteractive && \
+    apt install --no-install-recommends -y \
+    dpkg \
+    sudo \
+    bash \
+    zsh \
+    vim \
+    nano \
+    jq \
+    curl \
+    git \
+    procps \
+    net-tools \
+    iputils-ping \
+    netcat \
+    ntpdate \
+    tzdata \
+    unzip \
+    p7zip \
+    xz-utils \
+    locales \
+    inotify-tools \
+    ssl-cert \
+    ca-certificates \
+    openssh-server \
+    gcc \
+    binutils \
+    libxfont2 \
+    libdbus-glib-1-2 \
+    libatomic1 \
+    fontconfig \
+    build-essential \
+    libz-dev \ 
+    zlib1g-dev \
+    fonts-noto-core \
+    fonts-noto-cjk \
+    fonts-noto-color-emoji &&\
+    fc-cache -f -v && \
+    locale-gen en_US.UTF-8 && \
+    mkdir -p /home/$USERNAME/project && \
+    ln -s /home/$USERNAME/project /ws && \
+    apt-get autoremove && \
+    apt-get clean && \
+    rm -rf /tmp/* /var/tmp/* /var/lib/apt/lists/*
+
+# creating the user and usergroup
+RUN groupadd --gid 1000 $USERNAME && \
+    useradd  --uid 1000 --gid $USERNAME -d $HOME -m -s /bin/bash $USERNAME   && \
+    echo $USERNAME ALL=\(root\) NOPASSWD:ALL > /etc/sudoers.d/$USERNAME && \
+    chmod 0440 /etc/sudoers.d/$USERNAME && chmod g+rw /home
+
 WORKDIR $HOME
+# https://github.com/just-containers/s6-overlay
+ENTRYPOINT ["/init"]
 
-######### Customize Container Here ###########
+# install oh-my-zsh
+RUN curl -fsSL "https://raw.githubusercontent.com/ohmyzsh/ohmyzsh/master/tools/install.sh" &&\
+    git clone "https://github.com/zsh-users/zsh-autosuggestions" ~/.oh-my-zsh/plugins/zsh-autosuggestions &&\
+    echo "source ~/.oh-my-zsh/plugins/zsh-autosuggestions/zsh-autosuggestions.zsh" >> ~/.zshrc &&\
+    sed -i "1iZSH_DISABLE_COMPFIX=true" ~/.zshrc && rm -rf ~/.oh-my-zsh/plugins/zsh-autosuggestions/.git &&\
+    apt-get autoremove && apt-get clean && rm -rf /tmp/* /var/tmp/* /var/lib/apt/lists/* &&\
+    chown -R $USERNAME:$USERNAME $HOME
 
-# copy openresty resource
+# install openresty, /var/run/openresty, /www <- /usr/local/openresty/nginx/html/
 COPY --from=openresty /usr/local/openresty /usr/local/openresty
 COPY --from=openresty /etc/nginx /etc/nginx
-# COPY --from=openresty /var/run/openresty /var/run/openresty
-# COPY --from=openresty /www /www -> /usr/local/openresty/nginx/html/
 
 RUN ln -s /usr/local/openresty/nginx/sbin/nginx /usr/bin/nginx && \
     ln -s /usr/local/openresty/nginx/html /www && mkdir /var/run/openresty
 
-# copy resource
-COPY /root/ /
 
-# update linux
-RUN apt update && \
-    DEBIAN_FRONTEND=noninteractive \
-    apt install --no-install-recommends -y \
-    binutils \
-    ca-certificates \
-    curl \
-    dpkg \
-    gcc \
-    git \
-    inotify-tools \
-    iputils-ping \
-    jq \
-    libatomic1 \
-    libxfont2 \
-    locales \
-    nano \
-    net-tools \
-    ntpdate \
-    procps \
-    ssl-cert \
-    openssh-server \
-    p7zip \
-    unzip \
-    xz-utils \
-    sudo \
-    libdbus-glib-1-2 \
-    # build-essential \
-    # python3-dev \
-    # python3-pip \
-    # python3-venv \
-    # libz-dev \
-    # zlib1g-dev \
-    && \
-    # pip3 install --upgrade pip && \
-    echo kasm-user ALL=\(root\) NOPASSWD:ALL > /etc/sudoers.d/kasm-user && \
-    apt autoremove -y && apt autoclean -y && \
-    rm -rf /tmp/* /var/tmp/* /var/lib/apt/lists/*
+# =============================================================================================
+# https://nodejs.org/en/
+ENV PATH=/usr/local/node/bin:$PATH \
+    VSC_DATA=$HOME/.local/share/code-server
 
-# s6-overlay
-# https://github.com/just-containers/s6-overlay/releases
-RUN S6_RURL="https://github.com/just-containers/s6-overlay/releases" &&\
-    S6_APP="${S6_RURL}/download/v${S6_RELEASE}/s6-overlay-x86_64.tar.xz" &&\
-    S6_CFG="${S6_RURL}/download/v${S6_RELEASE}/s6-overlay-noarch.tar.xz" &&\
-    curl -o /tmp/s6-cfg.tar.xz -L "${S6_CFG}" && tar -C / -Jxpf /tmp/s6-cfg.tar.xz &&\
-    curl -o /tmp/s6-app.tar.xz -L "${S6_APP}" && tar -C / -Jxpf /tmp/s6-app.tar.xz &&\
-    rm -rf /tmp/* /var/tmp/* /var/lib/apt/lists/*
+RUN mkdir /usr/local/node && \
+    curl -fSL --compressed "https://nodejs.org/dist/v${NODE_VERSION}/node-v$NODE_VERSION-linux-x64.tar.xz" | \
+    tar -xJ -C /usr/local/node --strip-components=1 && npm install -g yarn && node --version && npm --version
 
-ENV S6_KEEP_ENV=true \
-    S6_CMD_WAIT_FOR_SERVICES_MAXTIME=0 \
-    PATH="$PATH:/command"
+# vscode-server
+RUN VSC_RURL="https://github.com/coder/code-server/releases" &&\
+    VSC_PATH="${VSC_RURL}/download/v${VSC_VERSION}/code-server-${VSC_VERSION}-linux-amd64.tar.gz" &&\
+    curl -o /tmp/vsc.tar.gz -L "${VSC_PATH}" && mkdir -p ${VSC_HOME} && tar xzf /tmp/vsc.tar.gz -C ${VSC_HOME}/ --strip-components=1 && \
+    ln -s ${VSC_HOME}/bin/code-server /usr/bin/code-server && \
+    rm -f ${VSC_HOME}/node            && ln -s /usr/local/node/bin/node ${VSC_HOME}/node &&\
+    rm -f ${VSC_HOME}/lib/node        && ln -s /usr/local/node/bin/node ${VSC_HOME}/lib/node &&\
+    rm -f ${VSC_HOME}/lib/coder-cloud-agent &&\
+    chown -R $USERNAME:$USERNAME ${VSC_HOME} && \
+    rm -rf /tmp/* /var/tmp/*
 
-# 安装 filebrowser
-# 默认已经提供nginx进行文件下载，如果需要上传，可以启动 filebrowser
-RUN FILE_URL="https://github.com/filebrowser/filebrowser/releases/download/v2.23.0/linux-amd64-filebrowser.tar.gz" &&\
-    curl -o /tmp/filebrowser.tar.gz -L "${FILE_URL}" && tar -C /tmp -zxvf /tmp/filebrowser.tar.gz &&\
-    mv /tmp/filebrowser /usr/local/bin/filebrowser &&\
-    cp /etc/filebrowser/filesidecar.desktop $HOME/Desktop/filesr.desktop &&\
-    rm -rf /tmp/* /var/tmp/* /var/lib/apt/lists/*
+ENV EXTENSIONS=""
 
-## 安装 firefox
-# https://download-installer.cdn.mozilla.net/pub/firefox/releases/115.0.3/linux-x86_64/en-US/firefox-115.0.3.tar.bz2
-# https://download-installer.cdn.mozilla.net/pub/firefox/releases/115.0.3/linux-x86_64/zh-CN/firefox-115.0.3.tar.bz2
-RUN FILE_URL="https://download-installer.cdn.mozilla.net/pub/firefox/releases/115.0.3/linux-x86_64/en-US/firefox-115.0.3.tar.bz2" &&\
-    curl -o /tmp/firefox.tar.bz2 -L "${FILE_URL}" && tar -C /opt -jxvf /tmp/firefox.tar.bz2 &&\
-    ln -s /opt/firefox/firefox /usr/local/bin/firefox &&\
-    update-alternatives --install /usr/bin/x-www-browser x-www-browser /usr/local/bin/firefox 100 &&\
-    update-alternatives --config x-www-browser &&\
-    rm -rf /tmp/* /var/tmp/* /var/lib/apt/lists/*
+# =============================================================================================
+# default user
+USER $USERNAME
 
-# # 安装 msedge
-# # ??替代 apt install chromium chromium-sandbox
-# RUN if [ -z ${EDGE_RELEASE+x} ]; then \
-#         EDGE_RELEASE=$(curl -q https://packages.microsoft.com/repos/edge/pool/main/m/microsoft-edge-stable/ | grep href | grep .deb | sed 's/.*href="//g'  | cut -d '"' -f1 | sort --version-sort | tail -1); \
-#     fi &&\
-#     EDGE_URL="https://packages.microsoft.com/repos/edge/pool/main/m/microsoft-edge-stable/$EDGE_RELEASE" &&\
-#     curl -o /tmp/msedge.deb -L "${EDGE_URL}" &&\
-#     apt update && apt install -y /tmp/msedge.deb &&\
-#     cp /usr/share/applications/microsoft-edge.desktop $HOME/Desktop/msedge.desktop &&\
-#     apt autoclean -y && \
-#     rm -rf /tmp/* /var/tmp/* /var/lib/apt/lists/*
-# # 禁用沙盒
-# # sed -i 's|"\$@"| --no-sandbox  &|' /opt/microsoft/msedge/microsoft-edge
 
-# # # 安装 vscode
-# # # ??替代  https://github.com/VSCodium/vscodium/releases/download/1.78.2.23132/codium_1.78.2.23132_amd64.deb
-# RUN CODE_URL="https://update.code.visualstudio.com/latest/linux-deb-x64/stable" &&\
-#     curl -o /tmp/vscode.deb -L "${CODE_URL}" &&\
-#     apt update && apt install -y /tmp/vscode.deb &&\
-#     cp /usr/share/applications/code.desktop $HOME/Desktop/vscode.desktop &&\
-#     apt autoclean -y && \
-#     rm -rf /tmp/* /var/tmp/* /var/lib/apt/lists/*
-# # 禁用沙盒
-# # sed -i 's#/usr/share/code/code#& --no-sandbox##' /usr/share/applications/code.desktop
-
-# https://github.com/kasmtech/workspaces-core-images/tree/release/1.13.1/src/common/startup_scripts
-ENTRYPOINT ["/init"]
-######### End Customizations ###########
-
-RUN chown 1000:0 $HOME
-RUN $STARTUPDIR/set_user_permission.sh $HOME
-
-ENV KASM_USER kasm-user
-ENV HOME /home/kasm-user
-WORKDIR $HOME
-RUN mkdir -p $HOME && chown -R 1000:0 $HOME
-
-# 不可以迁移用户到1000上，使用s6-overlay在启动的时候，会因为权限问题无法正常启动
-# USER 1000

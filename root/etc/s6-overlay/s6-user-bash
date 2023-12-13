@@ -1,8 +1,0 @@
-#!/command/with-contenv bash
-
-## 如果$KASM_USER == root 或者 $KASM_USER == ""，不使用 s6-setuidgid
-if [ "$KASM_USER" == "root" ] || [ "$KASM_USER" == "" ] ; then
-    exec bash "$@"
-else
-    exec s6-setuidgid $KASM_USER bash "$@"
-fi

@@ -1,0 +1,8 @@
+#!/command/with-contenv bash
+
+## 如果$USER == root 或者 $USER == ""，不使用 s6-setuidgid
+if [ "$USER" == "root" ] || [ "$USER" == "" ] ; then
+    exec bash "$@"
+else
+    exec s6-setuidgid $USER bash "$@"
+fi
