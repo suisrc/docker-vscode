@@ -46,9 +46,6 @@ COPY root/ /
 LABEL maintainer="suisrc@outlook.com"
 
 # set environment variables
-ARG VSCR_BIN="/vsc"
-ARG USERNAME="user"
-
 ENV NODE_VERSION="18.19.0" \
     VSCR_VERSION="4.19.1" \
     S6_CMD_WAIT_FOR_SERVICES_MAXTIME="0" \
@@ -58,6 +55,8 @@ ENV NODE_VERSION="18.19.0" \
     TERM="xterm" \
     PATH=/usr/local/node/bin:$PATH \
     EXTENSIONS="" \
+    VSC_HOME="/vsc" \
+    USERNAME="user" \
     HOME="/home/user"
 
 # update linux
@@ -132,22 +131,20 @@ RUN mkdir /usr/local/node && \
 # vscode-server
 RUN VSC_RURL="https://github.com/coder/code-server/releases" &&\
     VSC_PATH="${VSC_RURL}/download/v${VSCR_VERSION}/code-server-${VSCR_VERSION}-linux-amd64.tar.gz" &&\
-    curl -o /tmp/vsc.tar.gz -L "${VSC_PATH}" && mkdir -p ${VSCR_BIN} && tar xzf /tmp/vsc.tar.gz -C ${VSCR_BIN}/ --strip-components=1 && \
-    ln -s ${VSCR_BIN}/bin/code-server /usr/bin/code-server && \
-    rm -f ${VSCR_BIN}/node      && ln -s /usr/local/node/bin/node ${VSCR_BIN}/node &&\
-    rm -f ${VSCR_BIN}/lib/node  && ln -s /usr/local/node/bin/node ${VSCR_BIN}/lib/node &&\
-    rm -f ${VSCR_BIN}/lib/coder-cloud-agent &&\
-    chown -R $USERNAME:$USERNAME ${VSCR_BIN} $HOME /usr &&\
+    curl -o /tmp/vsc.tar.gz -L "${VSC_PATH}" && mkdir -p ${VSC_HOME} && tar xzf /tmp/vsc.tar.gz -C ${VSC_HOME}/ --strip-components=1 && \
+    ln -s ${VSC_HOME}/bin/code-server /usr/bin/code-server && \
+    rm -f ${VSC_HOME}/node      && ln -s /usr/local/node/bin/node ${VSC_HOME}/node &&\
+    rm -f ${VSC_HOME}/lib/node  && ln -s /usr/local/node/bin/node ${VSC_HOME}/lib/node &&\
+    rm -f ${VSC_HOME}/lib/coder-cloud-agent && chown -R $USERNAME:$USERNAME ${VSC_HOME} /wsc &&\
     rm -rf /tmp/* /var/tmp/*
 
 # =============================================================================================
-# default user
 USER $USERNAME
 # install extension ?ms-ceintl.vscode-language-pack-zh-hans
 RUN code-server --install-extension mhutchie.git-graph &&\
     code-server --install-extension esbenp.prettier-vscode &&\
     code-server --install-extension humao.rest-client &&\
     rm -rf $HOME/.local/share/code-server/CachedExtensionVSIXs/*
+USER root
 
 EXPOSE 7000
-

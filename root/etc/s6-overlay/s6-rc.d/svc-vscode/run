@@ -1,4 +1,4 @@
-#!/usr/bin/with-contenv bash
+#!/usr/bin/with-user bash
 
 ## VSC_ARGS: vscode参数
 echo 'start vscode server ...'
