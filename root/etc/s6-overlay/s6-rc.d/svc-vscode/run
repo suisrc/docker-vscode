@@ -1,17 +1,5 @@
-#!/usr/bin/with-contenv bash
+#!/usr/bin/with-contenv with-user
 echo 'start vscode server ...'
 
-## 如果$USERNAME == root 或者 $USERNAME == ""，不使用 s6-setuidgid
-if [ "$USERNAME" == "root" ] || [ "$USERNAME" == "" ] ; then
-    exec code-server --host ${VSC_HOST:-0.0.0.0} --port ${VSC_PORT:-7000} $VSC_ARGS /wsc
-else
-    exec s6-setuidgid $USERNAME code-server --host ${VSC_HOST:-0.0.0.0} --port ${VSC_PORT:-7000} $VSC_ARGS /wsc
-fi
-
-
-
-# #!/usr/bin/with-user bash
-
-# ## VSC_ARGS: vscode参数
-# echo 'start vscode server ...'
-# code-server --host ${VSC_HOST:-0.0.0.0} --port ${VSC_PORT:-7000} $VSC_ARGS /wsc
+## VSC_ARGS: vscode参数
+code-server --host ${VSC_HOST:-0.0.0.0} --port ${VSC_PORT:-7000} $VSC_ARGS /wsc
