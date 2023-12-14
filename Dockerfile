@@ -30,7 +30,7 @@ RUN echo "**** grab source ****" && \
     rm -f package-lock.json
 
 # ================================================================
-FROM suisrc/openresty:1.21.4.1-hu-3 as openresty
+FROM suisrc/openresty:1.21.4.1-hu-3 as openresty-stage
 
 # ================================================================
 FROM alpine:3.17 as rootfs-stage
@@ -43,10 +43,10 @@ ENV ARCH=amd64
 RUN apk add --no-cache bash curl tzdata xz
 
 # grab base image
-RUN mkdir /out && \
+RUN mkdir /rootfs && \
   curl -o /rootfs.tar.gz -L https://partner-images.canonical.com/core/${REL}/current/ubuntu-${REL}-core-cloudimg-${ARCH}-root.tar.gz && \
-  tar xf  /rootfs.tar.gz -C /out && \
-  rm -rf  /out/var/log/*
+  tar xf  /rootfs.tar.gz -C /rootfs && \
+  rm -rf  /rootfs/var/log/*
 
 # https://github.com/just-containers/s6-overlay
 # set version for s6 overlay
@@ -55,25 +55,25 @@ ARG S6_OVERLAY_ARCH="x86_64"
 
 # add s6 overlay
 ADD https://github.com/just-containers/s6-overlay/releases/download/v${S6_OVERLAY_VERSION}/s6-overlay-noarch.tar.xz /tmp
-RUN tar -C /out -Jxpf /tmp/s6-overlay-noarch.tar.xz
+RUN tar -C /rootfs -Jxpf /tmp/s6-overlay-noarch.tar.xz
 ADD https://github.com/just-containers/s6-overlay/releases/download/v${S6_OVERLAY_VERSION}/s6-overlay-${S6_OVERLAY_ARCH}.tar.xz /tmp
-RUN tar -C /out -Jxpf /tmp/s6-overlay-${S6_OVERLAY_ARCH}.tar.xz
+RUN tar -C /rootfs -Jxpf /tmp/s6-overlay-${S6_OVERLAY_ARCH}.tar.xz
 
 # add s6 optional symlinks
 ADD https://github.com/just-containers/s6-overlay/releases/download/v${S6_OVERLAY_VERSION}/s6-overlay-symlinks-noarch.tar.xz /tmp
-RUN tar -C /out -Jxpf /tmp/s6-overlay-symlinks-noarch.tar.xz
+RUN tar -C /rootfs -Jxpf /tmp/s6-overlay-symlinks-noarch.tar.xz
 ADD https://github.com/just-containers/s6-overlay/releases/download/v${S6_OVERLAY_VERSION}/s6-overlay-symlinks-arch.tar.xz /tmp
-RUN tar -C /out -Jxpf /tmp/s6-overlay-symlinks-arch.tar.xz
+RUN tar -C /rootfs -Jxpf /tmp/s6-overlay-symlinks-arch.tar.xz
 
 # install openresty, /var/run/openresty, /www <- /usr/local/openresty/nginx/html/
-COPY --from=openresty /usr/local/openresty /out/usr/local/openresty
-COPY --from=openresty /etc/nginx           /out/etc/nginx
-RUN  mkdir /out/var/run/openresty
+COPY --from=openresty-stage /usr/local/openresty /rootfs/usr/local/openresty
+COPY --from=openresty-stage /etc/nginx           /rootfs/etc/nginx
+RUN  mkdir /rootfs/var/run/openresty
 
 # runtime stage
 FROM scratch
-COPY --from=rootfs-stage /out/ /
-COPY root/ /
+COPY --from=rootfs-stage /rootfs/ /
+COPY rootfs/ /
 
 LABEL maintainer="suisrc@outlook.com"
 
@@ -273,12 +273,12 @@ RUN APP_URL="https://github.com/kasmtech/KasmVNC/releases/download/v${KASM_VERSI
     apt-get autoremove && apt-get clean && \
     rm -rf /tmp/* /var/tmp/* /var/lib/apt/lists/*
 
-# kclient
+# =============================================================================================
+# kclient, 访问终端， 提供终端页面， 上传/下载文件， 声音传输
 COPY --from=kclient-stage /kclient /kclient
 
-
 # =============================================================================================
-# desktop
+# desktop for xfce4
 
 RUN apt-get update && DEBIAN_FRONTEND=noninteractive \
     apt-get install --no-install-recommends -y \
@@ -292,15 +292,18 @@ RUN apt-get update && DEBIAN_FRONTEND=noninteractive \
     rm -rf /tmp/* /var/tmp/* /var/lib/apt/lists/*
 
 
-# # 安装 firefox
-# # https://download-installer.cdn.mozilla.net/pub/firefox/releases/115.0.3/linux-x86_64/en-US/firefox-115.0.3.tar.bz2
-# # https://download-installer.cdn.mozilla.net/pub/firefox/releases/115.0.3/linux-x86_64/zh-CN/firefox-115.0.3.tar.bz2
-# RUN FILE_URL="https://download-installer.cdn.mozilla.net/pub/firefox/releases/115.0.3/linux-x86_64/en-US/firefox-115.0.3.tar.bz2" &&\
-#     curl -o /tmp/firefox.tar.bz2 -L "${FILE_URL}" && tar -C /opt -jxvf /tmp/firefox.tar.bz2 &&\
-#     ln -s /opt/firefox/firefox /usr/local/bin/firefox &&\
-#     update-alternatives --install /usr/bin/x-www-browser x-www-browser /usr/local/bin/firefox 100 &&\
-#     update-alternatives --config x-www-browser &&\
-#     rm -rf /tmp/* /var/tmp/* /var/lib/apt/lists/*
+# =============================================================================================
+# install other apps
+
+# 安装 firefox, 因为 firefox 体积是这几个中最小的
+# https://www.mozilla.org/zh-CN/firefox/all/#product-desktop-release
+RUN APP_VERSION="120.0.1" &&\ 
+    APP_URL="https://download-installer.cdn.mozilla.net/pub/firefox/releases/${APP_VERSION}/linux-x86_64/en-US/firefox-${APP_VERSION}.tar.bz2" &&\
+    curl -o /tmp/firefox.tar.bz2 -L "${APP_URL}" && tar -C /opt -jxvf /tmp/firefox.tar.bz2 &&\
+    ln -s /opt/firefox/firefox /usr/local/bin/firefox &&\
+    update-alternatives --install /usr/bin/x-www-browser x-www-browser /usr/local/bin/firefox 100 &&\
+    update-alternatives --config x-www-browser &&\
+    rm -rf /tmp/* /var/tmp/* /var/lib/apt/lists/*
 
 # # 安装 msedge
 # # ??替代 apt install chromium chromium-sandbox
