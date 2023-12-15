@@ -1,5 +1,5 @@
 ## 4. 安装 webtop [vscode]
-FROM ghcr.io/suisrc/webtop:sshd-23121401
+FROM ghcr.io/suisrc/webtop:sshd-23121401-vsas
 # ================================================================
 
 # install nodejs and vscode <- https://nodejs.org/en/

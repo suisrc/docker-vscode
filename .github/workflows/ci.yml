@@ -6,7 +6,7 @@ on:
   #release:
   #  types: [published]
   push:
-    branches: [ vasm ]
+    branches: [ vsas ]
 
 env:
   IMAGE_NAME: suisrc/webtop
@@ -17,7 +17,7 @@ env:
   ALIYUN_REGISTRY: registry.cn-hongkong.aliyuncs.com
 
 jobs:
-  vasm:
+  vsas:
     # if: false
     runs-on: ubuntu-latest
 

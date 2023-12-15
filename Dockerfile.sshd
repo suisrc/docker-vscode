@@ -1,5 +1,5 @@
 ## 3. 安装 webtop [sshd]
-FROM ghcr.io/suisrc/webtop:nginx-23121401
+FROM ghcr.io/suisrc/webtop:nginx-23121401-vsas
 # ================================================================
 
 # set environment variables
