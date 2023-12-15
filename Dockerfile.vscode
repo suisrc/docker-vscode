@@ -2,7 +2,13 @@
 FROM ghcr.io/suisrc/webtop:sshd-23121401-vsas
 # ================================================================
 
-ENV SVC_SSHD="0"
+# set environment variables
+ENV SVC_SSHD="0" \
+    NODE_VERSION="18.19.0" \
+    VSCR_VERSION="4.19.1" \
+    PATH=/usr/local/node/bin:$PATH \
+    EXTENSIONS="" \
+    VSC_HOME="/vsc"
 
 # install nodejs and vscode <- https://nodejs.org/en/
 RUN mkdir /usr/local/node && \

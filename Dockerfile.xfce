@@ -12,8 +12,9 @@ FROM ghcr.io/suisrc/webtop:vscode-23121401-vsas
 
 COPY rootfs/ /
 
-# env
-ENV KASM_VERSION="1.2.0" \
+# set environment variables
+ENV TERM="xterm" \
+    KASM_VERSION="1.2.0" \
     DISPLAY=:1 \
     PERL5LIB=/usr/local/bin \
     OMP_WAIT_POLICY=PASSIVE \
