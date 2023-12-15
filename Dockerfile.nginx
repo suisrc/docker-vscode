@@ -6,8 +6,8 @@ FROM ghcr.io/suisrc/webtop:jammy-23121401-vsas
 # ================================================================
 
 # copy openresty
-COPY --from=openresty-stage /usr/local/openresty /rootfs/usr/local/openresty
-COPY --from=openresty-stage /etc/nginx           /rootfs/etc/nginx
+COPY --from=openresty-stage /usr/local/openresty /usr/local/openresty
+COPY --from=openresty-stage /etc/nginx           /etc/nginx
 
 # set environment variables
 ENV LANGUAGE="zh_CN.UTF-8" \
