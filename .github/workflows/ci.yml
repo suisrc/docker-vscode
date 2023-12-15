@@ -8,13 +8,20 @@ on:
   push:
     branches: [ vsas ]
 
-# dev 专注于开发环境
-# ms-dev 开发环境，使用 ms 插件库
-# playwright-ms-dev 开发环境，使用 playwright-ms 插件库
+# jammy: ubuntu 22.04基础镜像
+# kclient: 修复了kasm 终端的一些问题和增加了一些功能
+# nginx: jammy基础上安装了nginx
+# sshd: nginx基础上安装了sshd
+# vscode: sshd基础上安装了vscode
+# xfce: vscode基础上安装了xfce
+#
+# dev-~: 专注于开发环境
+# ms-dev-~: 开发环境，使用 ms 插件库
+# playwright-ms-dev-~: 开发环境，使用 playwright-ms 插件库
 
 env:
   IMAGE_NAME: suisrc/webtop
-  IMAGE_VERSION: 'ms-dev-vscode-23121401'
+  IMAGE_VERSION: 'playwirght-ms-dev-vscode-23121401'
   GITHUB_REGISTRY: ghcr.io
   DOCKER_REGISTRY: docker.io
   QUAY_REGISTRY: quay.io
