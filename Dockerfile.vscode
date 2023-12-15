@@ -28,7 +28,8 @@ FROM node:18-alpine
 LABEL maintainer="suisrc@outlook.com"
 
 # set environment variables
-ENV S6_CMD_WAIT_FOR_SERVICES_MAXTIME="0" \
+ENV SVC_SSHD="0" \
+    S6_CMD_WAIT_FOR_SERVICES_MAXTIME="0" \
     S6_VERBOSITY=1 \
     ZSH_CUSTOM="/root/.zsh/plugins" \
     VSCR_VERSION="4.19.1" \
