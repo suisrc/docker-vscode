@@ -1,5 +1,10 @@
 #!/bin/bash
 
+if [[ "${SVC_NGINX}" == "0" ]]; then
+    echo 'disable nginx server ...'
+    s6-svc -O exit
+fi
+
 # echo 'starting nginx server'
 # /usr/local/openresty/nginx/sbin/nginx -> /usr/local/bin/nginx
 if [ ! `pgrep nginx` ]; then

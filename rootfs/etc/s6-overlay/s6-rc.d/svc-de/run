@@ -1,4 +1,0 @@
-#!/usr/bin/with-contenv with-user
-
-cd $HOME
-exec bash /defaults/startwm.sh

@@ -1,0 +1,20 @@
+#!/usr/bin/with-contenv bash
+
+if [[ "${SVC_SSHD}" == "0" ]]; then
+    echo 'disable sshd server ...'
+    s6-svc -O exit
+fi
+
+if [ ! -f '/etc/ssh/ssh_host_rsa_key' ]; then
+    echo 'init sshd keygen ...'
+    # sshd-keygen,初始化
+    ssh-keygen -q -t rsa -N '' -f /etc/ssh/ssh_host_rsa_key
+    ssh-keygen -q -t rsa -N '' -f /etc/ssh/ssh_host_dsa_key
+    ssh-keygen -q -t rsa -N '' -f /etc/ssh/ssh_host_ecdsa_key
+    ssh-keygen -q -t rsa -N '' -f /etc/ssh/ssh_host_ed25519_key
+    # 配置root的登录密码
+    echo "user:${PASSWORD}" | chpasswd
+fi
+
+echo 'start sshd server ... '
+exec /usr/sbin/sshd -D
