@@ -1,9 +1,0 @@
-#!/usr/bin/with-contenv with-user
-
-if [[ "${SVC_KASM}" == "0" ]]; then
-    echo 'disable kams[de] server ...'
-    s6-svc -O exit
-fi
-
-cd $HOME
-exec bash /defaults/startwm.sh

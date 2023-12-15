@@ -21,17 +21,22 @@ RUN tar -C /rootfs -Jxpf /tmp/s6-overlay-symlinks-noarch.tar.xz
 ADD https://github.com/just-containers/s6-overlay/releases/download/v${S6_VERSION}/s6-overlay-symlinks-arch.tar.xz /tmp
 RUN tar -C /rootfs -Jxpf /tmp/s6-overlay-symlinks-arch.tar.xz
 
-FROM node:18-alpine
+FROM debian:bullseye-slim
 # ================================================================
-# 最小安装版, 这是一个工具，不能作为开发环境的基础环境使用，因此这里只提供root身份
 
 LABEL maintainer="suisrc@outlook.com"
 
 # set environment variables
 ENV S6_CMD_WAIT_FOR_SERVICES_MAXTIME="0" \
     S6_VERBOSITY=1 \
-    ZSH_CUSTOM="/root/.zsh/plugins" \
+    LANGUAGE="zh_CN.UTF-8" \
+    LANG="zh_CN.UTF-8" \
+    USERNAME="user" \
+    HOME="/home/user" \
+    ZSH_CUSTOM="/home/user/.zsh/plugins" \
+    NODE_VERSION="18.19.0" \
     VSCR_VERSION="4.19.1" \
+    PATH=/usr/local/node/bin:$PATH \
     VSC_HOME="/vsc" \
     WSC_HOME="/wsc" \
     EXTENSIONS=""
@@ -39,24 +44,74 @@ ENV S6_CMD_WAIT_FOR_SERVICES_MAXTIME="0" \
 COPY --from=rootfs-stage /rootfs/ /
 COPY rootfs/ /
 
-RUN apk add --no-cache curl gnupg openssh bash zsh jq tar git xz libc6-compat &&\
-    rm -rf /tmp/* /var/tmp/*
+RUN apt update && DEBIAN_FRONTEND=noninteractive \
+    apt install --no-install-recommends -y \
+    bash \
+    curl \
+    wget \
+    nano \
+    procps \
+    net-tools \
+    netcat \
+    tzdata \
+    ntpdate \
+    iputils-ping \
+    locales \
+    inotify-tools \
+    ca-certificates &&\
+    dpkg \
+    sudo \
+    zsh \
+    jq \
+    git \
+    unzip \
+    p7zip \
+    xz-utils \
+    util-linux \
+    ssl-cert \
+    openssl \
+    openssh-client \
+    openssh-server \
+    python3 \
+    gcc \
+    binutils \
+    libxfont2 \
+    libdbus-glib-1-2 \
+    libatomic1 \
+    build-essential \
+    libz-dev \ 
+    zlib1g-dev \
+    fontconfig \
+    fonts-noto-core \
+    fonts-noto-cjk \
+    fonts-noto-color-emoji &&\
+    fc-cache -f -v && \
+    locale-gen zh_CN.UTF-8 && \
+    apt-get autoremove && apt-get clean && \
+    rm -rf /tmp/* /var/tmp/* /var/lib/apt/lists/*
 
-# autosuggestions
-RUN git clone --depth 1 "https://github.com/zsh-users/zsh-autosuggestions" "${ZSH_CUSTOM}/zsh-autosuggestions" &&\
+# creating the user and usergroup
+RUN groupadd --gid 1000 $USERNAME && \
+    useradd  --uid 1000 --gid $USERNAME -d $HOME -m -s /bin/bash $USERNAME   && \
+    echo $USERNAME ALL=\(root\) NOPASSWD:ALL > /etc/sudoers.d/$USERNAME && \
+    chmod 0440 /etc/sudoers.d/$USERNAME && chmod g+rw /home && \
+    chown $USERNAME:$USERNAME /etc/nginx/conf.d /usr/local/openresty/nginx/html && \
+    git clone --depth 1 "https://github.com/zsh-users/zsh-autosuggestions" "${ZSH_CUSTOM}/zsh-autosuggestions" &&\
     echo "source ${ZSH_CUSTOM}/zsh-autosuggestions/zsh-autosuggestions.zsh" >> ~/.zshrc &&\
     sed -i "1iZSH_DISABLE_COMPFIX=true" ~/.zshrc
 
 WORKDIR $HOME
 
 # install nodejs and vscode <- https://nodejs.org/en/
-RUN VSC_RURL="https://github.com/coder/code-server/releases" &&\
+RUN mkdir /usr/local/node && \
+    curl -fSL --compressed "https://nodejs.org/dist/v${NODE_VERSION}/node-v$NODE_VERSION-linux-x64.tar.xz" | \
+    tar -xJ -C /usr/local/node --strip-components=1 && npm install -g yarn && node --version && npm --version && \
+    VSC_RURL="https://github.com/coder/code-server/releases" &&\
     VSC_PATH="${VSC_RURL}/download/v${VSCR_VERSION}/code-server-${VSCR_VERSION}-linux-amd64.tar.gz" &&\
     curl -o /tmp/vsc.tar.gz -L "${VSC_PATH}" && mkdir -p ${VSC_HOME} ${WSC_HOME} && tar xzf /tmp/vsc.tar.gz -C ${VSC_HOME}/ --strip-components=1 && \
-    rm -f ${VSC_HOME}/node      && ln -s /usr/local/bin/node ${VSC_HOME}/node && \
-    rm -f ${VSC_HOME}/lib/node  && ln -s /usr/local/bin/node ${VSC_HOME}/lib/node && \
+    rm -f ${VSC_HOME}/node      && ln -s /usr/local/node/bin/node ${VSC_HOME}/node && \
+    rm -f ${VSC_HOME}/lib/node  && ln -s /usr/local/node/bin/node ${VSC_HOME}/lib/node && \
     rm -f ${VSC_HOME}/lib/coder-cloud-agent && \
-    ln -s /lib/ld-musl-x86_64.so.1 /lib/ld-linux-x86-64.so.2 &&\
     ln -s ${VSC_HOME}/bin/code-server /usr/bin/code-server && \
     ${VSC_HOME}/bin/code-server --install-extension mhutchie.git-graph && \
     ${VSC_HOME}/bin/code-server --install-extension esbenp.prettier-vscode && \

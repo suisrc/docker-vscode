@@ -42,4 +42,12 @@ if [ $EXTENSIONS ]; then
         code-server --install-extension $i
     done
 fi
+
+# 更改文件权限，否则 firefox 无法启动
+if [ "$USERNAME" == "root" ] || [ "$USERNAME" == "" ] ; then
+    chown -R root:root $HOME
+else
+    sudo chown -R $USERNAME:$USERNAME $HOME
+fi
+
 echo 'init vscode server end'

@@ -2,51 +2,6 @@
 set -e
 echo "Init System By S6-Overlay"
 
-#########################################################################
-# 处理证书配置
-
-# ${HOME}/.vnc/self.pem不存在，新建自签证书
-if [[ ! -f ${HOME}/.vnc/self.pem ]]; then
-    # Create cert for KasmVNC
-    echo "Creating self-signed cert file for KasmVNC"
-    mkdir -p ${HOME}/.vnc
-    openssl req -x509 -nodes -days 3650 -newkey rsa:2048 \
-    -keyout ${HOME}/.vnc/self.pem \
-    -out    ${HOME}/.vnc/self.pem \
-    -subj "/C=CN/ST=LN/L=DL/O=None/OU=SSC/CN=*"
-fi
-
-# 使用密码验证
-KASM_PASS_PATH="$HOME/.kasmpasswd"
-if [[ -f $KASM_PASS_PATH ]]; then
-    echo -e "purging existing VNC password settings"
-    rm -f $KASM_PASS_PATH
-fi
-if [ ! -z ${KASM_PASS+x} ]; then
-    # echo "user:$(openssl passwd -apr1 ${VNC_PW}):ow" > $KASM_PASS_PATH
-    KASM_PW_HASH=$(python3 -c "import crypt; print(crypt.crypt('${KASM_PASS}', '\$5\$kasm\$'));")
-    echo "${KASM_USER:-user}:${KASM_PW_HASH}:ow" > $KASM_PASS_PATH
-    chmod 600 $KASM_PASS_PATH
-fi
-
-# default file copies first run
-if [[ ! -f "${HOME}/.config/openbox/autostart" ]]; then
-  mkdir -p  ${HOME}/.config/openbox
-  cp /defaults/autostart ${HOME}/.config/openbox/autostart
-fi
-if [[ ! -f "${HOME}/.config/openbox/menu.xml" ]]; then
-  mkdir -p  ${HOME}/.config/openbox
-  cp /defaults/menu.xml ${HOME}/.config/openbox/menu.xml
-fi
-if [[ -f /usr/local/etc/kasmvnc/kasmvnc.yaml.lsio ]]; then
-  sudo mv /usr/local/etc/kasmvnc/kasmvnc.yaml.lsio /usr/local/etc/kasmvnc/kasmvnc.yaml
-fi
-# XDG Home
-sudo printf "${HOME}/.XDG" > /run/s6/container_environment/XDG_RUNTIME_DIR
-if [ ! -d "${HOME}/.XDG" ]; then
-  mkdir -p ${HOME}/.XDG
-fi
-
 # 更改文件权限，否则 firefox 无法启动
 if [ "$USERNAME" == "root" ] || [ "$USERNAME" == "" ] ; then
     chown -R root:root $HOME
@@ -54,6 +9,4 @@ else
     sudo chown -R $USERNAME:$USERNAME $HOME
 fi
 
-# config -> home/user
-sudo sed -i "s|/config|${HOME}|" /kclient/index.js
 
