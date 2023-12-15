@@ -44,8 +44,7 @@ ENV KASM_VERSION="1.2.0" \
     NVIDIA_DRIVER_CAPABILITIES=all
 
 # update
-RUN apt update && \
-    DEBIAN_FRONTEND=noninteractive \
+RUN apt update && DEBIAN_FRONTEND=noninteractive \
     apt install --no-install-recommends -y \
     cups \
     cups-client \

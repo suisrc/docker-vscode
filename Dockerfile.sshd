@@ -17,8 +17,7 @@ RUN groupadd --gid 1000 $USERNAME && \
 WORKDIR $HOME
 
 # update linux
-RUN apt update && \
-    DEBIAN_FRONTEND=noninteractive \
+RUN apt update && DEBIAN_FRONTEND=noninteractive \
     apt install --no-install-recommends -y \
     dpkg \
     sudo \

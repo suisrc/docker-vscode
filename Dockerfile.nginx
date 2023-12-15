@@ -16,8 +16,7 @@ ENV LANGUAGE="zh_CN.UTF-8" \
 RUN mkdir /var/run/openresty &&\
     ln -s /usr/local/openresty/nginx/sbin/nginx /usr/bin/nginx && \
     ln -s /usr/local/openresty/nginx/html       /www &&\
-    apt update && \
-    DEBIAN_FRONTEND=noninteractive \
+    apt update && DEBIAN_FRONTEND=noninteractive \
     apt install --no-install-recommends -y \
     bash \
     curl \
