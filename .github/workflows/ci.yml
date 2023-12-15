@@ -26,8 +26,7 @@ jobs:
 
       - name: Build image
         run: |
-          BASE_IMAGE_TAGE=${IMAGE_VERSION#*-} \
-          docker build -f "Dockerfile.${IMAGE_VERSION%%-*}" -t image --no-cache .
+          docker build -f "Dockerfile.${IMAGE_VERSION%%-*}" -t image --no-cache . --build-arg BASE_IMAGE_TAGE=${IMAGE_VERSION#*-}
 
       - name: Push github image
         run: |
