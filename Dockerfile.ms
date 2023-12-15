@@ -1,4 +1,4 @@
-## x. all in one, BASE_IMAGE_TAG = zvdev / zxdev
+## x. ms 依赖的 vscode
 ARG BASE_IMAGE_TAG
 
 FROM ghcr.io/suisrc/webtop:${BASE_IMAGE_TAG}-vsas
