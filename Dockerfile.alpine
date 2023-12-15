@@ -39,6 +39,7 @@ ENV SVC_SSHD="0" \
 
 COPY --from=rootfs-stage /rootfs/ /
 COPY rootfs/ /
+ENTRYPOINT ["/init"]
 
 RUN apk add --no-cache curl gnupg openssh bash zsh jq tar git xz libc6-compat &&\
     rm -rf /tmp/* /var/tmp/*
@@ -60,8 +61,6 @@ RUN VSC_RURL="https://github.com/coder/code-server/releases" &&\
     ln -s /lib/ld-musl-x86_64.so.1 /lib/ld-linux-x86-64.so.2 &&\
     ln -s ${VSC_HOME}/bin/code-server /usr/bin/code-server && \
     ${VSC_HOME}/bin/code-server --install-extension mhutchie.git-graph && \
-    ${VSC_HOME}/bin/code-server --install-extension esbenp.prettier-vscode && \
-    ${VSC_HOME}/bin/code-server --install-extension humao.rest-client && \
     rm -rf /tmp/* /var/tmp/* $HOME/.local/share/code-server/CachedExtensionVSIXs/* && \
     ln -s ${WSC_HOME} ${HOME}/wsc
 
