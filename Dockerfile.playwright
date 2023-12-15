@@ -7,4 +7,5 @@ FROM ghcr.io/suisrc/webtop:${BASE_IMAGE_TAG}-vsas
 RUN npm install -g typescript playwright 
 #go install github.com/playwright-community/playwright-go@latest
 
-RUN playwright install firefox --with-deps
+RUN playwright install firefox --with-deps &&
+    apt-autoremove -y && apt-get clean && rm -rf /var/lib/apt/lists/* /tmp/* /var/tmp/*
