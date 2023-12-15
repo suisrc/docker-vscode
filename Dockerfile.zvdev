@@ -1,0 +1,4 @@
+## x. 最后安装 java， golang 等开发环境, all in one
+# ================================================================
+FROM ghcr.io/suisrc/webtop:vscode-23121401
+
