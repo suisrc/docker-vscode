@@ -1,7 +1,7 @@
-## x. all in one, IMAGE_TAG = zvdev / zxdev
-ARG IMAGE_TAG=zvdev-23121401
+## x. all in one, BASE_IMAGE_TAG = zvdev / zxdev
+ARG BASE_IMAGE_TAG
 
-FROM ghcr.io/suisrc/webtop:${IMAGE_TAG}
+FROM ghcr.io/suisrc/webtop:${BASE_IMAGE_TAG}
 # ================================================================
 
 RUN zsh -c "grep -rl open-vsx.org /vsc/**/*.js /vsc/**/*.json /vsc/**/*.map | xargs sed -i \

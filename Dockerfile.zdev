@@ -1,7 +1,7 @@
-## x. 最后安装 java， golang 等开发环境, all in one, IMAGE_TAG = vscode / xfce
-ARG IMAGE_TAG=vscode-23121401
+## x. 最后安装 java， golang 等开发环境, all in one, BASE_IMAGE_TAG = vscode / xfce
+ARG BASE_IMAGE_TAG
 
-FROM ghcr.io/suisrc/webtop:${IMAGE_TAG}
+FROM ghcr.io/suisrc/webtop:${BASE_IMAGE_TAG}
 # ================================================================
 
 RUN mkdir -p ${HOME}/.go/bin

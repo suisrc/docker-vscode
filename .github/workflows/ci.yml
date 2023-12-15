@@ -10,7 +10,7 @@ on:
 
 env:
   IMAGE_NAME: suisrc/webtop
-  IMAGE_VERSION: 'xfce-23121401'
+  IMAGE_VERSION: 'zdev-vscode-23121401'
   GITHUB_REGISTRY: ghcr.io
   DOCKER_REGISTRY: docker.io
   QUAY_REGISTRY: quay.io
@@ -26,6 +26,7 @@ jobs:
 
       - name: Build image
         run: |
+          BASE_IMAGE_TAGE=${IMAGE_VERSION#*-} \
           docker build -f "Dockerfile.${IMAGE_VERSION%%-*}" -t image --no-cache .
 
       - name: Push github image
