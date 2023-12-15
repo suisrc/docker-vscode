@@ -25,7 +25,7 @@ RUN echo "**** grab source ****" && \
     rm -f package-lock.json
 
 
-FROM ghcr.io/suisrc/webtop:vscode-23121401-vsas
+FROM ghcr.io/suisrc/webtop:jammy-23121401-vsas
 # ================================================================
 # kclient, 访问终端， 提供终端页面， 上传/下载文件， 声音传输
 COPY --from=kclient-stage /kclient /kclient
