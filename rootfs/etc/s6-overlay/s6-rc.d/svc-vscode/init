@@ -44,7 +44,7 @@ if [ $EXTENSIONS ]; then
 fi
 
 # 更改文件权限，否则 firefox 无法启动
-if [ "$USERNAME" == "root" ] || [ "$USERNAME" == "" ] ; then
+if [[ "$USERNAME" == "root" ]] || [[ "$USERNAME" = "" ]] ; then
     chown -R root:root $HOME
 else
     sudo chown -R $USERNAME:$USERNAME $HOME

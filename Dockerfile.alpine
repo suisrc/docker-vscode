@@ -31,6 +31,7 @@ LABEL maintainer="suisrc@outlook.com"
 ENV SVC_SSHD="0" \
     S6_CMD_WAIT_FOR_SERVICES_MAXTIME="0" \
     S6_VERBOSITY=1 \
+    HOME="/root" \
     ZSH_CUSTOM="/root/.zsh/plugins" \
     VSCR_VERSION="4.19.1" \
     VSC_HOME="/vsc" \
@@ -62,6 +63,8 @@ RUN VSC_RURL="https://github.com/coder/code-server/releases" &&\
     ln -s ${VSC_HOME}/bin/code-server /usr/bin/code-server && \
     ${VSC_HOME}/bin/code-server --install-extension mhutchie.git-graph && \
     rm -rf /tmp/* /var/tmp/* $HOME/.local/share/code-server/CachedExtensionVSIXs/* && \
-    ln -s ${WSC_HOME} ${HOME}/wsc
+    ln -s ${WSC_HOME} ${HOME}/wsc && \
+    rm /etc/s6-overlay/s6-rc.d/user/contents.d/svc-sshd && \
+    rm -rf /etc/s6-overlay/s6-rc.d/svc-sshd
 
 EXPOSE 7000
