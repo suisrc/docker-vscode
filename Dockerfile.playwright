@@ -4,7 +4,7 @@ ARG BASE_IMAGE_TAG
 FROM ghcr.io/suisrc/webtop:${BASE_IMAGE_TAG}-vsas
 # ================================================================
 
-RUN npm install -g typescript playwright 
+RUN npm install -g playwright 
 #go install github.com/playwright-community/playwright-go@latest
 
 RUN playwright install firefox --with-deps && \
