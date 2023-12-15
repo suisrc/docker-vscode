@@ -21,7 +21,7 @@ on:
 
 env:
   IMAGE_NAME: suisrc/webtop
-  IMAGE_VERSION: 'playwirght-ms-dev-vscode-23121401'
+  IMAGE_VERSION: 'playwright-ms-dev-vscode-23121401'
   GITHUB_REGISTRY: ghcr.io
   DOCKER_REGISTRY: docker.io
   QUAY_REGISTRY: quay.io
