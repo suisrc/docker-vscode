@@ -1,0 +1,121 @@
+## 5. 安装 webtop for xfce4
+# ================================================================
+# https://github.com/linuxserver/docker-baseimage-kasmvnc
+# https://github.com/kasmtech/workspaces-core-images
+
+# kclient builder, fix kasm client bug
+FROM ghcr.io/suisrc/webtop:kclient-23121401-vsas as kclient-stage
+
+FROM ghcr.io/suisrc/webtop:vscode-23121401-vsas
+# =============================================================================================
+# kasm (noVnc)
+
+COPY rootfs/ /
+
+# set environment variables
+ENV TERM="xterm" \
+    KASM_VERSION="1.2.0" \
+    DISPLAY=:1 \
+    PERL5LIB=/usr/local/bin \
+    OMP_WAIT_POLICY=PASSIVE \
+    GOMP_SPINCOUNT=0 \
+    PULSE_RUNTIME_PATH=/defaults \
+    NVIDIA_DRIVER_CAPABILITIES=all
+
+# update
+RUN apt update && DEBIAN_FRONTEND=noninteractive \
+    apt install --no-install-recommends -y \
+    cups \
+    cups-client \
+    cups-pdf \
+    dbus-x11 \
+    ffmpeg \
+    file \
+    fuse-overlayfs \
+    intel-media-va-driver \
+    libdatetime-perl \
+    libfontenc1 \
+    libfreetype6 \
+    libgbm1 \
+    libgcrypt20 \
+    libgl1-mesa-dri \
+    libglu1-mesa \
+    libgnutls30 \
+    libgomp1 \
+    libhash-merge-simple-perl \
+    libjpeg-turbo8 \
+    liblist-moreutils-perl \
+    libp11-kit0 \
+    libpam0g \
+    libpixman-1-0 \
+    libscalar-list-utils-perl \
+    libswitch-perl \
+    libtasn1-6 \
+    libtry-tiny-perl \
+    libwebp7 \
+    libx11-6 \
+    libxau6 \
+    libxcb1 \
+    libxcursor1 \
+    libxdmcp6 \
+    libxext6 \
+    libxfixes3 \
+    libxfont2 \
+    libxinerama1 \
+    libxshmfence1 \
+    libxtst6 \
+    libyaml-tiny-perl \
+    mesa-va-drivers \
+    openbox \
+    pciutils \
+    perl \
+    pulseaudio \
+    pulseaudio-utils \
+    software-properties-common \
+    x11-apps \
+    x11-common \
+    x11-utils \
+    x11-xkb-utils \
+    x11-xkb-utils \
+    x11-xserver-utils \
+    xauth \
+    xdg-utils \
+    xfonts-base \
+    xkb-data \
+    xserver-common \
+    xserver-xorg-core \
+    xserver-xorg-video-amdgpu \
+    xserver-xorg-video-ati \
+    xserver-xorg-video-intel \
+    xserver-xorg-video-nouveau \
+    xserver-xorg-video-qxl \
+    xterm \
+    xutils &&\
+    apt-get autoremove && apt-get clean && \
+    rm -rf /tmp/* /var/tmp/* /var/lib/apt/lists/*
+
+# ================================================================
+# kasm vnc
+RUN APP_URL="https://github.com/kasmtech/KasmVNC/releases/download/v${KASM_VERSION}/kasmvncserver_jammy_${KASM_VERSION}_amd64.deb" && \
+    curl -o /tmp/app.deb -L "${APP_URL}" && dpkg -i /tmp/app.deb && \
+    apt-get autoremove && apt-get clean && \
+    rm -rf /tmp/* /var/tmp/* /var/lib/apt/lists/*
+
+# ================================================================
+# kclient, 访问终端， 提供终端页面， 上传/下载文件， 声音传输
+COPY --from=kclient-stage /kclient /kclient
+
+# ================================================================
+# desktop for xfce4, 这里可更换 kde, openbox 等等, 替换完成，同步需要更改 rootfs/defaults/startwm.sh 中的内容
+# https://github.com/linuxserver/docker-kasm/pkgs/container/kasm
+
+RUN apt-get update && DEBIAN_FRONTEND=noninteractive \
+    apt-get install --no-install-recommends -y \
+    mousepad \
+    xfce4-terminal \
+    xfce4 \
+    xubuntu-default-settings \
+    xubuntu-icon-theme && \
+    rm -f /etc/xdg/autostart/xscreensaver.desktop && \
+    apt-get autoremove && apt-get clean && \
+    rm -rf /tmp/* /var/tmp/* /var/lib/apt/lists/*

@@ -1,0 +1,10 @@
+#!/usr/bin/with-contenv with-user
+
+if [[ "${SVC_KCLIENT}" == "0" ]]; then
+    echo 'disable kclient server ...'
+    s6-svc -O exit
+fi
+
+# NodeJS wrapper
+cd /kclient
+exec node index.js

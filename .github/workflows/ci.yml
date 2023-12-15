@@ -6,19 +6,35 @@ on:
   #release:
   #  types: [published]
   push:
-    branches: [ dev-vscode-cdr ]
+    branches: [ vsas ]
+
+# jammy: ubuntu 22.04基础镜像
+# kclient: 修复了kasm 终端的一些问题和增加了一些功能
+# nginx: jammy基础上安装了nginx
+# sshd: nginx基础上安装了sshd
+# vscode: sshd基础上安装了vscode
+# xfce: vscode基础上安装了xfce
+#
+# dev-~: 专注于开发环境
+# ms-dev-~: 开发环境，使用 ms 插件库
+# playwright-ms-dev-~: 开发环境，使用 playwright-ms 插件库
 
 env:
+<<<<<<< HEAD
   IMAGE_NAME: suisrc/vscode
   IMAGE_VERSION: '1.84.2-cdr'
+=======
+  IMAGE_NAME: suisrc/webtop
+  IMAGE_VERSION: 'playwright-ms-dev-xfce-23121401'
+>>>>>>> 01d147ea3d75d9f53d146569b2ee638424c4bc7b
   GITHUB_REGISTRY: ghcr.io
   DOCKER_REGISTRY: docker.io
   QUAY_REGISTRY: quay.io
   ALIYUN_REGISTRY: registry.cn-hongkong.aliyuncs.com
 
 jobs:
-  vscode:
-    #if: false
+  vsas:
+    # if: false
     runs-on: ubuntu-latest
 
     steps:
@@ -26,6 +42,7 @@ jobs:
 
       - name: Build image
         run: |
+<<<<<<< HEAD
           docker build ./vscode --file ./vscode/${{ github.job }}.Dockerfile --tag image
 
       - name: Push github image
@@ -102,6 +119,9 @@ jobs:
       - name: Build image
         run: |
           docker build ./vscode --file ./vscode/${{ github.job }}.Dockerfile --tag image
+=======
+          docker build -f "Dockerfile.${IMAGE_VERSION%%-*}" -t image --no-cache --build-arg BASE_IMAGE_TAG=${IMAGE_VERSION#*-} .
+>>>>>>> 01d147ea3d75d9f53d146569b2ee638424c4bc7b
 
       - name: Push github image
         run: |
@@ -116,6 +136,7 @@ jobs:
           docker tag image $IMAGE_ID:$VERSION
           docker push $IMAGE_ID:$VERSION
 
+<<<<<<< HEAD
       # - name: Push quay image
       #   run: |
       #     REGISTRY_URL=$QUAY_REGISTRY
@@ -178,6 +199,8 @@ jobs:
       #     docker tag image $IMAGE_ID:$VERSION
       #     docker push $IMAGE_ID:$VERSION
 
+=======
+>>>>>>> 01d147ea3d75d9f53d146569b2ee638424c4bc7b
       - name: Push docker image
         run: |
           REGISTRY_URL=$DOCKER_REGISTRY

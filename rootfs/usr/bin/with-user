@@ -1,0 +1,8 @@
+#!/usr/bin/with-contenv bash
+
+## 如果$USERNAME == root 或者 $USERNAME == ""，不使用 s6-setuidgid
+if [ "$USERNAME" == "root" ] || [ "$USERNAME" == "" ] ; then
+    exec bash "$@"
+else
+    exec s6-setuidgid $USERNAME bash "$@"
+fi
