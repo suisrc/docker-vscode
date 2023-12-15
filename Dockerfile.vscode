@@ -63,6 +63,6 @@ RUN VSC_RURL="https://github.com/coder/code-server/releases" &&\
     ${VSC_HOME}/bin/code-server --install-extension esbenp.prettier-vscode && \
     ${VSC_HOME}/bin/code-server --install-extension humao.rest-client && \
     rm -rf /tmp/* /var/tmp/* $HOME/.local/share/code-server/CachedExtensionVSIXs/* && \
-    ln -s ${WSC_HOME} ${HOME}/wsc && chown -R $USERNAME:$USERNAME ${VSC_HOME} $HOME ${WSC_HOME}
+    ln -s ${WSC_HOME} ${HOME}/wsc
 
 EXPOSE 7000
