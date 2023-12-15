@@ -6,6 +6,6 @@ FROM ghcr.io/suisrc/webtop:${BASE_IMAGE_TAG}-vsas
 
 ## install playwright-ts and playwright-go
 RUN npm install -g typescript playwright &&\
-    go install -g github.com/playwright-community/playwright-go
+    go install github.com/playwright-community/playwright-go
 
 RUN playwright install firefox --with-deps
