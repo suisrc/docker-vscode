@@ -46,8 +46,9 @@ fi
 # 更改文件权限，否则 firefox 无法启动
 if [[ "$USERNAME" == "root" ]] || [[ "$USERNAME" == "" ]] ; then
     # chown -R root:root $HOME
-    echo "run  vscode server by root"
+    echo "init vscode server by root"
 else
+    echo "init vscode server by user"
     sudo chown -R $USERNAME:$USERNAME $HOME
 fi
 
