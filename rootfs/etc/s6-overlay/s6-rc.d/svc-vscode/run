@@ -3,7 +3,8 @@
 
 if [[ "${SVC_VSCODE}" == "0" ]]; then
     echo 'disable vscode server ...'
-    s6-svc -O exit
+    s6-rc vsc-sshd stop
+    exit
 fi
 
 echo 'start vscode server ...'
