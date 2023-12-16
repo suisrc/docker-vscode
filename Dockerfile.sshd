@@ -59,4 +59,4 @@ WORKDIR $HOME
 COPY rootfs/etc/s6-overlay/s6-rc.d/svc-sshd/run \
      rootfs/etc/s6-overlay/s6-rc.d/svc-sshd/type \
      /etc/s6-overlay/s6-rc.d/svc-sshd/
-RUN  echo "" /etc/s6-overlay/s6-rc.d/user/contents.d/svc-sshd
+RUN  echo "" > /etc/s6-overlay/s6-rc.d/user/contents.d/svc-sshd
