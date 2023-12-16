@@ -2,6 +2,7 @@
 
 if [[ "${SVC_SSHD}" == "0" ]]; then
     echo 'disable sshd server ...'
+    sleep 1
     sudo s6-rc stop svc-sshd
     exit
 fi
