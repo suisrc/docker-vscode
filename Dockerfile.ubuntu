@@ -46,7 +46,6 @@ COPY --from=rootfs-stage /rootfs/ /
 COPY rootfs/ /
 ENTRYPOINT ["/init"]
 
-
 RUN apt update && DEBIAN_FRONTEND=noninteractive \
     apt install --no-install-recommends -y \
     bash \
