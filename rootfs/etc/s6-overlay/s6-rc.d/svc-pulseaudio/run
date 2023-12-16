@@ -1,8 +1,10 @@
 #!/usr/bin/with-contenv with-user
 
-if [[ "${SVC_KASM}" == "0" ]]; then
-    echo 'disable kams[pulseaudio] server ...'
-    s6-svc -O exit
+if [[ "${SVC_AUDIO}" == "0" ]]; then
+    echo 'disable pulseaudio server ...'
+    sleep 1
+    sudo s6-rc stop svc-pulseaudio
+    exit
 fi
 
 

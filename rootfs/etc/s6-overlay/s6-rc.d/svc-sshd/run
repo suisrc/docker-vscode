@@ -2,18 +2,24 @@
 
 if [[ "${SVC_SSHD}" == "0" ]]; then
     echo 'disable sshd server ...'
-    s6-svc -O exit
+    sleep 1
+    sudo s6-rc stop svc-sshd
+    exit
 fi
 
-if [ ! -f '/etc/ssh/ssh_host_rsa_key' ]; then
-    echo 'init sshd keygen ...'
+if [ ! -f '/etc/ssh/_sshd_init' ]; then
+    echo 'init sshd config ...'
+    echo '' > /etc/ssh/_sshd_init
     # sshd-keygen,初始化
-    ssh-keygen -q -t rsa -N '' -f /etc/ssh/ssh_host_rsa_key
-    ssh-keygen -q -t rsa -N '' -f /etc/ssh/ssh_host_dsa_key
-    ssh-keygen -q -t rsa -N '' -f /etc/ssh/ssh_host_ecdsa_key
-    ssh-keygen -q -t rsa -N '' -f /etc/ssh/ssh_host_ed25519_key
+    echo y | ssh-keygen -q -t rsa -N '' -f /etc/ssh/ssh_host_rsa_key
+    echo y | ssh-keygen -q -t rsa -N '' -f /etc/ssh/ssh_host_dsa_key
+    echo y | ssh-keygen -q -t rsa -N '' -f /etc/ssh/ssh_host_ecdsa_key
+    echo y | ssh-keygen -q -t rsa -N '' -f /etc/ssh/ssh_host_ed25519_key
     # 配置root的登录密码
     echo "user:${PASSWORD}" | chpasswd
+    echo "PasswordAuthentication yes" >> /etc/ssh/sshd_config
+    # echo "PermitRootLogin yes" >> /etc/ssh/sshd_config
+    mkdir /run/sshd
 fi
 
 echo 'start sshd server ... '

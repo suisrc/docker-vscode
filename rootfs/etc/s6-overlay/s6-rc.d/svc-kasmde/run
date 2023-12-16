@@ -2,7 +2,8 @@
 
 if [[ "${SVC_KASM}" == "0" ]]; then
     echo 'disable kams[de] server ...'
-    s6-svc -O exit
+    sleep 1
+    sudo s6-rc stop svc-kasmde
 fi
 
 cd $HOME

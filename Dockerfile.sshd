@@ -37,16 +37,16 @@ RUN apt update && DEBIAN_FRONTEND=noninteractive \
     rm -rf /tmp/* /var/tmp/* /var/lib/apt/lists/*
 
 # set environment variables
-ENV USERNAME="user" \
+ENV USER_DEF="user" \
     HOME="/home/user" \
     ZSH_CUSTOM="/home/user/.zsh/plugins"
 
 # creating the user and usergroup
-RUN groupadd --gid 1000 $USERNAME && \
-    useradd  --uid 1000 --gid $USERNAME -d $HOME -m -s /bin/bash $USERNAME   && \
-    echo $USERNAME ALL=\(root\) NOPASSWD:ALL > /etc/sudoers.d/$USERNAME && \
-    chmod 0440 /etc/sudoers.d/$USERNAME && chmod g+rw /home && \
-    chown $USERNAME:$USERNAME /etc/nginx/conf.d /usr/local/openresty/nginx/html && \
+RUN groupadd --gid 1000 $USER_DEF && \
+    useradd  --uid 1000 --gid $USER_DEF -d $HOME -m -s /bin/bash $USER_DEF && \
+    echo $USER_DEF ALL=\(root\) NOPASSWD:ALL > /etc/sudoers.d/$USER_DEF && \
+    chmod 0440 /etc/sudoers.d/$USER_DEF && chmod g+rw /home && \
+    sh -c "$(curl -fsSL https://raw.githubusercontent.com/ohmyzsh/ohmyzsh/master/tools/install.sh)" &&\
     git clone --depth 1 "https://github.com/zsh-users/zsh-autosuggestions" "${ZSH_CUSTOM}/zsh-autosuggestions" &&\
     echo "source ${ZSH_CUSTOM}/zsh-autosuggestions/zsh-autosuggestions.zsh" >> ~/.zshrc &&\
     sed -i "1iZSH_DISABLE_COMPFIX=true" ~/.zshrc

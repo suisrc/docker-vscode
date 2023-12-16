@@ -62,10 +62,10 @@ trusted-host=mirrors.aliyun.com
 <settings xmlns="http://maven.apache.org/SETTINGS/1.0.0"
           xmlns:xsi="http://www.w3.org/2001/XMLSchema-instance"
           xsi:schemaLocation="http://maven.apache.org/SETTINGS/1.0.0 http://maven.apache.org/xsd/settings-1.0.0.xsd">
-    <!-- sed -i 's/username-rdc-releases/xxxx/g' settings.xml -->
+    <!-- sed -i 's/USER_DEF-rdc-releases/xxxx/g' settings.xml -->
     <!-- sed -i 's/password-rdc-releases/xxxx/g' settings.xml -->
     <!-- sed -i 's/groups-rdc-releases/xxxx/g' settings.xml -->
-    <!-- sed -i 's/username-rdc-snapshots/xxxx/g' settings.xml -->
+    <!-- sed -i 's/USER_DEF-rdc-snapshots/xxxx/g' settings.xml -->
     <!-- sed -i 's/password-rdc-snapshots/xxxx/g' settings.xml -->
     <!-- sed -i 's/groups-rdc-snapshots/xxxx/g' settings.xml -->
     <!-- cp settings.xml /root/.m2/ -->
@@ -83,12 +83,12 @@ trusted-host=mirrors.aliyun.com
     <servers>
         <server>
             <id>rdc-releases</id>
-            <username>username-rdc-releases</username>
+            <USER_DEF>USER_DEF-rdc-releases</USER_DEF>
             <password>password-rdc-releases</password>
         </server>
         <server>
             <id>rdc-snapshots</id>
-            <username>username-rdc-snapshots</username>
+            <USER_DEF>USER_DEF-rdc-snapshots</USER_DEF>
             <password>password-rdc-snapshots</password>
         </server>
     </servers>

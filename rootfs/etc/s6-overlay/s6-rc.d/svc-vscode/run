@@ -1,11 +1,12 @@
-#!/usr/bin/with-contenv bash
-
+#!/usr/bin/with-contenv with-user
 
 if [[ "${SVC_VSCODE}" == "0" ]]; then
-    echo 'disable sshd server ...'
-    s6-svc -O exit
+    echo 'disable vscode server ...'
+    sleep 1
+    sudo s6-rc stop svc-vscode
+    exit
 fi
 
-echo 'start sshd server ...'
+echo 'start vscode server ...'
 ## VSC_ARGS: vscode参数
 code-server --host ${VSC_HOST:-0.0.0.0} --port ${VSC_PORT:-7000} $VSC_ARGS /wsc

@@ -1,8 +1,10 @@
-#!/bin/bash
+#!/usr/bin/with-contenv bash
 
 if [[ "${SVC_NGINX}" == "0" ]]; then
     echo 'disable nginx server ...'
-    s6-svc -O exit
+    sleep 1
+    sudo s6-rc stop svc-nginx
+    exit
 fi
 
 # echo 'starting nginx server'

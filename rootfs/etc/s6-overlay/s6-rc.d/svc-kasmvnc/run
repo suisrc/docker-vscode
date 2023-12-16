@@ -3,7 +3,9 @@
 
 if [[ "${SVC_KASM}" == "0" ]]; then
     echo 'disable kams[vnc] server ...'
-    s6-svc -O exit
+    sleep 1
+    sudo s6-rc stop svc-kasmvnc
+    exit
 fi
 
 # Pass gpu flags if mounted

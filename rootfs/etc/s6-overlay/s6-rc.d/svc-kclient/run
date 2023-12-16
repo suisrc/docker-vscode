@@ -1,8 +1,10 @@
-#!/usr/bin/with-contenv with-user
+#!/usr/bin/with-contenv bash
 
 if [[ "${SVC_KCLIENT}" == "0" ]]; then
     echo 'disable kclient server ...'
-    s6-svc -O exit
+    sleep 1
+    sudo s6-rc stop svc-kclient
+    exit
 fi
 
 # NodeJS wrapper

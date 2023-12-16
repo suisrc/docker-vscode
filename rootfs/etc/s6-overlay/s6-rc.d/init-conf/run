@@ -47,13 +47,6 @@ if [ ! -d "${HOME}/.XDG" ]; then
   mkdir -p ${HOME}/.XDG
 fi
 
-# 更改文件权限，否则 firefox 无法启动
-if [ "$USERNAME" == "root" ] || [ "$USERNAME" == "" ] ; then
-    chown -R root:root $HOME
-else
-    sudo chown -R $USERNAME:$USERNAME $HOME
-fi
-
 # config -> home/user
 sudo sed -i "s|/config|${HOME}|" /kclient/index.js
 
