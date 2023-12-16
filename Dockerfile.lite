@@ -59,6 +59,7 @@ RUN apt update && DEBIAN_FRONTEND=noninteractive \
     locales \
     inotify-tools \
     ca-certificates \
+    git \
     openssh-client \
     openssh-server \
     sudo \
