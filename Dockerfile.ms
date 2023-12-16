@@ -1,7 +1,7 @@
 ## x. ms 依赖的 vscode
 ARG BASE_IMAGE_TAG
 
-FROM ghcr.io/suisrc/webtop:${BASE_IMAGE_TAG}-vsas
+FROM ghcr.io/suisrc/vscode:${BASE_IMAGE_TAG}-cdr
 # ================================================================
 
 RUN zsh -c "grep -rl open-vsx.org /vsc/**/*.js /vsc/**/*.json /vsc/**/*.map | xargs sed -i \
