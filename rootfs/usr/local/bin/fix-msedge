@@ -1,4 +1,4 @@
-#!/bin/bash
+#!/usr/bin/bash
 
 ## 修复 msedge 只在 no-sandbox 模式下运行
 if [ `cat /opt/microsoft/msedge/microsoft-edge | grep -c '--no-sandbox'` -eq 0 ]; then

@@ -1,4 +1,4 @@
-#!/bin/bash
+#!/usr/bin/bash
 
 ## 修复 vscode 只在 no-sandbox 模式下运行
 if [ `cat /usr/share/applications/code.desktop | grep -c '--no-sandbox'` -eq 0 ]; then

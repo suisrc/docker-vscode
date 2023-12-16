@@ -1,4 +1,4 @@
-#!/bin/bash
+#!/usr/bin/bash
 set -e
 
 # 安装 chromium, 由于chrome 和 chromium 差不多，这里就不安装chrome了

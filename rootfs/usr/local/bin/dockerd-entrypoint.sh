@@ -1,4 +1,4 @@
-#!/bin/sh
+#!/usr/bin/sh
 set -eu
 
 _tls_ensure_private() {
