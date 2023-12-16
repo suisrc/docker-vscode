@@ -1,8 +1,10 @@
 #!/usr/bin/with-contenv bash
 
 if [[ "${SVC_SSHD}" == "0" ]]; then
-    echo 'disable sshd server ...'
+    # 需要等待注册 > /run/s6-rc/resolve.cdb
+    sleep 3
     s6-rc stop vsc-sshd
+    echo 'disable sshd server ...'
     exit
 fi
 

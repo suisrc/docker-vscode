@@ -2,8 +2,10 @@
 
 
 if [[ "${SVC_VSCODE}" == "0" ]]; then
+    # 需要等待注册 > /run/s6-rc/resolve.cdb
+    sleep 3
+    s6-rc stop svc-vscode
     echo 'disable vscode server ...'
-    s6-rc vsc-sshd stop
     exit
 fi
 
