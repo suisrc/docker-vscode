@@ -32,7 +32,7 @@ ENV SVC_SSHD="0" \
     S6_VERBOSITY=1 \
     LANGUAGE="zh_CN.UTF-8" \
     LANG="zh_CN.UTF-8" \
-    USERNAME="user" \
+    USER_DEF="user" \
     HOME="/home/user" \
     ZSH_CUSTOM="/home/user/.zsh/plugins" \
     NODE_VERSION="18.19.0" \
@@ -93,10 +93,10 @@ RUN apt update && DEBIAN_FRONTEND=noninteractive \
     rm -rf /tmp/* /var/tmp/* /var/lib/apt/lists/*
 
 # creating the user and usergroup
-RUN groupadd --gid 1000 $USERNAME && \
-    useradd  --uid 1000 --gid $USERNAME -d $HOME -m -s /bin/bash $USERNAME   && \
-    echo $USERNAME ALL=\(root\) NOPASSWD:ALL > /etc/sudoers.d/$USERNAME && \
-    chmod 0440 /etc/sudoers.d/$USERNAME && chmod g+rw /home && \
+RUN groupadd --gid 1000 $USER_DEF && \
+    useradd  --uid 1000 --gid $USER_DEF -d $HOME -m -s /bin/bash $USER_DEF   && \
+    echo $USER_DEF ALL=\(root\) NOPASSWD:ALL > /etc/sudoers.d/$USER_DEF && \
+    chmod 0440 /etc/sudoers.d/$USER_DEF && chmod g+rw /home && \
     git clone --depth 1 "https://github.com/zsh-users/zsh-autosuggestions" "${ZSH_CUSTOM}/zsh-autosuggestions" &&\
     echo "source ${ZSH_CUSTOM}/zsh-autosuggestions/zsh-autosuggestions.zsh" >> ~/.zshrc &&\
     sed -i "1iZSH_DISABLE_COMPFIX=true" ~/.zshrc
@@ -118,6 +118,6 @@ RUN mkdir /usr/local/node && \
     ${VSC_HOME}/bin/code-server --install-extension esbenp.prettier-vscode && \
     ${VSC_HOME}/bin/code-server --install-extension humao.rest-client && \
     rm -rf /tmp/* /var/tmp/* $HOME/.local/share/code-server/CachedExtensionVSIXs/* && \
-    ln -s ${WSC_HOME} ${HOME}/wsc && chown -R $USERNAME:$USERNAME ${VSC_HOME} $HOME ${WSC_HOME}
+    ln -s ${WSC_HOME} ${HOME}/wsc && chown -R $USER_DEF:$USER_DEF ${VSC_HOME} $HOME ${WSC_HOME}
 
 EXPOSE 7000
