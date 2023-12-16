@@ -14,7 +14,7 @@ on:
 
 env:
   IMAGE_NAME: suisrc/vscode
-  IMAGE_VERSION: 'ms-dev-ubuntu-1.84.2'
+  IMAGE_VERSION: 'ms-dev-debian-1.84.2'
   GITHUB_REGISTRY: ghcr.io
   DOCKER_REGISTRY: docker.io
   QUAY_REGISTRY: quay.io
