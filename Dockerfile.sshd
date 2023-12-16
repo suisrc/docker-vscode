@@ -2,6 +2,13 @@
 FROM ghcr.io/suisrc/webtop:nginx-23121401-vsas
 # ================================================================
 
+# set environment variables
+ENV LANGUAGE="zh_CN.UTF-8" \
+    LANG="zh_CN.UTF-8" \
+    USER_DEF="user" \
+    HOME="/home/user" \
+    ZSH_CUSTOM="/home/user/.oh-my-zsh/plugins" \
+
 # update linux
 RUN apt update && DEBIAN_FRONTEND=noninteractive \
     apt install --no-install-recommends -y \
@@ -35,11 +42,6 @@ RUN apt update && DEBIAN_FRONTEND=noninteractive \
     locale-gen zh_CN.UTF-8 && \
     apt-get autoremove && apt-get clean && \
     rm -rf /tmp/* /var/tmp/* /var/lib/apt/lists/*
-
-# set environment variables
-ENV USER_DEF="user" \
-    HOME="/home/user" \
-    ZSH_CUSTOM="/home/user/.oh-my-zsh/plugins" \
 
 # creating the user and usergroup
 RUN groupadd --gid 1000 $USER_DEF && \
