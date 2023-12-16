@@ -1,4 +1,4 @@
-#!/usr/bin/with-contenv bash
+#!/usr/bin/with-contenv with-user
 
 
 if [[ "${SVC_VSCODE}" == "0" ]]; then
