@@ -1,5 +1,5 @@
 ## 4. 安装 webtop [vscode]
-FROM ghcr.io/suisrc/webtop:sshd-23121401-vsas
+FROM ghcr.io/suisrc/webtop:sshd-23121601-vsas
 # ================================================================
 
 # set environment variables
@@ -31,10 +31,9 @@ RUN mkdir /usr/local/node && \
 
 EXPOSE 7000
 
+# add rootfs/home
 COPY rootfs/home /home
-COPY rootfs/usr/bin /usr/bin
-COPY rootfs/usr/local/bin /usr/local/bin
-# add vscode to s6-rc
+# add vscode s6-rc
 COPY rootfs/etc/s6-overlay/s6-rc.d/init-vscode/* /etc/s6-overlay/s6-rc.d/init-vscode/
 COPY rootfs/etc/s6-overlay/s6-rc.d/svc-vscode/* /etc/s6-overlay/s6-rc.d/svc-vscode/
 RUN  echo "" > /etc/s6-overlay/s6-rc.d/user/contents.d/init-vscode &&\

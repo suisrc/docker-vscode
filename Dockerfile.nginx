@@ -2,7 +2,7 @@
 # ================================================================
 FROM suisrc/openresty:1.21.4.1-hu-3 as openresty-stage
 
-FROM ghcr.io/suisrc/webtop:jammy-23121401-vsas
+FROM ghcr.io/suisrc/webtop:jammy-23121601-vsas
 # ================================================================
 
 # copy openresty
