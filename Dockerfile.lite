@@ -21,9 +21,8 @@ RUN tar -C /rootfs -Jxpf /tmp/s6-overlay-symlinks-noarch.tar.xz
 ADD https://github.com/just-containers/s6-overlay/releases/download/v${S6_VERSION}/s6-overlay-symlinks-arch.tar.xz /tmp
 RUN tar -C /rootfs -Jxpf /tmp/s6-overlay-symlinks-arch.tar.xz
 
-FROM node:18-bullseye-slim
+FROM debian:bullseye-slim
 # ================================================================
-# 最小安装版, 这是一个工具，不能作为开发环境的基础环境使用，因此这里只提供root身份
 
 LABEL maintainer="suisrc@outlook.com"
 
@@ -34,7 +33,9 @@ ENV SVC_SSHD="0" \
     USER_DEF="user" \
     HOME="/home/user" \
     ZSH_CUSTOM="/home/user/.oh-my-zsh/plugins" \
+    NODE_VERSION="18.19.0" \
     VSCR_VERSION="4.19.1" \
+    PATH=/usr/local/node/bin:$PATH \
     VSC_HOME="/vsc" \
     WSC_HOME="/wsc" \
     EXTENSIONS=""
@@ -46,7 +47,6 @@ ENTRYPOINT ["/init"]
 RUN apt update && DEBIAN_FRONTEND=noninteractive \
     apt install --no-install-recommends -y \
     bash \
-    sudo \
     curl \
     wget \
     nano \
@@ -60,13 +60,14 @@ RUN apt update && DEBIAN_FRONTEND=noninteractive \
     inotify-tools \
     ca-certificates \
     openssh-client \
-    openssh-server &&\
+    openssh-server \
+    sudo &&\
     apt-get autoremove && apt-get clean && \
     rm -rf /tmp/* /var/tmp/* /var/lib/apt/lists/*
 
 # creating the user and usergroup
-RUN groupadd --gid 1001 $USER_DEF && \
-    useradd  --uid 1001 --gid $USER_DEF -d $HOME -m -s /bin/bash $USER_DEF && \
+RUN groupadd --gid 1000 $USER_DEF && \
+    useradd  --uid 1000 --gid $USER_DEF -d $HOME -m -s /bin/bash $USER_DEF && \
     echo $USER_DEF ALL=\(root\) NOPASSWD:ALL > /etc/sudoers.d/$USER_DEF && \
     chmod 0440 /etc/sudoers.d/$USER_DEF && chmod g+rw /home && \
     sh -c "$(curl -fsSL https://raw.githubusercontent.com/ohmyzsh/ohmyzsh/master/tools/install.sh)" &&\
@@ -76,18 +77,21 @@ RUN groupadd --gid 1001 $USER_DEF && \
 
 WORKDIR $HOME
 
-# install vscode
-RUN VSC_RURL="https://github.com/coder/code-server/releases" &&\
+# install nodejs and vscode <- https://nodejs.org/en/
+RUN mkdir /usr/local/node && \
+    curl -fSL --compressed "https://nodejs.org/dist/v${NODE_VERSION}/node-v$NODE_VERSION-linux-x64.tar.xz" | \
+    tar -xJ -C /usr/local/node --strip-components=1 && npm install -g yarn && node --version && npm --version && \
+    VSC_RURL="https://github.com/coder/code-server/releases" &&\
     VSC_PATH="${VSC_RURL}/download/v${VSCR_VERSION}/code-server-${VSCR_VERSION}-linux-amd64.tar.gz" &&\
     curl -o /tmp/vsc.tar.gz -L "${VSC_PATH}" && mkdir -p ${VSC_HOME} ${WSC_HOME} && tar xzf /tmp/vsc.tar.gz -C ${VSC_HOME}/ --strip-components=1 && \
-    rm -f ${VSC_HOME}/node      && ln -s /usr/local/bin/node ${VSC_HOME}/node && \
-    rm -f ${VSC_HOME}/lib/node  && ln -s /usr/local/bin/node ${VSC_HOME}/lib/node && \
+    rm -f ${VSC_HOME}/node      && ln -s /usr/local/node/bin/node ${VSC_HOME}/node && \
+    rm -f ${VSC_HOME}/lib/node  && ln -s /usr/local/node/bin/node ${VSC_HOME}/lib/node && \
     rm -f ${VSC_HOME}/lib/coder-cloud-agent && \
     ln -s ${VSC_HOME}/bin/code-server /usr/bin/code-server && \
     ${VSC_HOME}/bin/code-server --install-extension mhutchie.git-graph && \
     ${VSC_HOME}/bin/code-server --install-extension esbenp.prettier-vscode && \
     ${VSC_HOME}/bin/code-server --install-extension humao.rest-client && \
     rm -rf /tmp/* /var/tmp/* $HOME/.local/share/code-server/CachedExtensionVSIXs/* && \
-    ln -s ${WSC_HOME} ${HOME}/wsc && chown -R $USER_DEF:$USER_DEF ${VSC_HOME} $HOME ${WSC_HOME} 
+    ln -s ${WSC_HOME} ${HOME}/wsc && chown -R $USER_DEF:$USER_DEF ${VSC_HOME} $HOME ${WSC_HOME}
 
 EXPOSE 7000
