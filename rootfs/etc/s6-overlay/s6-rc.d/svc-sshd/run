@@ -6,14 +6,14 @@ if [[ "${SVC_SSHD}" == "0" ]]; then
     exit
 fi
 
-if [ ! -f '/etc/ssh/_ssh_init' ]; then
+if [ ! -f '/etc/ssh/_sshd_init' ]; then
     echo 'init sshd config ...'
-    echo '' > /etc/ssh/_ssh_init
+    echo '' > /etc/ssh/_sshd_init
     # sshd-keygen,初始化
-    ssh-keygen -y -q -t rsa -N '' -f /etc/ssh/ssh_host_rsa_key
-    ssh-keygen -y -q -t rsa -N '' -f /etc/ssh/ssh_host_dsa_key
-    ssh-keygen -y -q -t rsa -N '' -f /etc/ssh/ssh_host_ecdsa_key
-    ssh-keygen -y -q -t rsa -N '' -f /etc/ssh/ssh_host_ed25519_key
+    echo y | ssh-keygen -q -t rsa -N '' -f /etc/ssh/ssh_host_rsa_key
+    echo y | ssh-keygen -q -t rsa -N '' -f /etc/ssh/ssh_host_dsa_key
+    echo y | ssh-keygen -q -t rsa -N '' -f /etc/ssh/ssh_host_ecdsa_key
+    echo y | ssh-keygen -q -t rsa -N '' -f /etc/ssh/ssh_host_ed25519_key
     # 配置root的登录密码
     echo "user:${PASSWORD}" | chpasswd
     echo "PasswordAuthentication yes" >> /etc/ssh/sshd_config
