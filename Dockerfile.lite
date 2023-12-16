@@ -28,10 +28,11 @@ FROM node:18-bullseye-slim
 LABEL maintainer="suisrc@outlook.com"
 
 # set environment variables
-ENV S6_CMD_WAIT_FOR_SERVICES_MAXTIME="0" \
+ENV SVC_SSHD="0" \
+    S6_CMD_WAIT_FOR_SERVICES_MAXTIME="0" \
     S6_VERBOSITY=1 \
     USER_DEF="root" \
-    HOME="/root" \
+    HOME="/home/user" \
     ZSH_CUSTOM="/home/user/.oh-my-zsh/plugins" \
     VSCR_VERSION="4.19.1" \
     VSC_HOME="/vsc" \
@@ -42,26 +43,50 @@ COPY --from=rootfs-stage /rootfs/ /
 COPY rootfs/ /
 ENTRYPOINT ["/init"]
 
-WORKDIR $HOME
+RUN apt update && DEBIAN_FRONTEND=noninteractive \
+    apt install --no-install-recommends -y \
+    bash \
+    curl \
+    wget \
+    nano \
+    procps \
+    net-tools \
+    netcat \
+    tzdata \
+    ntpdate \
+    iputils-ping \
+    locales \
+    inotify-tools \
+    ca-certificates \
+    openssh-client \
+    openssh-server \
+    apt-get autoremove && apt-get clean && \
+    rm -rf /tmp/* /var/tmp/* /var/lib/apt/lists/*
 
-# install nodejs and vscode <- https://nodejs.org/en/
-RUN sh -c "$(curl -fsSL https://raw.githubusercontent.com/ohmyzsh/ohmyzsh/master/tools/install.sh)" &&\
+# creating the user and usergroup
+RUN groupadd --gid 1000 $USER_DEF && \
+    useradd  --uid 1000 --gid $USER_DEF -d $HOME -m -s /bin/bash $USER_DEF   && \
+    echo $USER_DEF ALL=\(root\) NOPASSWD:ALL > /etc/sudoers.d/$USER_DEF && \
+    chmod 0440 /etc/sudoers.d/$USER_DEF && chmod g+rw /home && \
+    sh -c "$(curl -fsSL https://raw.githubusercontent.com/ohmyzsh/ohmyzsh/master/tools/install.sh)" &&\
     git clone --depth 1 "https://github.com/zsh-users/zsh-autosuggestions" "${ZSH_CUSTOM}/zsh-autosuggestions" &&\
     echo "source ${ZSH_CUSTOM}/zsh-autosuggestions/zsh-autosuggestions.zsh" >> ~/.zshrc &&\
-    sed -i "1iZSH_DISABLE_COMPFIX=true" ~/.zshrc &&\
-    VSC_RURL="https://github.com/coder/code-server/releases" &&\
+    sed -i "1iZSH_DISABLE_COMPFIX=true" ~/.zshrc
+
+WORKDIR $HOME
+
+# install vscode
+RUN VSC_RURL="https://github.com/coder/code-server/releases" &&\
     VSC_PATH="${VSC_RURL}/download/v${VSCR_VERSION}/code-server-${VSCR_VERSION}-linux-amd64.tar.gz" &&\
     curl -o /tmp/vsc.tar.gz -L "${VSC_PATH}" && mkdir -p ${VSC_HOME} ${WSC_HOME} && tar xzf /tmp/vsc.tar.gz -C ${VSC_HOME}/ --strip-components=1 && \
-    rm -f ${VSC_HOME}/node      && ln -s /usr/local/node/bin/node ${VSC_HOME}/node && \
-    rm -f ${VSC_HOME}/lib/node  && ln -s /usr/local/node/bin/node ${VSC_HOME}/lib/node && \
+    rm -f ${VSC_HOME}/node      && ln -s /usr/local/bin/node ${VSC_HOME}/node && \
+    rm -f ${VSC_HOME}/lib/node  && ln -s /usr/local/bin/node ${VSC_HOME}/lib/node && \
     rm -f ${VSC_HOME}/lib/coder-cloud-agent && \
     ln -s ${VSC_HOME}/bin/code-server /usr/bin/code-server && \
     ${VSC_HOME}/bin/code-server --install-extension mhutchie.git-graph && \
     ${VSC_HOME}/bin/code-server --install-extension esbenp.prettier-vscode && \
     ${VSC_HOME}/bin/code-server --install-extension humao.rest-client && \
     rm -rf /tmp/* /var/tmp/* $HOME/.local/share/code-server/CachedExtensionVSIXs/* && \
-    ln -s ${WSC_HOME} ${HOME}/wsc && \
-    rm /etc/s6-overlay/s6-rc.d/user/contents.d/svc-sshd && \
-    rm -rf /etc/s6-overlay/s6-rc.d/svc-sshd
+    ln -s ${WSC_HOME} ${HOME}/wsc && chown -R $USER_DEF:$USER_DEF ${VSC_HOME} $HOME ${WSC_HOME} 
 
 EXPOSE 7000
