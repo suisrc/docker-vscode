@@ -9,10 +9,6 @@ FROM ghcr.io/suisrc/webtop:jammy-23121401-vsas
 COPY --from=openresty-stage /usr/local/openresty /usr/local/openresty
 COPY --from=openresty-stage /etc/nginx           /etc/nginx
 
-# set environment variables
-ENV LANGUAGE="zh_CN.UTF-8" \
-    LANG="zh_CN.UTF-8"
-
 RUN mkdir /var/run/openresty &&\
     ln -s /usr/local/openresty/nginx/sbin/nginx /usr/bin/nginx && \
     ln -s /usr/local/openresty/nginx/html       /www &&\

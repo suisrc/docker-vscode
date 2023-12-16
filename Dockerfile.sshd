@@ -39,7 +39,7 @@ RUN apt update && DEBIAN_FRONTEND=noninteractive \
 # set environment variables
 ENV USER_DEF="user" \
     HOME="/home/user" \
-    ZSH_CUSTOM="/home/user/.zsh/plugins"
+    ZSH_CUSTOM="/home/user/.oh-my-zsh/plugins" \
 
 # creating the user and usergroup
 RUN groupadd --gid 1000 $USER_DEF && \
