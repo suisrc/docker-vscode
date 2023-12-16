@@ -61,7 +61,7 @@ RUN apt update && DEBIAN_FRONTEND=noninteractive \
     iputils-ping \
     locales \
     inotify-tools \
-    ca-certificates &&\
+    ca-certificates \
     dpkg \
     sudo \
     zsh \
