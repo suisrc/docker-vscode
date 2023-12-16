@@ -1,4 +1,4 @@
-#!/usr/bin/with-contenv with-user
+#!/usr/bin/with-contenv bash
 set -e
 echo "Init System By S6-Overlay"
 

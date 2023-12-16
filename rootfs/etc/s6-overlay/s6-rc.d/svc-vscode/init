@@ -43,13 +43,4 @@ if [ $EXTENSIONS ]; then
     done
 fi
 
-# 更改文件权限，否则 firefox 无法启动
-if [[ "$USER_DEF" == "root" ]] || [[ "$USER_DEF" == "" ]] ; then
-    # chown -R root:root $HOME
-    echo "init vscode server by root"
-else
-    echo "init vscode server by user"
-    sudo chown -R $USER_DEF:$USER_DEF $HOME
-fi
-
 echo 'init vscode server end'
