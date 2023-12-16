@@ -21,7 +21,7 @@ on:
 
 env:
   IMAGE_NAME: suisrc/webtop
-  IMAGE_VERSION: 'nginx-23121601'
+  IMAGE_VERSION: 'sshd-23121601'
   GITHUB_REGISTRY: ghcr.io
   DOCKER_REGISTRY: docker.io
   QUAY_REGISTRY: quay.io
