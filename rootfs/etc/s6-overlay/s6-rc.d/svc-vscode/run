@@ -2,7 +2,7 @@
 
 if [[ "${SVC_VSCODE}" == "0" ]]; then
     echo 'disable vscode server ...'
-    s6-rc stop svc-vscode
+    sudo s6-rc stop svc-vscode
     exit
 fi
 
