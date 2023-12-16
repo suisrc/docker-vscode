@@ -4,6 +4,7 @@ FROM ghcr.io/suisrc/webtop:sshd-23121401-vsas
 
 # set environment variables
 ENV SVC_SSHD="0" \
+    SVC_NGINX="0" \
     NODE_VERSION="18.19.0" \
     VSCR_VERSION="4.19.1" \
     PATH=/usr/local/node/bin:$PATH \
@@ -26,11 +27,11 @@ RUN mkdir /usr/local/node && \
     ${VSC_HOME}/bin/code-server --install-extension esbenp.prettier-vscode && \
     ${VSC_HOME}/bin/code-server --install-extension humao.rest-client && \
     rm -rf /tmp/* /var/tmp/* $HOME/.local/share/code-server/CachedExtensionVSIXs/* && \
-    ln -s /wsc ${HOME}/wsc && chown -R $USER_DEF:$USER_DEF ${VSC_HOME} $HOME /wsc
+    ln -s ${WSC_HOME} ${HOME}/wsc && chown -R $USER_DEF:$USER_DEF ${VSC_HOME} $HOME ${WSC_HOME} 
 
 EXPOSE 7000
 
 # add vscode to s6-rc
 COPY rootfs/etc/s6-overlay/s6-rc.d/init-vscode/* /etc/s6-overlay/s6-rc.d/init-vscode/
 COPY rootfs/etc/s6-overlay/s6-rc.d/svc-vscode/* /etc/s6-overlay/s6-rc.d/svc-vscode/
-RUN  echo "" /etc/s6-overlay/s6-rc.d/user/contents.d/svc-vscode
+RUN  echo "" > /etc/s6-overlay/s6-rc.d/user/contents.d/svc-vscode
