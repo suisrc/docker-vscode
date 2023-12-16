@@ -60,7 +60,7 @@ RUN apt update && DEBIAN_FRONTEND=noninteractive \
     iputils-ping \
     locales \
     inotify-tools \
-    ca-certificates &&\
+    ca-certificates \
     dpkg \
     sudo \
     zsh \
@@ -97,7 +97,6 @@ RUN groupadd --gid 1000 $USERNAME && \
     useradd  --uid 1000 --gid $USERNAME -d $HOME -m -s /bin/bash $USERNAME   && \
     echo $USERNAME ALL=\(root\) NOPASSWD:ALL > /etc/sudoers.d/$USERNAME && \
     chmod 0440 /etc/sudoers.d/$USERNAME && chmod g+rw /home && \
-    chown $USERNAME:$USERNAME /etc/nginx/conf.d /usr/local/openresty/nginx/html && \
     git clone --depth 1 "https://github.com/zsh-users/zsh-autosuggestions" "${ZSH_CUSTOM}/zsh-autosuggestions" &&\
     echo "source ${ZSH_CUSTOM}/zsh-autosuggestions/zsh-autosuggestions.zsh" >> ~/.zshrc &&\
     sed -i "1iZSH_DISABLE_COMPFIX=true" ~/.zshrc
