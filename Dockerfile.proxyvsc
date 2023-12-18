@@ -1,0 +1,3 @@
+FROM suisrc/openresty:1.21.4.1-hu-3
+
+COPY nginx/vscproxy.conf /etc/nginx/nginx.conf
