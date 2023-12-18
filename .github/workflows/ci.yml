@@ -21,7 +21,7 @@ on:
 
 env:
   IMAGE_NAME: suisrc/webtop
-  IMAGE_VERSION: 'sshproxy-23121801'
+  IMAGE_VERSION: 'vscproxy-23121801'
   GITHUB_REGISTRY: ghcr.io
   DOCKER_REGISTRY: docker.io
   QUAY_REGISTRY: quay.io
