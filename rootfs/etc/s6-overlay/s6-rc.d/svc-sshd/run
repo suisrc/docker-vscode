@@ -18,8 +18,12 @@ if [ ! -f '/etc/ssh/_sshd_init' ]; then
     # 配置root的登录密码
     echo "user:${PASSWORD}" | chpasswd
     echo "PasswordAuthentication yes" >> /etc/ssh/sshd_config
-    # echo "PermitRootLogin yes" >> /etc/ssh/sshd_config
     mkdir /run/sshd
+    # 配置root用户的ssh password
+    if [[ -n "${PASSROOT}" ]]; then
+        echo "root:${PASSROOT}" | chpasswd
+        echo "PermitRootLogin yes" >> /etc/ssh/sshd_config
+    fi
 fi
 
 echo 'start sshd server ... '
