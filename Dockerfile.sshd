@@ -51,8 +51,8 @@ RUN groupadd --gid 1000 $USER_DEF && \
     sh -c "$(curl -fsSL https://raw.githubusercontent.com/ohmyzsh/ohmyzsh/master/tools/install.sh)" &&\
     git clone --depth 1 "https://github.com/zsh-users/zsh-autosuggestions" "${ZSH_CUSTOM}/zsh-autosuggestions" &&\
     echo "source ${ZSH_CUSTOM}/zsh-autosuggestions/zsh-autosuggestions.zsh" >> ~/.zshrc &&\
-    sed -i "1iZSH_DISABLE_COMPFIX=true" ~/.zshrc && sed -i "1iHOME=/home/user" /root/.bashrc &&\
-    sed -i "2iexport \$(sudo cat /proc/1/environ |tr '\0' '\\\\n' | xargs)" /etc/profile
+    sed -i "1iZSH_DISABLE_COMPFIX=true" ~/.zshrc && sed -i -e "1iHOME=/home/user" -e "1isource /etc/profile" /root/.bashrc &&\
+    sed -i "3iexport \$(sudo cat /proc/1/environ |tr '\\\\0' '\\\\n' | xargs)" /etc/profile
 
 # /etc/profile
 # ssh 连接会导致环境变量消失, 在docker中,可以通过进程ID=1上的环境变量还原, 通过profile文件还原
