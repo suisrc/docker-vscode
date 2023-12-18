@@ -51,7 +51,7 @@ RUN groupadd --gid 1000 $USER_DEF && \
     sh -c "$(curl -fsSL https://raw.githubusercontent.com/ohmyzsh/ohmyzsh/master/tools/install.sh)" &&\
     git clone --depth 1 "https://github.com/zsh-users/zsh-autosuggestions" "${ZSH_CUSTOM}/zsh-autosuggestions" &&\
     echo "source ${ZSH_CUSTOM}/zsh-autosuggestions/zsh-autosuggestions.zsh" >> ~/.zshrc &&\
-    sed -i "1iZSH_DISABLE_COMPFIX=true" ~/.zshrc
+    sed -i "1iZSH_DISABLE_COMPFIX=true" ~/.zshrc && sed -i "1iHOME=/home/user" /root/.bashrc
 
 WORKDIR $HOME
 
