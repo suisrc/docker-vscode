@@ -1,6 +1,9 @@
 # /etc/profile: system-wide .profile file for the Bourne shell (sh(1))
 # and Bourne compatible shells (bash(1), ksh(1), ash(1), ...).
 
+# ssh 连接会导致环境变量消失, 在docker中,可以通过进程ID=1上的环境变量还原
+export $(sudo cat /proc/1/environ |tr '\0' '\n' | xargs)
+
 if [ "${PS1-}" ]; then
   if [ "${BASH-}" ] && [ "$BASH" != "/bin/sh" ]; then
     # The file bash.bashrc already sets the default PS1.
@@ -25,6 +28,3 @@ if [ -d /etc/profile.d ]; then
   done
   unset i
 fi
-
-# ssh 连接会导致环境变量消失, 在docker中,可以通过进程ID=1上的环境变量还原
-# export $(cat /proc/1/environ |tr '\0' '\n' | xargs)
