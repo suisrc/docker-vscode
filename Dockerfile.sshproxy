@@ -1,7 +1,7 @@
 FROM golang:1.20-bullseye as builder
 
 RUN apt-get update && apt-get install -y git
-RUN mkdir /build/ git clone https://github.com/suisrc/sshproxy.git /build/
+RUN mkdir /build/ && git clone https://github.com/suisrc/sshproxy.git /build/
 RUN cd /build/ && go build -ldflags "-w -s" -o ./_app .
 
 FROM debian:bullseye-slim
