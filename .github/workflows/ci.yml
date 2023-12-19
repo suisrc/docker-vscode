@@ -13,15 +13,15 @@ on:
 # nginx: jammy基础上安装了nginx
 # sshd: nginx基础上安装了sshd
 # vscode: sshd基础上安装了vscode
-# xfce: vscode基础上安装了xfce
 #
+# xface-~: 安装桌面环境 
 # dev-~: 专注于开发环境
 # ms-dev-~: 开发环境，使用 ms 插件库
 # playwright-ms-dev-~: 开发环境，使用 playwright-ms 插件库
 
 env:
   IMAGE_NAME: suisrc/webtop
-  IMAGE_VERSION: 'vscpod-23121901'
+  IMAGE_VERSION: 'jammy-23121901'
   GITHUB_REGISTRY: ghcr.io
   DOCKER_REGISTRY: docker.io
   QUAY_REGISTRY: quay.io
