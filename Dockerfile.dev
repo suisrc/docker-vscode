@@ -53,6 +53,7 @@ RUN if [ -z ${MAVEN_URL+x} ]; then \
 # RUN apt update && apt install -y python3 python3-pip python3-venv && ln -s /usr/bin/python3 /usr/local/bin/py &&\
 #     apt autoremove -y && apt clean && rm -rf /tmp/* /var/tmp/* /var/lib/apt/lists/*
 
+# COPY rootfs/usr/bin/ /usr/bin/
 # ==============================================================================================================
 # golang extension
 # RUN go install github.com/ramya-rao-a/go-outline@latest &&\
