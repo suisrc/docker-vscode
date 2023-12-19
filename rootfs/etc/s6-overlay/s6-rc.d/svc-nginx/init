@@ -5,13 +5,13 @@ echo "init nginx config ..."
 #########################################################################
 # 处理证书配置
 # ${HOME}/.vnc/self.pem不存在，新建自签证书
-if [[ ! -f ${HOME}/.vnc/self.pem ]]; then
+if [[ ! -f ${HOME}/.vnc/self.csr ]]; then
     # Create cert for KasmVNC
-    echo "Creating self-signed cert file for KasmVNC"
+    echo "creating self-signed file to ${HOME}/.vnc/self.(csr/key)"
     mkdir -p ${HOME}/.vnc
     openssl req -x509 -nodes -days 3650 -newkey rsa:2048 \
-    -keyout ${HOME}/.vnc/self.pem \
-    -out    ${HOME}/.vnc/self.pem \
+    -keyout ${HOME}/.vnc/self.key \
+    -out    ${HOME}/.vnc/self.csr \
     -subj "/C=CN/ST=LN/L=DL/O=None/OU=SCC/CN=*"
 fi
 
