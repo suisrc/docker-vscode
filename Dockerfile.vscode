@@ -1,6 +1,7 @@
 ## 4. 安装 webtop [vscode]
 FROM ghcr.io/suisrc/webtop:sshd-23121901-vsas
 # ================================================================
+# --auth none & default passwd
 
 # set environment variables
 ENV SVC_SSHD="0" \
@@ -16,8 +17,8 @@ ENV SVC_SSHD="0" \
 RUN mkdir /usr/local/node && \
     curl -fSL --compressed "https://nodejs.org/dist/v${NODE_VERSION}/node-v$NODE_VERSION-linux-x64.tar.xz" | \
     tar -xJ -C /usr/local/node --strip-components=1 && npm install -g yarn && node --version && npm --version && \
-    VSC_RURL="https://github.com/coder/code-server/releases" &&\
-    VSC_PATH="${VSC_RURL}/download/v${VSCR_VERSION}/code-server-${VSCR_VERSION}-linux-amd64.tar.gz" &&\
+    VSC_RURL="https://github.com/coder/code-server/releases" && \
+    VSC_PATH="${VSC_RURL}/download/v${VSCR_VERSION}/code-server-${VSCR_VERSION}-linux-amd64.tar.gz" && \
     curl -o /tmp/vsc.tar.gz -L "${VSC_PATH}" && mkdir -p ${VSC_HOME} ${WSC_HOME} && tar xzf /tmp/vsc.tar.gz -C ${VSC_HOME}/ --strip-components=1 && \
     rm -f ${VSC_HOME}/node      && ln -s /usr/local/node/bin/node ${VSC_HOME}/node && \
     rm -f ${VSC_HOME}/lib/node  && ln -s /usr/local/node/bin/node ${VSC_HOME}/lib/node && \
@@ -29,7 +30,7 @@ RUN mkdir /usr/local/node && \
     rm -rf /tmp/* /var/tmp/* $HOME/.local/share/code-server/CachedExtensionVSIXs/* && \
     ln -s ${WSC_HOME} ${HOME}/wsc && chown -R $USER_DEF:$USER_DEF ${VSC_HOME} $HOME ${WSC_HOME} 
 
-EXPOSE 7901
+# EXPOSE 6801
 
 # add rootfs/home
 COPY rootfs/home /home
