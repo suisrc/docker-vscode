@@ -7,8 +7,8 @@ if [[ "${SVC_VSCODE}" == "0" ]]; then
     exit
 fi
 
-if [ ! -f "$HOME/.vscode-server/_init" ]; then
-    echo `date` > $HOME/.vscode-server/_init
+if [ ! -f "$HOME/.vscode_server_init" ]; then
+    echo `date` > $HOME/.vscode_server_init
     # 不能使用 init-vscode 调度，原因是需要在 with-user 环境下执行
     zsh /etc/s6-overlay/s6-rc.d/svc-vscode/init
 fi

@@ -31,9 +31,9 @@ else
         grep -rl open-vsx.org /vsc/**/*.js | xargs sed -i "s|https://open-vsx.org/vscode/asset/{publisher}/{name}/{version}/Microsoft.VisualStudio.Code.WebResources/{path}|$VSX_RESOURCE_URL|g"
     fi
 fi
-echo 'install vscode extension ...'
 # bash read -ra, zsh read -rA
 if [ $EXTENSIONS ]; then
+    echo 'install vscode extension ...'
     IFS=','
     read -rA exts <<<"$EXTENSIONS"
     for i in "${exts[@]}"; do
