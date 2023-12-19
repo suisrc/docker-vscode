@@ -32,10 +32,11 @@ RUN mkdir /var/run/openresty &&\
     rm -rf /tmp/* /var/tmp/* /var/lib/apt/lists/*
 
 # add nginx to s6-rc
-COPY rootfs/etc/s6-overlay/s6-rc.d/init-nginx/* /etc/s6-overlay/s6-rc.d/init-nginx/
-COPY rootfs/etc/s6-overlay/s6-rc.d/svc-nginx/* /etc/s6-overlay/s6-rc.d/svc-nginx/
+COPY rootfs/etc/nginx/ /etc/nginx/
+COPY rootfs/etc/s6-overlay/s6-rc.d/init-nginx/ /etc/s6-overlay/s6-rc.d/init-nginx/
+COPY rootfs/etc/s6-overlay/s6-rc.d/svc-nginx/ /etc/s6-overlay/s6-rc.d/svc-nginx/
 RUN  echo "" > /etc/s6-overlay/s6-rc.d/user/contents.d/init-nginx && \
-     echo "" > /etc/s6-overlay/s6-rc.d/user/contents.d/svc-nginx
-COPY rootfs/etc/nginx/* /etc/nginx/
+     echo "" > /etc/s6-overlay/s6-rc.d/user/contents.d/svc-nginx && \
+     rm -rf /etc/nginx/demo/*.conf
 
 WORKDIR /www

@@ -32,10 +32,14 @@ fi
 #########################################################################
 ## NGX_VSCC_CONF
 NGX_VSCC_CONF=/etc/nginx/conf.d/vscc.server.conf
-# 如果NGINX_CONFIG存在，跳过处理
-if [ ! -f ${NGX_VSCC_CONF} ]; then
-  echo "[nginx] create nginx conf for vscc"
-  cp -f /etc/nginx/demo/vscc.server.conf  ${NGX_VSCC_CONF}
+NGX_VSCC_DEMO=/etc/nginx/demo/vscc.server.conf
+if [ -f ${NGX_VSCC_CONF} ]; then
+  echo "[nginx] vscc.server.conf exists, skip"
+elif [ ! -f ${NGX_VSCC_DEMO} ]; then
+  echo "[nginx] vscc.server.conf demo not exists, skip"
+else
+  echo "[nginx] vscc.server.conf create ..."
+  cp -f ${NGX_VSCC_DEMO} ${NGX_VSCC_CONF}
   # 使用密码验证
   if [ ! -z ${PASSWORD+x} ]; then
     sed -i 's/##//g' ${NGX_VSCC_CONF}
@@ -45,10 +49,14 @@ fi
 #########################################################################
 ## NGX_KASM_CONF
 NGX_KASM_CONF=/etc/nginx/conf.d/kasm.server.conf
-# 如果NGINX_CONFIG存在，跳过处理
-if [ ! -f ${NGX_KASM_CONF} ]; then
-  echo "[nginx] create nginx conf for kasm"
-  cp -f /etc/nginx/demo/kasm.server.conf  ${NGX_KASM_CONF}
+NGX_KASM_DEMO=/etc/nginx/demo/kasm.server.conf
+if [ -f ${NGX_KASM_CONF} ]; then
+  echo "[nginx] kasm.server.conf exists, skip"
+elif [ ! -f ${NGX_KASM_DEMO} ]; then
+  echo "[nginx] kasm.server.conf demo not exists, skip"
+else
+  echo "[nginx] kasm.server.conf create ..."
+  cp -f ${NGX_KASM_DEMO} ${NGX_KASM_CONF}
   # 使用密码验证
   if [ ! -z ${PASSWORD+x} ]; then
     sed -i 's/##//g' ${NGX_KASM_CONF}
