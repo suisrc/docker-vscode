@@ -7,6 +7,12 @@ if [[ "${SVC_VSCODE}" == "0" ]]; then
     exit
 fi
 
+if [ ! -f "$HOME/.vscode-server/_init" ]; then
+    echo `date` > $HOME/.vscode-server/_init
+    # 不能使用 init-vscode 调度，原因是需要在 with-user 环境下执行
+    zsh /etc/s6-overlay/s6-rc.d/svc-vscode/init
+fi
+
 echo 'start vscode server ...'
 ## VSC_ARGS: vscode参数
-code-server --host ${VSC_HOST:-0.0.0.0} --port ${VSC_PORT:-7000} $VSC_ARGS /wsc
+code-server --host ${VSC_HOST:-0.0.0.0} --port ${VSC_PORT:-7901} $VSC_ARGS /wsc

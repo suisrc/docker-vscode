@@ -1,25 +1,56 @@
 #!/usr/bin/with-contenv bash
 set -e
 
-## NGX_KASM_CONF
-## PASSKASM
-
-# # nginx Path
-NGX_KASM_CONF=/etc/nginx/conf.d/kasm.server.conf
-# 如果NGINX_CONFIG存在，跳过处理
-if [ -f ${NGX_KASM_CONF} ]; then
-  echo "[nginx] kasm conf exists, skip modify"
-  exit 0
+echo "init nginx config ..."
+#########################################################################
+# 处理证书配置
+# ${HOME}/.vnc/self.pem不存在，新建自签证书
+if [[ ! -f ${HOME}/.vnc/self.pem ]]; then
+    # Create cert for KasmVNC
+    echo "Creating self-signed cert file for KasmVNC"
+    mkdir -p ${HOME}/.vnc
+    openssl req -x509 -nodes -days 3650 -newkey rsa:2048 \
+    -keyout ${HOME}/.vnc/self.pem \
+    -out    ${HOME}/.vnc/self.pem \
+    -subj "/C=CN/ST=LN/L=DL/O=None/OU=SCC/CN=*"
 fi
 
-echo "[nginx] create nginx conf for kasm"
-cp -f /etc/nginx/demo/kasm.server.conf  ${NGX_KASM_CONF}
-# 修改默认的配置内容
-# sed -i "s/7001/${NGX_KASM_PORT:-7001}/" ${NGX_KASM_CONF}
-# if [ ! -z ${NGX_KASM_IPV6+x} ]; then
-#   sed -i '/listen \[::\]/d' ${NGX_KASM_CONF}
-# fi
+#########################################################################
 # 使用密码验证
-if [ ! -z ${PASSKASM+x} ]; then
-  sed -i 's/##//g' ${NGX_KASM_CONF}
+PASSWORD_PATH="$HOME/.passwd"
+if [[ -f $PASSWORD_PATH ]]; then
+    echo -e "purging existing VNC password settings"
+    rm -f $PASSWORD_PATH
+fi
+if [ ! -z ${PASSWORD+x} ]; then
+    # echo "user:$(openssl passwd -apr1 ${VNC_PW}):ow" > $PASSWORD_PATH
+    KASM_PW_HASH=$(python3 -c "import crypt; print(crypt.crypt('${PASSWORD}', '\$5\$kasm\$'));")
+    echo "${KASM_USER:-user}:${KASM_PW_HASH}:ow" > $PASSWORD_PATH
+    chmod 600 $PASSWORD_PATH
+fi
+
+#########################################################################
+## NGX_VSCC_CONF
+NGX_VSCC_CONF=/etc/nginx/conf.d/vscc.server.conf
+# 如果NGINX_CONFIG存在，跳过处理
+if [ ! -f ${NGX_VSCC_CONF} ]; then
+  echo "[nginx] create nginx conf for vscc"
+  cp -f /etc/nginx/demo/vscc.server.conf  ${NGX_VSCC_CONF}
+  # 使用密码验证
+  if [ ! -z ${PASSWORD+x} ]; then
+    sed -i 's/##//g' ${NGX_VSCC_CONF}
+  fi
+fi
+
+#########################################################################
+## NGX_KASM_CONF
+NGX_KASM_CONF=/etc/nginx/conf.d/kasm.server.conf
+# 如果NGINX_CONFIG存在，跳过处理
+if [ ! -f ${NGX_KASM_CONF} ]; then
+  echo "[nginx] create nginx conf for kasm"
+  cp -f /etc/nginx/demo/kasm.server.conf  ${NGX_KASM_CONF}
+  # 使用密码验证
+  if [ ! -z ${PASSWORD+x} ]; then
+    sed -i 's/##//g' ${NGX_KASM_CONF}
+  fi
 fi

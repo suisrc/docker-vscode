@@ -7,9 +7,9 @@ if [[ "${SVC_SSHD}" == "0" ]]; then
     exit
 fi
 
-if [ ! -f '/etc/ssh/_sshd_init' ]; then
+if [ ! -f '/etc/ssh/_init' ]; then
+    echo `date` > /etc/ssh/_init
     echo 'init sshd keys ...'
-    echo `date` > /etc/ssh/_sshd_init
     mkdir /run/sshd
     # sshd-keygen,初始化
     echo y | ssh-keygen -q -t rsa -N '' -f /etc/ssh/ssh_host_rsa_key

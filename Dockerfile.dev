@@ -8,11 +8,11 @@ RUN mkdir -p ${HOME}/.go/bin
 ENV GO_VERSION=1.21.3 \
     JAVA_VERSION=jdk-17.0.8.1+1_openj9-0.40.0 \
     MAVEN_VERSION=3.9.5 \
-    GOPATH=${HOME}/.go \
+    GOPATH=${HOME}/go \
     JDK_HOME=/usr/local/java \
     JAVA_HOME=/usr/local/java \
     MAVEN_HOME=/usr/local/maven \
-    PATH=/usr/local/golang/bin:/usr/local/node/bin:/usr/local/java/bin:/usr/local/maven/bin:${HOME}/.go/bin:$PATH
+    PATH=/usr/local/golang/bin:/usr/local/node/bin:/usr/local/java/bin:/usr/local/maven/bin:${HOME}/go/bin:$PATH
 
 # ==============================================================================================================
 # https://golang.google.cn/dl/

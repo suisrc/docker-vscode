@@ -7,7 +7,6 @@ if [[ "${SVC_AUDIO}" == "0" ]]; then
     exit
 fi
 
-
 exec /usr/bin/pulseaudio \
     --log-level=0 \
     --log-target=stderr \
