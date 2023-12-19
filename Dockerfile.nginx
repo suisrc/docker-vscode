@@ -25,6 +25,7 @@ RUN mkdir /var/run/openresty &&\
     ntpdate \
     iputils-ping \
     locales \
+    openssl \
     inotify-tools \
     ca-certificates &&\
     apt-get autoremove && apt-get clean && \

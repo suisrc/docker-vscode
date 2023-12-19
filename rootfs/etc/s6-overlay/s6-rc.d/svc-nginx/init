@@ -23,9 +23,9 @@ if [[ -f $PASSWORD_PATH ]]; then
     rm -f $PASSWORD_PATH
 fi
 if [ ! -z ${PASSWORD+x} ]; then
-    # echo "user:$(openssl passwd -apr1 ${VNC_PW}):ow" > $PASSWORD_PATH
-    KASM_PW_HASH=$(python3 -c "import crypt; print(crypt.crypt('${PASSWORD}', '\$5\$kasm\$'));")
-    echo "${KASM_USER:-user}:${KASM_PW_HASH}:ow" > $PASSWORD_PATH
+    # openssl passwd -5 使用的是基于 SHA-256 的密码哈希算法
+    random_str=$(cat /dev/urandom | tr -dc 'a-zA-Z0-9' | fold -w 10 | head -n 1)
+    echo "user:$(openssl passwd -5 -salt $random_str $PASSWORD):ow" > $PASSWORD_PATH
     chmod 600 $PASSWORD_PATH
 fi
 
