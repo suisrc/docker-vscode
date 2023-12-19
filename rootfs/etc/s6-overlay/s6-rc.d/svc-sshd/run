@@ -9,7 +9,7 @@ fi
 
 if [ ! -f '/etc/ssh/_init' ]; then
     echo `date` > /etc/ssh/_init
-    echo 'init sshd keys ...'
+    echo 'init sshd for keys ...'
     mkdir /run/sshd
     # sshd-keygen,初始化
     echo y | ssh-keygen -q -t rsa -N '' -f /etc/ssh/ssh_host_rsa_key
@@ -17,12 +17,13 @@ if [ ! -f '/etc/ssh/_init' ]; then
     echo y | ssh-keygen -q -t rsa -N '' -f /etc/ssh/ssh_host_ecdsa_key
     echo y | ssh-keygen -q -t rsa -N '' -f /etc/ssh/ssh_host_ed25519_key
     # 配置root的登录密码
-    echo 'init sshd user ...'
+    echo ''
+    echo 'init sshd for user ...'
     echo "user:${PASSWORD}" | chpasswd
     echo "PasswordAuthentication yes" >> /etc/ssh/sshd_config
     # 配置root用户的ssh password
     if [[ -n "${PASSROOT}" ]]; then
-        echo 'init sshd root ...'
+        echo 'init sshd for root ...'
         echo "root:${PASSROOT}" | chpasswd
         echo "PermitRootLogin yes" >> /etc/ssh/sshd_config
     fi
