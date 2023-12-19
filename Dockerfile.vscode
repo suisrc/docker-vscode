@@ -34,5 +34,6 @@ EXPOSE 7000
 # add rootfs/home
 COPY rootfs/home /home
 # add vscode s6-rc
-COPY rootfs/etc/s6-overlay/s6-rc.d/svc-vscode/* /etc/s6-overlay/s6-rc.d/svc-vscode/
+COPY rootfs/etc/s6-overlay/s6-rc.d/svc-vscode/ /etc/s6-overlay/s6-rc.d/svc-vscode/
+COPY rootfs/etc/nginx/demo/vscc.server.conf    /etc/nginx/demo/
 RUN  echo "" > /etc/s6-overlay/s6-rc.d/user/contents.d/svc-vscode
