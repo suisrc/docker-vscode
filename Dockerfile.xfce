@@ -6,6 +6,7 @@
 # kclient builder, fix kasm client bug
 FROM ghcr.io/suisrc/webtop:kclient-23121601-vsas as kclient-stage
 
+ARG BASE_IMAGE_TAG
 FROM ghcr.io/suisrc/webtop:${BASE_IMAGE_TAG}-vsas
 # =============================================================================================
 # kasm (noVnc)
