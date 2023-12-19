@@ -23,10 +23,10 @@ RUN mkdir /usr/local/node && \
     sed -i 's/"$0"/"$(readlink -f $0)"/' ${VSC_HOME}/bin/openvscode-server && \
     sed -i 's/"$0"/"$(readlink -f $0)"/' ${VSC_HOME}/bin/remote-cli/openvscode-server && \
     rm  -f ${VSC_HOME}/node && ln -s /usr/local/node/bin/node ${VSC_HOME}/node && \
-    ln -s ${VSC_HOME}/bin/code-server /usr/bin/code-server && \
-    ${VSC_HOME}/bin/code-server --install-extension mhutchie.git-graph && \
-    ${VSC_HOME}/bin/code-server --install-extension esbenp.prettier-vscode && \
-    ${VSC_HOME}/bin/code-server --install-extension humao.rest-client && \
+    ln -s ${VSC_HOME}/bin/openvscode-server /usr/bin/code-server && \
+    /usr/bin/code-server --install-extension mhutchie.git-graph && \
+    /usr/bin/code-server --install-extension esbenp.prettier-vscode && \
+    /usr/bin/code-server --install-extension humao.rest-client && \
     rm -rf /tmp/* /var/tmp/* $HOME/.local/share/code-server/CachedExtensionVSIXs/* && \
     ln -s ${WSC_HOME} ${HOME}/wsc && chown -R $USER_DEF:$USER_DEF ${VSC_HOME} $HOME ${WSC_HOME} 
 
