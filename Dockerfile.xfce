@@ -1,4 +1,4 @@
-## 5. 安装 webtop for xfce4
+## x. 安装 webtop for xfce4, 支持 vscode-cdr 和 vscode-pod 安装
 # ================================================================
 # https://github.com/linuxserver/docker-baseimage-kasmvnc
 # https://github.com/kasmtech/workspaces-core-images
