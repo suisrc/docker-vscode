@@ -8,6 +8,9 @@ if [[ "${SVC_KASM}" == "0" ]]; then
     exit
 fi
 
+if [ -z ${XVNC_IP+x} ]; then
+    XVNC_IP="127.0.0.1" # default to localhost
+fi
 # Pass gpu flags if mounted
 if ls /dev/dri/renderD* 1> /dev/null 2>&1; then
   HW3D="-hw3d"
@@ -18,16 +21,16 @@ fi
 
 exec /usr/bin/Xvnc ${DISPLAY} \
     ${HW3D} \
-    -PublicIP 127.0.0.1 \
+    -PublicIP '127.0.0.1' \
     -drinode ${DRINODE} \
     -disableBasicAuth \
     -SecurityTypes None \
     -AlwaysShared \
     -http-header Cross-Origin-Embedder-Policy=require-corp \
     -http-header Cross-Origin-Opener-Policy=same-origin \
-    -geometry 1024x768 \
+    -geometry '1024x768' \
     -sslOnly 0 \
     -RectThreads 0 \
     -websocketPort 6901 \
-    -interface 0.0.0.0 \
+    -interface ${XVNC_IP} \
     -Log *:stdout:10

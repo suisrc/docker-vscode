@@ -2,29 +2,24 @@
 set -e
 
 ## NGX_KASM_CONF
-## NGX_KASM_PORT
-## NGX_KASM_IPV6： 是否启用ipv6
-## PASSWORD
+## PASSKASM
 
 # # nginx Path
-NGX_KASM_CONF=/etc/nginx/conf.d/kasmvnc.server.conf
-
+NGX_KASM_CONF=/etc/nginx/conf.d/kasm.server.conf
 # 如果NGINX_CONFIG存在，跳过处理
 if [ -f ${NGX_KASM_CONF} ]; then
-  echo "[nginx] kasmvnc conf exists, skip modify"
+  echo "[nginx] kasm conf exists, skip modify"
   exit 0
 fi
 
-echo "[nginx] create nginx conf for kasmvnc"
-
-# 修改默认的配置内容
+echo "[nginx] create nginx conf for kasm"
 cp -f /etc/nginx/demo/kasm.server.conf  ${NGX_KASM_CONF}
-sed -i "s/7001/${NGX_KASM_PORT:-7001}/" ${NGX_KASM_CONF}
-if [ ! -z ${NGX_KASM_IPV6+x} ]; then
-  sed -i '/listen \[::\]/d' ${NGX_KASM_CONF}
-fi
-
+# 修改默认的配置内容
+# sed -i "s/7001/${NGX_KASM_PORT:-7001}/" ${NGX_KASM_CONF}
+# if [ ! -z ${NGX_KASM_IPV6+x} ]; then
+#   sed -i '/listen \[::\]/d' ${NGX_KASM_CONF}
+# fi
 # 使用密码验证
-if [ ! -z ${KASM_PASS+x} ]; then
+if [ ! -z ${PASSKASM+x} ]; then
   sed -i 's/##//g' ${NGX_KASM_CONF}
 fi

@@ -1,5 +1,5 @@
 ## 4. 安装 webtop [vscode]
-FROM ghcr.io/suisrc/webtop:sshd-23121802-vsas
+FROM ghcr.io/suisrc/webtop:sshd-23121901-vsas
 # ================================================================
 
 # set environment variables

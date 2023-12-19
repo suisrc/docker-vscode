@@ -17,16 +17,16 @@ if [[ ! -f ${HOME}/.vnc/self.pem ]]; then
 fi
 
 # 使用密码验证
-KASM_PASS_PATH="$HOME/.kasmpasswd"
-if [[ -f $KASM_PASS_PATH ]]; then
+PASS_KASM_PATH="$HOME/.vnc/passwd"
+if [[ -f $PASS_KASM_PATH ]]; then
     echo -e "purging existing VNC password settings"
-    rm -f $KASM_PASS_PATH
+    rm -f $PASS_KASM_PATH
 fi
-if [ ! -z ${KASM_PASS+x} ]; then
-    # echo "user:$(openssl passwd -apr1 ${VNC_PW}):ow" > $KASM_PASS_PATH
-    KASM_PW_HASH=$(python3 -c "import crypt; print(crypt.crypt('${KASM_PASS}', '\$5\$kasm\$'));")
-    echo "${KASM_USER:-user}:${KASM_PW_HASH}:ow" > $KASM_PASS_PATH
-    chmod 600 $KASM_PASS_PATH
+if [ ! -z ${PASSKASM+x} ]; then
+    # echo "user:$(openssl passwd -apr1 ${VNC_PW}):ow" > $PASS_KASM_PATH
+    KASM_PW_HASH=$(python3 -c "import crypt; print(crypt.crypt('${PASSKASM}', '\$5\$kasm\$'));")
+    echo "${KASM_USER:-user}:${KASM_PW_HASH}:ow" > $PASS_KASM_PATH
+    chmod 600 $PASS_KASM_PATH
 fi
 
 # default file copies first run
