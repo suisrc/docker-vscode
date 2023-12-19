@@ -13,7 +13,7 @@ RUN zsh -c "grep -rl open-vsx.org /vsc/**/*.js /vsc/**/*.json /vsc/**/*.map | xa
 RUN code-server --install-extension golang.go &&\
     code-server --install-extension Vue.volar &&\
     code-server --install-extension Vue.vscode-typescript-vue-plugin &&\
-    code-server --install-extension vscjava.vscode-java-pack@0.23.0 &&\
+    code-server --install-extension vscjava.vscode-java-pack &&\
     code-server --install-extension vscjava.vscode-lombok &&\
     code-server --install-extension redhat.vscode-xml &&\
     code-server --install-extension bungcip.better-toml &&\
