@@ -11,6 +11,9 @@ FROM ghcr.io/suisrc/webtop:${BASE_IMAGE_TAG}
 # =============================================================================================
 # kasm (noVnc)
 
+# backup run file
+RUN  cd /etc/s6-overlay/s6-rc.d/svc-vscode/ && mv run run.0
+# copy rootfs all file
 COPY rootfs/ /
 
 # set environment variables
@@ -120,8 +123,6 @@ RUN apt-get update && DEBIAN_FRONTEND=noninteractive \
     rm -f /etc/xdg/autostart/xscreensaver.desktop && \
     apt-get autoremove && apt-get clean && \
     rm -rf /tmp/* /var/tmp/* /var/lib/apt/lists/* && \
-    cp -f  /usr/share/backgrounds/bg_ubuntu.png /usr/share/backgrounds/xfce/xfce-verticals.png
-
-# ================================================================
-COPY others/vscode-run.sh /etc/s6-overlay/s6-rc.d/svc-vscode/run
-RUN  chown -R $USER_DEF:$USER_DEF ${VSC_HOME} ${WSC_HOME} ${HOME}
+    cp -f  /usr/share/backgrounds/bg_ubuntu.png /usr/share/backgrounds/xfce/xfce-verticals.png && \
+    chown -R $USER_DEF:$USER_DEF ${VSC_HOME} ${WSC_HOME} ${HOME} && \
+    cd /etc/s6-overlay/s6-rc.d/svc-vscode/ && mv -f run.0 run
