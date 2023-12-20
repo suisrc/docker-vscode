@@ -1,6 +1,6 @@
 ## 3. 安装 webtop [sshd]
 ARG BASE_IMAGE_TAG
-FROM ghcr.io/suisrc/webtop:nginx-{BASE_IMAGE_TAG}
+FROM ghcr.io/suisrc/webtop:nginx-${BASE_IMAGE_TAG}
 # ================================================================
 
 # set environment variables
