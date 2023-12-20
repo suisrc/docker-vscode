@@ -4,13 +4,20 @@ ARG BASE_IMAGE_TAG
 FROM ghcr.io/suisrc/webtop:${BASE_IMAGE_TAG}
 # ================================================================
 
-RUN npm install -g playwright 
+# install nodejs
+# RUN if [ -d /usr/local/node ]; then exit 0; fi && \
+#     mkdir /usr/local/node && \
+#     curl -fSL --compressed "https://nodejs.org/dist/v${NODE_VERSION}/node-v$NODE_VERSION-linux-x64.tar.xz" | \
+#     tar -xJ -C /usr/local/node --strip-components=1 && npm install -g yarn && node --version && npm --version
+
+# install playwright
+RUN npm install -g playwright
+
+# install playwright-go
 #go install github.com/playwright-community/playwright-go@latest
 
-# RUN playwright install firefox --with-deps && \
-#     apt-get autoremove && apt-get clean && \
-#     rm -rf /tmp/* /var/tmp/* /var/lib/apt/lists/*
 
+# install chromium and firefox
 RUN playwright install chromium firefox --with-deps && \
     apt-get autoremove && apt-get clean && \
     rm -rf /tmp/* /var/tmp/* /var/lib/apt/lists/*
