@@ -11,7 +11,7 @@ ENV VSC_HOST="0.0.0.0" \
     HOME="/root" \
     EXTENSIONS=""
 
-RUN apk add --no-cache curl gnupg openssh bash zsh jq tar git xz libc6-compat && \
+RUN apk add --no-cache curl wget gnupg openssh bash zsh jq tar git xz libc6-compat && \
     rm -rf /tmp/* /var/tmp/*
 
 RUN sh -c "$(curl -fsSL https://raw.githubusercontent.com/ohmyzsh/ohmyzsh/master/tools/install.sh)" && \
