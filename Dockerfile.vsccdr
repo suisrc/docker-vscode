@@ -30,7 +30,7 @@ RUN mkdir /usr/local/node && \
     /usr/bin/code-server --install-extension esbenp.prettier-vscode && \
     /usr/bin/code-server --install-extension humao.rest-client && \
     rm -rf /tmp/* /var/tmp/* $HOME/.local/share/code-server/CachedExtensionVSIXs/* && \
-    ln -s ${WSC_HOME} ${HOME}/wsc && chown -R $USER_DEF:$USER_DEF ${VSC_HOME} $HOME ${WSC_HOME} 
+    ln -s ${WSC_HOME} ${HOME}/wsc 
 
 # EXPOSE 6801
 
@@ -41,4 +41,5 @@ COPY rootfs/home /home
 COPY rootfs/etc/nginx/demo/vscc.server.conf /etc/nginx/demo/
 # add vscode s6-rc
 COPY rootfs/etc/s6-overlay/s6-rc.d/svc-vscode/ /etc/s6-overlay/s6-rc.d/svc-vscode/
-RUN  echo "" > /etc/s6-overlay/s6-rc.d/user/contents.d/svc-vscode
+RUN  echo "" > /etc/s6-overlay/s6-rc.d/user/contents.d/svc-vscode && \
+     chown -R $USER_DEF:$USER_DEF ${VSC_HOME} ${WSC_HOME} ${HOME}
