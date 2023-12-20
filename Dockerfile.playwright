@@ -1,7 +1,7 @@
 ## x. playwirght
 ARG BASE_IMAGE_TAG
 
-FROM ghcr.io/suisrc/webtop:${BASE_IMAGE_TAG}-vsas
+FROM ghcr.io/suisrc/webtop:${BASE_IMAGE_TAG}
 # ================================================================
 
 RUN npm install -g playwright 

@@ -1,5 +1,6 @@
 ## 4. 安装 webtop [vscode]
-FROM ghcr.io/suisrc/webtop:sshd-23121901-vsas
+ARG BASE_IMAGE_TAG
+FROM ghcr.io/suisrc/webtop:sshd-{BASE_IMAGE_TAG}
 # ================================================================
 # --without-connection-token & --connection-token $VSC_TOKEN
 
