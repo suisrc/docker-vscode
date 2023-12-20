@@ -1,5 +1,5 @@
 ## 非常小，只有编辑功能的 vscode-online
-FROM alpine:3.19
+FROM debian:bullseye-slim
 
 # set environment variables
 ENV VSC_HOST="0.0.0.0" \
@@ -11,8 +11,11 @@ ENV VSC_HOST="0.0.0.0" \
     HOME="/root" \
     EXTENSIONS=""
 
-RUN apk add --no-cache curl wget gnupg openssh bash zsh jq tar git xz libc6-compat && \
-    rm -rf /tmp/* /var/tmp/*
+RUN apt update && DEBIAN_FRONTEND=noninteractive \
+    apt install --no-install-recommends -y \
+    curl wget gnupg openssh bash zsh jq tar git xz && \
+    apt-get autoremove && apt-get clean && \
+    rm -rf /tmp/* /var/tmp/* /var/lib/apt/lists/*
 
 RUN sh -c "$(curl -fsSL https://raw.githubusercontent.com/ohmyzsh/ohmyzsh/master/tools/install.sh)" && \
     git clone --depth 1 "https://github.com/zsh-users/zsh-autosuggestions" "${ZSH_CUSTOM}/zsh-autosuggestions" && \
