@@ -14,11 +14,6 @@ ENV SVC_SSHD="0" \
     WSC_HOME="/wsc" \
     EXTENSIONS=""
 
-# install nodejs and vscode <- https://nodejs.org/en/
-RUN mkdir /usr/local/node && \
-    curl -fSL --compressed "https://nodejs.org/dist/v${NODE_VERSION}/node-v$NODE_VERSION-linux-x64.tar.xz" | \
-    tar -xJ -C /usr/local/node --strip-components=1 && npm install -g yarn && node --version && npm --version
-
 # 只下载最新版的 vscode-cli
 RUN curl -Lk 'https://code.visualstudio.com/sha/download?build=stable&os=cli-alpine-x64' --output /tmp/vsc.tar.gz &&\
     cd /tmp/ && tar -xf vsc.tar.gz && mv code /usr/bin/code-cli && chmod +x /usr/bin/code-cli && \
