@@ -8,15 +8,15 @@ ENV VSC_HOST="0.0.0.0" \
     ZSH_CUSTOM="/root/.oh-my-zsh/plugins" \
     VSC_HOME="/vsc" \
     WSC_HOME="/wsc" \
-    HOME="/root"
+    HOME="/root" \
     EXTENSIONS=""
 
-RUN apk add --no-cache curl gnupg openssh bash zsh jq tar git xz libc6-compat &&\
+RUN apk add --no-cache curl gnupg openssh bash zsh jq tar git xz libc6-compat && \
     rm -rf /tmp/* /var/tmp/*
 
-RUN sh -c "$(curl -fsSL https://raw.githubusercontent.com/ohmyzsh/ohmyzsh/master/tools/install.sh)" &&\
-    git clone --depth 1 "https://github.com/zsh-users/zsh-autosuggestions" "${ZSH_CUSTOM}/zsh-autosuggestions" &&\
-    echo "source ${ZSH_CUSTOM}/zsh-autosuggestions/zsh-autosuggestions.zsh" >> ~/.zshrc &&\
+RUN sh -c "$(curl -fsSL https://raw.githubusercontent.com/ohmyzsh/ohmyzsh/master/tools/install.sh)" && \
+    git clone --depth 1 "https://github.com/zsh-users/zsh-autosuggestions" "${ZSH_CUSTOM}/zsh-autosuggestions" && \
+    echo "source ${ZSH_CUSTOM}/zsh-autosuggestions/zsh-autosuggestions.zsh" >> ~/.zshrc && \
     sed -i "1iZSH_DISABLE_COMPFIX=true" ~/.zshrc
 
 # 只下载新版的 vscode
