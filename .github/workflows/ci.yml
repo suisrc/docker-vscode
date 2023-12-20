@@ -21,7 +21,7 @@ on:
 
 env:
   IMAGE_NAME: suisrc/webtop
-  IMAGE_VERSION: 'dev-vscode-23122001'
+  IMAGE_VERSION: 'lite-23122001'
   GITHUB_REGISTRY: ghcr.io
   DOCKER_REGISTRY: docker.io
   QUAY_REGISTRY: quay.io
@@ -46,7 +46,7 @@ jobs:
 
           IMAGE_ID=$REGISTRY_URL/$IMAGE_NAME
           echo IMAGE_ID=$IMAGE_ID
-          VERSION=$IMAGE_VERSION-${{ github.job }}
+          VERSION=$IMAGE_VERSION  #-${{ github.job }}
           echo VERSION=$VERSION
 
           docker tag image $IMAGE_ID:$VERSION
@@ -59,7 +59,7 @@ jobs:
 
           IMAGE_ID=$REGISTRY_URL/$IMAGE_NAME
           echo IMAGE_ID=$IMAGE_ID
-          VERSION=$IMAGE_VERSION-${{ github.job }}
+          VERSION=$IMAGE_VERSION  #-${{ github.job }}
           echo VERSION=$VERSION
 
           docker tag image $IMAGE_ID:$VERSION

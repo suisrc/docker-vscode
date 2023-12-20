@@ -26,10 +26,10 @@ echo 'start vscode server ...'
 ## VSC_ARGS: vscode参数
 if [[ "${SVC_VSCODE}" == "-1" ]]; then
     # tun server， 注册到vscode官方服务器, PS：未经测试，延迟高，而且一个账号最多5个设备
-    code-cli tunnel --accept-server-license-terms --random-name --cli-data-dir ${VSC_HOME}
+    exec code-cli tunnel --accept-server-license-terms --random-name --cli-data-dir ${VSC_HOME}
 else 
     # web server， 本地运行web服务
-    code-cli serve-web --accept-server-license-terms --host ${VSC_HOST:-0.0.0.0} --port ${VSC_PORT:-6801} --cli-data-dir ${VSC_HOME} --server-data-dir ${HOME}/.vscode-server $VSC_ARGS
+    exec code-cli serve-web --accept-server-license-terms --host ${VSC_HOST:-0.0.0.0} --port ${VSC_PORT:-6801} --cli-data-dir ${VSC_HOME} --server-data-dir ${HOME}/.vscode-server $VSC_ARGS
 fi
 
 
