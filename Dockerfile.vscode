@@ -6,7 +6,6 @@ FROM ghcr.io/suisrc/webtop:sshd-23121901-vsas
 # set environment variables
 ENV SVC_SSHD="0" \
     SVC_NGINX="1" \
-    SVC_VSCODE="0" \
     VSC_HOST="127.0.0.1" \
     VSC_ARGS="--without-connection-token" \
     NODE_VERSION="18.19.0" \
