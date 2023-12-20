@@ -19,10 +19,13 @@ RUN sh -c "$(curl -fsSL https://raw.githubusercontent.com/ohmyzsh/ohmyzsh/master
     echo "source ${ZSH_CUSTOM}/zsh-autosuggestions/zsh-autosuggestions.zsh" >> ~/.zshrc && \
     sed -i "1iZSH_DISABLE_COMPFIX=true" ~/.zshrc
 
+COPY others/vscode-run.sh /entrypoint.sh
+
 # 只下载新版的 vscode
 RUN curl -Lk 'https://code.visualstudio.com/sha/download?build=stable&os=cli-alpine-x64' --output /tmp/vsc.tar.gz &&\
     cd /tmp/ && tar -xf vsc.tar.gz && mv code /usr/bin/code-cli && chmod +x /usr/bin/code-cli && \
-    mkdir -p ${VSC_HOME} ${WSC_HOME} ${HOME}/.vscode-server && ln -s ${WSC_HOME} ${HOME}/wsc 
+    mkdir -p ${VSC_HOME} ${WSC_HOME} ${HOME}/.vscode-server && ln -s ${WSC_HOME} ${HOME}/wsc &&\
+    sed -i '1i#!/bin/bash' /entrypoint.sh
 
-COPY others/vscode-run.sh /entrypoint.sh
 ENTRYPOINT ["/entrypoint.sh"]
+
