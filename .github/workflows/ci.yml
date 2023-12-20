@@ -22,7 +22,7 @@ on:
 
 env:
   IMAGE_NAME: suisrc/webtop
-  IMAGE_VERSION: 'ms-dev-vscpod-23122002'
+  IMAGE_VERSION: 'xfce-dev-vscode-23122002'
   GITHUB_REGISTRY: ghcr.io
   DOCKER_REGISTRY: docker.io
   QUAY_REGISTRY: quay.io
