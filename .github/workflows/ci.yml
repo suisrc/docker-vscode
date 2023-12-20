@@ -18,11 +18,11 @@ on:
 # xface-~: 安装桌面环境 
 # dev-~: 专注于开发环境
 # ms-dev-~: 开发环境，使用 ms 插件库
-# playwright-ms-dev-~: 开发环境，使用 playwright-ms 插件库
+# playwright-~: 开发环境，使用 playwright-ms 插件库
 
 env:
   IMAGE_NAME: suisrc/webtop
-  IMAGE_VERSION: 'xfce-ms-dev-vscpod-23122002'
+  IMAGE_VERSION: 'playwright-xfce-dev-vscode-23122002'
   GITHUB_REGISTRY: ghcr.io
   DOCKER_REGISTRY: docker.io
   QUAY_REGISTRY: quay.io
