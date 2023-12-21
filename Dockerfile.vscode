@@ -8,7 +8,7 @@ FROM ghcr.io/suisrc/webtop:sshd-23122002
 ENV SVC_SSHD="0" \
     SVC_NGINX="1" \
     VSC_HOST="127.0.0.1" \
-    VSC_ARGS="--without-connection-token" \
+    VSC_ARGS=" --accept-server-license-terms --without-connection-token" \
     NODE_VERSION="18.19.0" \
     VSCR_VERSION="1.85.1" \
     PATH=/usr/local/node/bin:$PATH \
