@@ -48,7 +48,7 @@ RUN sh -c "$(curl -fsSL https://raw.githubusercontent.com/ohmyzsh/ohmyzsh/master
 
 COPY others/vscode-run.sh /entrypoint.sh
 
-# 只下载新版的 vscode
+# 安装 vscode cli
 RUN curl -Lk 'https://code.visualstudio.com/sha/download?build=stable&os=cli-alpine-x64' --output /tmp/vsc.tar.gz &&\
     cd /tmp/ && tar -xf vsc.tar.gz && mv code /usr/bin/code-cli && chmod +x /usr/bin/code-cli && \
     mkdir -p ${VSC_HOME} ${WSC_HOME} ${HOME}/.vscode-server && ln -s ${WSC_HOME} ${HOME}/wsc &&\

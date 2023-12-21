@@ -1,6 +1,6 @@
 ## 4. 安装 webtop [vscode]
 ARG BASE_IMAGE_TAG
-FROM ghcr.io/suisrc/webtop:sshd-${BASE_IMAGE_TAG}
+FROM ghcr.io/suisrc/webtop:sshd-23122002
 # ================================================================
 # --auth none & default passwd
 
@@ -10,25 +10,39 @@ ENV SVC_SSHD="0" \
     VSC_HOST="127.0.0.1" \
     VSC_ARGS="--without-connection-token" \
     NODE_VERSION="18.19.0" \
+    VSCR_VERSION="1.85.1" \
     PATH=/usr/local/node/bin:$PATH \
     VSC_HOME="/vsc" \
     WSC_HOME="/wsc" \
     EXTENSIONS=""
-
-# 只下载最新版的 vscode-cli
-RUN curl -Lk 'https://code.visualstudio.com/sha/download?build=stable&os=cli-alpine-x64' --output /tmp/vsc.tar.gz &&\
-    cd /tmp/ && tar -xf vsc.tar.gz && mv code /usr/bin/code-cli && chmod +x /usr/bin/code-cli && \
-    mkdir -p ${VSC_HOME} ${WSC_HOME} && ln -s ${WSC_HOME} ${HOME}/wsc 
-
-# EXPOSE 6801
 
 # add rootfs/home
 COPY rootfs/home /home
 # 默认 vscode 使用 no-auth 模式，需要启动 nginx 进行权限控制
 # 可以使用 VSC_HOST 和 VSC_ARGS 自行控制权限和直连 vscode
 COPY rootfs/etc/nginx/demo/vscc.server.conf /etc/nginx/demo/
+
+# 安装 vscode-cli
+# RUN curl -Lk 'https://code.visualstudio.com/sha/download?build=stable&os=cli-alpine-x64' --output /tmp/vsc.tar.gz &&\
+#     cd /tmp/ && tar -xf vsc.tar.gz && mv code /usr/bin/code-cli && chmod +x /usr/bin/code-cli && \
+#     mkdir -p ${VSC_HOME} ${WSC_HOME} && ln -s ${WSC_HOME} ${HOME}/wsc 
+# # add vscode s6-rc
+# COPY others/vscode-run.sh /etc/s6-overlay/s6-rc.d/svc-vscode/run
+# RUN  echo "longrun" > /etc/s6-overlay/s6-rc.d/svc-vscode/type && \
+#      echo "" > /etc/s6-overlay/s6-rc.d/user/contents.d/svc-vscode
+
+RUN mkdir /usr/local/node && \
+    curl -fSL --compressed "https://nodejs.org/dist/v${NODE_VERSION}/node-v$NODE_VERSION-linux-x64.tar.xz" | \
+    tar -xJ -C /usr/local/node --strip-components=1 && npm install -g yarn && node --version && npm --version && 
+    mkdir /tmp/vsc/ && git clone -b v${VSCR_VERSION} --depth 1 "https://github.com/suisrc/ms-vscode.git" /tmp/vsc/ && mv /tmp/vsc/vsc / && \
+    ln -s ${VSC_HOME}/bin/code-server /usr/bin/code-server && \
+    /usr/bin/code-server --install-extension mhutchie.git-graph && \
+    /usr/bin/code-server --install-extension esbenp.prettier-vscode && \
+    /usr/bin/code-server --install-extension humao.rest-client && \
+    rm -rf /tmp/* /var/tmp/* $HOME/.vscode-server/data/CachedExtensionVSIXs/* && \
+    mkdir -p ${WSC_HOME} && ln -s ${WSC_HOME} ${HOME}/wsc && chown -R $USER_DEF:$USER_DEF ${VSC_HOME} ${WSC_HOME} ${HOME}
 # add vscode s6-rc
-COPY others/vscode-run.sh /etc/s6-overlay/s6-rc.d/svc-vscode/run
-RUN  echo "longrun" > /etc/s6-overlay/s6-rc.d/svc-vscode/type && \
-     echo "" > /etc/s6-overlay/s6-rc.d/user/contents.d/svc-vscode && \
-     chown -R $USER_DEF:$USER_DEF ${VSC_HOME} ${WSC_HOME} ${HOME}
+COPY rootfs/etc/s6-overlay/s6-rc.d/svc-vscode/ /etc/s6-overlay/s6-rc.d/svc-vscode/
+RUN  echo "" > /etc/s6-overlay/s6-rc.d/user/contents.d/svc-vscode
+
+# EXPOSE 6801
