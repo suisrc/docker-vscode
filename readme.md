@@ -8,4 +8,6 @@ https://github.com/coder/code-server/releases
 https://github.com/kasmtech/KasmVNC  
 https://github.dev/kasmtech/workspaces-core-images  
 https://github.com/linuxserver/docker-webtop  
+https://github.com/linuxserver/docker-baseimage-kasmvnc  
+https://github.com/linuxserver/docker-baseimage-ubuntu  
 
