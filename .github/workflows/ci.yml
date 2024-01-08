@@ -22,7 +22,7 @@ on:
 
 env:
   IMAGE_NAME: suisrc/webtop
-  IMAGE_VERSION: 'ms-dev-vsccdr-24010301'
+  IMAGE_VERSION: 'proxyssh-24010801'
   GITHUB_REGISTRY: ghcr.io
   DOCKER_REGISTRY: docker.io
   QUAY_REGISTRY: quay.io
