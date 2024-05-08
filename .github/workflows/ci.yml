@@ -9,7 +9,7 @@ on:
 
 env:
   DOCKER_IMAGE_NAME: suisrc/vscode
-  DOCKER_VERSION: '1.84.2-cdr'
+  DOCKER_VERSION: '1.84.2-cdr-php'
   GITHUB_REGISTRY: ghcr.io
   QUAY_REGISTRY: quay.io
   DOCKER_REGISTRY: docker.io
