@@ -10,7 +10,7 @@ on:
 env:
   GITHUB_IMAGE_NAME: vscode
   DOCKER_IMAGE_NAME: suisrc/vscode
-  DOCKER_VERSION: '1.65.2-cdr'
+  DOCKER_VERSION: '1.84.2-cdr'
   GITHUB_REGISTRY: docker.pkg.github.com
   QUAY_REGISTRY: quay.io
   DOCKER_REGISTRY: docker.io
@@ -48,28 +48,28 @@ jobs:
           docker tag image $IMAGE_ID:$VERSION
           docker push $IMAGE_ID:$VERSION
       
-      - name: Push quay image
-        run: |
-          REGISTRY_URL=$QUAY_REGISTRY
-          echo "${{ secrets.QUAY_TOKEN }}" | docker login $REGISTRY_URL -u ${{ secrets.QUAY_USER }} --password-stdin
+      # - name: Push quay image
+      #   run: |
+      #     REGISTRY_URL=$QUAY_REGISTRY
+      #     echo "${{ secrets.QUAY_TOKEN }}" | docker login $REGISTRY_URL -u ${{ secrets.QUAY_USER }} --password-stdin
 
-          IMAGE_ID=$REGISTRY_URL/$DOCKER_IMAGE_NAME
-          echo IMAGE_ID=$IMAGE_ID
-          VERSION=$DOCKER_VERSION-${{ github.job }}
-          echo VERSION=$VERSION
+      #     IMAGE_ID=$REGISTRY_URL/$DOCKER_IMAGE_NAME
+      #     echo IMAGE_ID=$IMAGE_ID
+      #     VERSION=$DOCKER_VERSION-${{ github.job }}
+      #     echo VERSION=$VERSION
 
-          docker tag image $IMAGE_ID:$VERSION
-          docker push $IMAGE_ID:$VERSION
+      #     docker tag image $IMAGE_ID:$VERSION
+      #     docker push $IMAGE_ID:$VERSION
 
-      - name: Push aliyun image
-        run: |
-          REGISTRY_URL=$ALIYUN_REGISTRY
-          echo "${{ secrets.ALIYUN_TOKEN }}" | docker login $REGISTRY_URL -u ${{ secrets.ALIYUN_USER }} --password-stdin
+      # - name: Push aliyun image
+      #   run: |
+      #     REGISTRY_URL=$ALIYUN_REGISTRY
+      #     echo "${{ secrets.ALIYUN_TOKEN }}" | docker login $REGISTRY_URL -u ${{ secrets.ALIYUN_USER }} --password-stdin
 
-          IMAGE_ID=$REGISTRY_URL/$DOCKER_IMAGE_NAME
-          echo IMAGE_ID=$IMAGE_ID
-          VERSION=$DOCKER_VERSION-${{ github.job }}
-          echo VERSION=$VERSION
+      #     IMAGE_ID=$REGISTRY_URL/$DOCKER_IMAGE_NAME
+      #     echo IMAGE_ID=$IMAGE_ID
+      #     VERSION=$DOCKER_VERSION-${{ github.job }}
+      #     echo VERSION=$VERSION
 
-          docker tag image $IMAGE_ID:$VERSION
-          docker push $IMAGE_ID:$VERSION
+      #     docker tag image $IMAGE_ID:$VERSION
+      #     docker push $IMAGE_ID:$VERSION
