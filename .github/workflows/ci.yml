@@ -8,10 +8,9 @@ on:
     branches: [ dev-php ]
 
 env:
-  GITHUB_IMAGE_NAME: vscode
   DOCKER_IMAGE_NAME: suisrc/vscode
   DOCKER_VERSION: '1.84.2-cdr'
-  GITHUB_REGISTRY: docker.pkg.github.com
+  GITHUB_REGISTRY: ghcr.io
   QUAY_REGISTRY: quay.io
   DOCKER_REGISTRY: docker.io
   ALIYUN_REGISTRY: registry.cn-hongkong.aliyuncs.com
