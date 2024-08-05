@@ -35,11 +35,11 @@ else
 fi
 # 提供新版或者私有vscode地址
 if [ $VSCR_NEW_URL ]; then
-    echo "download vscode from ${VSCR_NEW_URL}"
+    echo "download vscode from ${VSCR_NEW_URL} ..."
     curl -o /tmp/vsc.tar -L "${VSCR_NEW_URL}"
     rm -rf ${VSC_HOME}/* && tar -xf /tmp/vsc.tar -C ${VSC_HOME}/
     ln -s /usr/local/node/bin/node ${VSC_HOME}/node
-    ln -s ${VSC_HOME}/bin/code-server /usr/bin/code-server
+    echo "deployment vscode to ${VSC_HOME} ..."
 fi
 
 # bash read -ra, zsh read -rA
