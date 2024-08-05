@@ -1,11 +1,12 @@
 ## x. 最后安装 nodejs, java， golang 等开发环境, all in one, BASE_IMAGE_TAG = vscode / xfce
+# python 环境， 可以直接命令行安装，这边不作为基础环境
 ARG BASE_IMAGE_TAG
 
 FROM ghcr.io/suisrc/webtop:${BASE_IMAGE_TAG}
 # ================================================================
 
 RUN mkdir -p ${HOME}/.go/bin
-ENV GO_VERSION=1.21.3 \
+ENV GO_VERSION=1.22.5 \
     NODE_VERSION=18.20.4 \
     JAVA_VERSION=jdk-17.0.8.1+1_openj9-0.40.0 \
     MAVEN_VERSION=3.9.5 \
