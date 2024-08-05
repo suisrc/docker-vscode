@@ -1,0 +1,34 @@
+## 4. 安装 webtop [vscode]
+ARG BASE_IMAGE_TAG
+FROM ghcr.io/suisrc/webtop:sshd-23122002
+# ================================================================
+# --auth none & default passwd
+
+# set environment variables
+ENV SVC_SSHD="0" \
+    SVC_NGINX="1" \
+    VSC_HOST="127.0.0.1" \
+    VSC_ARGS=" --without-connection-token" \
+    VSC_HOME="/vsc" \
+    WSC_HOME="/wsc" \
+    EXTENSIONS=""
+
+# add rootfs/home
+COPY rootfs/home /home
+# 默认 vscode 使用 no-auth 模式，需要启动 nginx 进行权限控制
+# 可以使用 VSC_HOST 和 VSC_ARGS 自行控制权限和直连 vscode
+COPY rootfs/etc/nginx/demo/vscc.server.conf /etc/nginx/demo/
+
+# 安装 vscode cli
+RUN curl -Lk 'https://code.visualstudio.com/sha/download?build=stable&os=cli-alpine-x64' --output /tmp/vsc.tar.gz &&\
+    cd /tmp/ && tar -xf vsc.tar.gz && mv code /usr/bin/code-cli && chmod +x /usr/bin/code-cli &&\
+    mkdir -p ${VSC_HOME} ${WSC_HOME} ${HOME}/.vscode-server && ln -s ${WSC_HOME} ${HOME}/wsc &&\
+    sed -i '1i#!/bin/bash' /entrypoint.sh
+
+# add vscode s6-rc
+COPY others/vscode-run.sh /etc/s6-overlay/s6-rc.d/svc-vscode/run
+RUN  echo "longrun" > /etc/s6-overlay/s6-rc.d/svc-vscode/type && \
+     echo "" > /etc/s6-overlay/s6-rc.d/user/contents.d/svc-vscode &&
+     sed -i '1i#!/bin/bash' /etc/s6-overlay/s6-rc.d/svc-vscode/run
+
+# EXPOSE 6801
