@@ -63,3 +63,5 @@ WORKDIR $HOME
 # add sshd to s6-rc
 COPY rootfs/etc/s6-overlay/s6-rc.d/svc-sshd/ /etc/s6-overlay/s6-rc.d/svc-sshd/
 RUN  echo "" > /etc/s6-overlay/s6-rc.d/user/contents.d/svc-sshd
+
+# EXPOSE 22

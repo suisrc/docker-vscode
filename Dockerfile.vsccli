@@ -29,7 +29,5 @@ RUN curl -Lk 'https://code.visualstudio.com/sha/download?build=stable&os=cli-alp
 # add vscode s6-rc
 COPY others/vscode-run.sh /etc/s6-overlay/s6-rc.d/svc-vscode/run
 RUN  echo "longrun" > /etc/s6-overlay/s6-rc.d/svc-vscode/type && \
-     echo "" > /etc/s6-overlay/s6-rc.d/user/contents.d/svc-vscode &&
-     sed -i '1i#!/bin/bash' /etc/s6-overlay/s6-rc.d/svc-vscode/run
-
-# EXPOSE 6801
+sed -i '1i#!/bin/bash' /etc/s6-overlay/s6-rc.d/svc-vscode/run && \
+     echo "" > /etc/s6-overlay/s6-rc.d/user/contents.d/svc-vscode

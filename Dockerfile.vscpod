@@ -10,8 +10,8 @@ ENV SVC_SSHD="0" \
     SVC_NGINX="1" \
     VSC_HOST="127.0.0.1" \
     VSC_ARGS="--without-connection-token" \
-    NODE_VERSION="18.19.0" \
-    VSCR_VERSION="1.85.1" \
+    NODE_VERSION="18.20.4" \
+    VSCR_VERSION="1.92.0" \
     PATH=/usr/local/node/bin:$PATH \
     VSC_HOME="/vsc" \
     WSC_HOME="/wsc" \
@@ -29,7 +29,7 @@ RUN mkdir /usr/local/node && \
     tar -xJ -C /usr/local/node --strip-components=1 && npm install -g yarn && node --version && npm --version && \
     VSC_RURL="https://github.com/gitpod-io/openvscode-server/releases" && \
     VSC_PATH="${VSC_RURL}/download/openvscode-server-v${VSCR_VERSION}/openvscode-server-v${VSCR_VERSION}-linux-x64.tar.gz" && \
-    curl -o /tmp/vsc.tar.gz -L "${VSC_PATH}" && mkdir -p ${VSC_HOME} ${WSC_HOME} && tar xzf /tmp/vsc.tar.gz -C ${VSC_HOME}/ --strip-components=1 && \
+    curl -o /tmp/vsc.tar.gz -L "${VSC_PATH}" && mkdir -p ${VSC_HOME} ${WSC_HOME} && tar -xzf /tmp/vsc.tar.gz -C ${VSC_HOME}/ --strip-components=1 && \
     sed -i 's/"$0"/"$(readlink -f $0)"/' ${VSC_HOME}/bin/openvscode-server && \
     sed -i 's/"$0"/"$(readlink -f $0)"/' ${VSC_HOME}/bin/remote-cli/openvscode-server && \
     rm  -f ${VSC_HOME}/node && ln -s /usr/local/node/bin/node ${VSC_HOME}/node && \
@@ -42,5 +42,3 @@ RUN mkdir /usr/local/node && \
 # add vscode s6-rc
 COPY rootfs/etc/s6-overlay/s6-rc.d/svc-vscode/ /etc/s6-overlay/s6-rc.d/svc-vscode/
 RUN  echo "" > /etc/s6-overlay/s6-rc.d/user/contents.d/svc-vscode
-
-# EXPOSE 6801

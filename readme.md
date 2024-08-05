@@ -10,14 +10,14 @@ Dockerfile.proxyvsc(proxyvsc-24080501)(vsc代理)
 Dockerfile.kclient(kclient-23121601-vsas)(kasm终端)  
   
 开发环境  
-Dockerfile.lite(lite-24080501)(轻量版，无cjk字体，注意， 本身没有 vsode， 是 vscode-cli, 原版 )  
+Dockerfile.lite(lite-24080501)(轻量版，无cjk字体，注意， 无 vsode， 是 vscode-cli)  
 Dockerfile.jammy(jammy-24080501) ->  
 Dockerfile.nginx ->  
 Dockerfile.sshd ->  
-Dockerfile.vscode |  
-Dockerfile.vsccdr |  
-Dockerfile.vscpod |  
-Dockerfile.vsccli ->  
+Dockerfile.vsccli(无 vscode，即用即下) |  
+Dockerfile.vscode(微软原版) |  
+Dockerfile.vscpod(gitpod版) |  
+Dockerfile.vsccdr(open_vsc) ->  
 Dockerfile.xface ->  
 Dockerfile.dev ->  
 Dockerfile.ms ->  

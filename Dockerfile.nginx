@@ -41,3 +41,5 @@ RUN  echo "" > /etc/s6-overlay/s6-rc.d/user/contents.d/init-nginx && \
      rm -rf /etc/nginx/demo/*.conf
 
 WORKDIR /www
+
+# EXPOSE 80 443
