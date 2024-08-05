@@ -100,6 +100,7 @@ RUN apt update && DEBIAN_FRONTEND=noninteractive \
 
 # ================================================================
 # kasm vnc
+# https://github.com/kasmtech/KasmVNC/releases/
 RUN APP_URL="https://github.com/kasmtech/KasmVNC/releases/download/v${KASM_VERSION}/kasmvncserver_jammy_${KASM_VERSION}_amd64.deb" && \
     curl -o /tmp/app.deb -L "${APP_URL}" && dpkg -i /tmp/app.deb && \
     apt-get autoremove && apt-get clean && \
