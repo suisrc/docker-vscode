@@ -1,12 +1,28 @@
 # 说明
 
-Dockerfile.lite(轻量版，无cjk字体，注意， 本身没有 vsode， 是 vscode-cli, 原版 )
-Dockerfile.jammy(基础镜像) -> Dockerfile.kclient(修复kasm终端, 作为 xface 的补充内容)
-                           -> Dockerfile.nginx -> Dockerfile.sshd -> Dockerfile.vscode |
-                                                                  -> Dockerfile.vscdr  |
-                                                                  -> Dockerfile.vscpod | -> Dockerfile.xface -> Dockerfile.dev -> Dockerfile.ms -> Dockerfile.playwright
+多环境
 
-## 更新
+## Dockerfile
+
+基础组件  
+Dockerfile.proxyssh(proxyssh-24080501)(ssh代理)  
+Dockerfile.proxyvsc(proxyvsc-24080501)(vsc代理)  
+Dockerfile.kclient(kclient-23121601-vsas)(kasm终端)  
+  
+开发环境  
+Dockerfile.lite(lite-24080501)(轻量版，无cjk字体，注意， 本身没有 vsode， 是 vscode-cli, 原版 )  
+Dockerfile.jammy(jammy-24080501) ->  
+Dockerfile.nginx ->  
+Dockerfile.sshd ->  
+Dockerfile.vscode |  
+Dockerfile.vsccdr |  
+Dockerfile.vscpod |  
+Dockerfile.vsccli ->  
+Dockerfile.xface ->  
+Dockerfile.dev ->  
+Dockerfile.ms ->  
+Dockerfile.playwright  
+
 
 ## 鸣谢
 https://github.com/microsoft/vscode/releases  
