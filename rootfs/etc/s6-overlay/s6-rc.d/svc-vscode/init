@@ -40,6 +40,7 @@ if [ $VSCR_NEW_URL ]; then
     rm -rf ${VSC_HOME}/* && tar -xf /tmp/vsc.tar -C ${VSC_HOME}/
     ln -s /usr/local/node/bin/node ${VSC_HOME}/node
     ln -s ${VSC_HOME}/bin/code-server /usr/bin/code-server
+fi
 
 # bash read -ra, zsh read -rA
 if [ $EXTENSIONS ]; then
