@@ -7,6 +7,7 @@
 ## VSX_ITME_URL = https://open-vsx.org/vscode/item
 ## VSX_RESOURCE_URL = https://open-vsx.org/vscode/asset/{publisher}/{name}/{version}/Microsoft.VisualStudio.Code.WebResources/{path}
 ## EXTENSIONS = xxx,yyy,zzz
+## VSC_NEW_URL=
 
 echo 'init vscode config ...'
 if [ $GIT_USER_NAME ]; then
@@ -15,6 +16,7 @@ if [ $GIT_USER_NAME ]; then
         git config --global user.email "$GIT_USER_EMAIL"
     fi
 fi
+# 
 if [ $VSX_MICROSOFT ]; then
     grep -rl open-vsx.org /vsc/**/*.js /vsc/**/*.json /vsc/**/*.map | xargs sed -i \
     -e 's|open-vsx.org/vscode/gallery|marketplace.visualstudio.com/_apis/public/gallery|g' \
@@ -31,6 +33,14 @@ else
         grep -rl open-vsx.org /vsc/**/*.js | xargs sed -i "s|https://open-vsx.org/vscode/asset/{publisher}/{name}/{version}/Microsoft.VisualStudio.Code.WebResources/{path}|$VSX_RESOURCE_URL|g"
     fi
 fi
+# 提供新版或者私有vscode地址
+if [ $VSCR_NEW_URL ]; then
+    echo "download vscode from ${VSCR_NEW_URL}"
+    curl -o /tmp/vsc.tar -L "${VSCR_NEW_URL}"
+    rm -rf ${VSC_HOME}/* && tar -xf /tmp/vsc.tar -C ${VSC_HOME}/
+    ln -s /usr/local/node/bin/node ${VSC_HOME}/node
+    ln -s ${VSC_HOME}/bin/code-server /usr/bin/code-server
+
 # bash read -ra, zsh read -rA
 if [ $EXTENSIONS ]; then
     echo 'install vscode extension ...'

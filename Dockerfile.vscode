@@ -12,6 +12,7 @@ ENV SVC_SSHD="0" \
     VSC_ARGS=" --accept-server-license-terms --without-connection-token" \
     NODE_VERSION="18.20.4" \
     VSCR_VERSION="1.92.0" \
+    VSCR_NEW_URL="" \
     PATH=/usr/local/node/bin:$PATH \
     VSC_HOME="/vsc" \
     WSC_HOME="/wsc" \
