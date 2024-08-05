@@ -16,7 +16,7 @@ if [ $GIT_USER_NAME ]; then
         git config --global user.email "$GIT_USER_EMAIL"
     fi
 fi
-# 
+# 将 open-vsx.org 替换为 microsoft
 if [ $VSX_MICROSOFT ]; then
     grep -rl open-vsx.org /vsc/**/*.js /vsc/**/*.json /vsc/**/*.map | xargs sed -i \
     -e 's|open-vsx.org/vscode/gallery|marketplace.visualstudio.com/_apis/public/gallery|g' \
@@ -41,7 +41,6 @@ if [ $VSCR_NEW_URL ]; then
     ln -s /usr/local/node/bin/node ${VSC_HOME}/node
     echo "deployment vscode to ${VSC_HOME} ..."
 fi
-
 # bash read -ra, zsh read -rA
 if [ $EXTENSIONS ]; then
     echo 'install vscode extension ...'
