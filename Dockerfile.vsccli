@@ -1,6 +1,7 @@
 ## 4. 安装 webtop [vscode]
 ARG BASE_IMAGE_TAG
-FROM ghcr.io/suisrc/webtop:sshd-23122002
+FROM ghcr.io/suisrc/webtop:sshd-${BASE_IMAGE_TAG}
+# FROM ghcr.io/suisrc/webtop:sshd-xxx
 # ================================================================
 # --auth none & default passwd
 

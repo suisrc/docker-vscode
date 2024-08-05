@@ -1,6 +1,7 @@
 ## 4. 安装 webtop [vscode]
 ARG BASE_IMAGE_TAG
-FROM ghcr.io/suisrc/webtop:sshd-23122002
+FROM ghcr.io/suisrc/webtop:sshd-${BASE_IMAGE_TAG}
+# FROM ghcr.io/suisrc/webtop:sshd-xxx
 # ================================================================
 # --auth none & default passwd
 
@@ -32,11 +33,12 @@ COPY rootfs/etc/nginx/demo/vscc.server.conf /etc/nginx/demo/
 #      echo "" > /etc/s6-overlay/s6-rc.d/user/contents.d/svc-vscode
 
 # 通过 https://github.com/suisrc/ms-vscode.git 安装对应版本的 ms-vscode 应用
+# mkdir /tmp/vsc/ && git clone -b v${VSCR_VERSION} --depth 1 "https://github.com/suisrc/ms-vscode.git" /tmp/vsc/ && mv /tmp/vsc/vsc / && \
 # ln -s /usr/local/node/bin/node ${VSC_HOME}/node
 RUN mkdir /usr/local/node && \
     curl -fSL --compressed "https://nodejs.org/dist/v${NODE_VERSION}/node-v$NODE_VERSION-linux-x64.tar.xz" | \
     tar -xJ -C /usr/local/node --strip-components=1 && npm install -g yarn && node --version && npm --version && \
-    mkdir /tmp/vsc/ && git clone -b v${VSCR_VERSION} --depth 1 "https://github.com/suisrc/ms-vscode.git" /tmp/vsc/ && mv /tmp/vsc/vsc / && \
+    # mkdir /tmp/vsc/ && git clone -b v${VSCR_VERSION} --depth 1 "https://github.com/suisrc/ms-vscode.git" /tmp/vsc/ && mv /tmp/vsc/vsc / && \
     ln -s ${VSC_HOME}/bin/code-server /usr/bin/code-server && \
     /usr/bin/code-server --install-extension mhutchie.git-graph && \
     /usr/bin/code-server --install-extension esbenp.prettier-vscode && \
