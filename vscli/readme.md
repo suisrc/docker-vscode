@@ -22,6 +22,8 @@ rm -rf vscli_svc/* && cp -r data-cli/serve-web/b1c0a14de1414fcdaa400695b4db1c079
 rm -f  vscli_svc/node
 # 构建
 tar -cvf vscli_svc.tar -C vscli_svc .
+# 测试
+tar -xvf vscli_svc.tar -C vscli_tmp
 
 # 安装gh
 sudo apt-key adv --keyserver keyserver.ubuntu.com --recv-key C99B11DEB97541F0
