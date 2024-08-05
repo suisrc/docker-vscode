@@ -8,21 +8,9 @@ on:
   push:
     branches: [ vsas ]
 
-# lite: vscode 轻量版本，cjk 字体不存在
-# jammy: ubuntu 22.04基础镜像
-# kclient: 修复了kasm 终端的一些问题和增加了一些功能
-# nginx: jammy基础上安装了nginx
-# sshd: nginx基础上安装了sshd
-# vscode: vsccdr, vscpod; sshd基础上安装了vscode
-#
-# xface-~: 安装桌面环境 
-# dev-~: 专注于开发环境
-# ms-dev-~: 开发环境，使用 ms 插件库
-# playwright-~: 开发环境，使用 playwright-ms 插件库
-
 env:
   IMAGE_NAME: suisrc/webtop
-  IMAGE_VERSION: 'proxyssh-24080501'
+  IMAGE_VERSION: 'lite-24080501'
   GITHUB_REGISTRY: ghcr.io
   DOCKER_REGISTRY: docker.io
   QUAY_REGISTRY: quay.io
