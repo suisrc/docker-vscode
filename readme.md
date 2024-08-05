@@ -18,8 +18,8 @@ Dockerfile.vsccli(无 vscode，即用即下) |
 Dockerfile.vscode(微软原版) |  
 Dockerfile.vscpod(gitpod版) |  
 Dockerfile.vsccdr(open_vsc) ->  
-Dockerfile.xface ->  
 Dockerfile.dev ->  
+Dockerfile.xface ->  
 Dockerfile.ms ->  
 Dockerfile.playwright  
 
