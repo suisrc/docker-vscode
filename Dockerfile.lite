@@ -1,5 +1,5 @@
 ## 非常小，只有编辑功能的 vscode-online
-FROM debian:bullseye -slim
+FROM debian:bullseye-slim
 
 # set environment variables
 ENV VSC_HOST="0.0.0.0" \
