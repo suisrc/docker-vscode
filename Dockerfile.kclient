@@ -5,7 +5,7 @@ FROM ubuntu:noble as kclient-stage
 
 RUN echo "**** install build deps ****" && \
     apt-get update && apt-get install -y gnupg curl tar && \
-    curl -fsSL https://deb.nodesource.com/setup_20.x | sudo bash - && \
+    curl -fsSL https://deb.nodesource.com/setup_20.x | bash - && \
     apt-get update && apt-get install -y \
     g++ \
     gcc \
