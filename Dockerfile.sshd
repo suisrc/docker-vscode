@@ -46,7 +46,7 @@ RUN apt update && DEBIAN_FRONTEND=noninteractive \
 
 # creating the user and usergroup
 # groupadd --gid 1000 $USER_DEF && \
-RUN useradd  --uid 1000 --gid $USER_DEF -d $HOME -m -s /bin/bash $USER_DEF && \
+RUN useradd --uid 1000 --gid 1000 -d $HOME -m -s /bin/bash $USER_DEF && \
     echo $USER_DEF ALL=\(root\) NOPASSWD:ALL > /etc/sudoers.d/$USER_DEF && \
     chmod 0440 /etc/sudoers.d/$USER_DEF && chmod g+rw /home && \
     sh -c "$(curl -fsSL https://raw.githubusercontent.com/ohmyzsh/ohmyzsh/master/tools/install.sh)" &&\
