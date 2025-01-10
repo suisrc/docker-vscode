@@ -4,6 +4,7 @@ FROM ubuntu:noble
 # https://github.com/just-containers/s6-overlay
 ARG S6_VERSION="3.2.0.2"
 ARG S6_ARCH="x86_64"
+ARG S6_URL="https://github.com/just-containers/s6-overlay/releases/download/"
 
 # install packages
 RUN apt update && DEBIAN_FRONTEND=noninteractive \
@@ -16,11 +17,10 @@ RUN apt update && DEBIAN_FRONTEND=noninteractive \
     rm -rf /tmp/* /var/tmp/* /var/lib/apt/lists/*
 
 # grab s6-overlay
-RUN S6_URL = "https://github.com/just-containers/s6-overlay/releases/download" && \
-    curl -fSL --compressed "${S6_URL}/v${S6_VERSION}/s6-overlay-noarch.tar.xz" |  tar -xJ -C / && \
-    curl -fSL --compressed "${S6_URL}/v${S6_VERSION}/s6-overlay-${S6_ARCH}.tar.xz" |  tar -xJ -C / && \
-    curl -fSL --compressed "${S6_URL}/v${S6_VERSION}/s6-overlay-symlinks-noarch.tar.xz" |  tar -xJ -C / && \
-    curl -fSL --compressed "${S6_URL}/v${S6_VERSION}/s6-overlay-symlinks-arch.tar.xz" |  tar -xJ -C /
+RUN curl -fSL --compressed "${S6_URL}v${S6_VERSION}/s6-overlay-noarch.tar.xz" |  tar -xJ -C / && \
+    curl -fSL --compressed "${S6_URL}v${S6_VERSION}/s6-overlay-${S6_ARCH}.tar.xz" |  tar -xJ -C / && \
+    curl -fSL --compressed "${S6_URL}v${S6_VERSION}/s6-overlay-symlinks-noarch.tar.xz" |  tar -xJ -C / && \
+    curl -fSL --compressed "${S6_URL}v${S6_VERSION}/s6-overlay-symlinks-arch.tar.xz" |  tar -xJ -C /
 
 # set environment variables
 ENV S6_CMD_WAIT_FOR_SERVICES_MAXTIME="0" \
