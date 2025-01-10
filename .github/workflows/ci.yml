@@ -6,18 +6,18 @@ on:
   #release:
   #  types: [published]
   push:
-    branches: [ vsas ]
+    branches: [ main ]
 
 env:
   IMAGE_NAME: suisrc/webtop
-  IMAGE_VERSION: 'playwright-xfce-dev-vscode-24080501'
+  IMAGE_VERSION: 'lite-2.0.0'
   GITHUB_REGISTRY: ghcr.io
   DOCKER_REGISTRY: docker.io
   QUAY_REGISTRY: quay.io
   ALIYUN_REGISTRY: registry.cn-hongkong.aliyuncs.com
 
 jobs:
-  vsas:
+  main:
     # if: false
     runs-on: ubuntu-latest
 
