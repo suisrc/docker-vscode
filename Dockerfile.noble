@@ -11,6 +11,7 @@ RUN apt update && DEBIAN_FRONTEND=noninteractive \
     apt install --no-install-recommends -y \
     bash \
     curl \
+    ca-certificates \
     tzdata \
     xz-utils &&\
     apt-get autoremove && apt-get clean && \
