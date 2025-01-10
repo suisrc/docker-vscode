@@ -5,8 +5,7 @@ FROM ubuntu:noble as kclient-stage
 
 RUN echo "**** install build deps ****" && \
     apt-get update && apt-get install -y gnupg curl tar && \
-    curl -s https://deb.nodesource.com/gpgkey/nodesource.gpg.key | apt-key add - && \
-    echo 'deb https://deb.nodesource.com/node_20.x noble main' > /etc/apt/sources.list.d/nodesource.list && \
+    curl -fsSL https://deb.nodesource.com/setup_20.x | sudo bash - && \
     apt-get update && apt-get install -y \
     g++ \
     gcc \
@@ -25,7 +24,7 @@ RUN echo "**** grab source ****" && \
     rm -f package-lock.json
 
 
-FROM ghcr.io/suisrc/webtop:jammy-23121601-vsas
+FROM ghcr.io/suisrc/webtop:noble-2.0.0
 # ================================================================
 # kclient, 访问终端， 提供终端页面， 上传/下载文件， 声音传输
 COPY --from=kclient-stage /kclient /kclient
