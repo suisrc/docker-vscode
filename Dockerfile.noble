@@ -1,47 +1,30 @@
-# syntax=docker/dockerfile:1
-
-## 1. 构建一个基础镜像, 带有 s6-overlay
+## 1. 构建基础镜像
+FROM ubuntu:noble
 # ================================================================
-FROM alpine:3.18 as rootfs-stage
-
 # https://github.com/just-containers/s6-overlay
 ARG S6_VERSION="3.2.0.2"
 ARG S6_ARCH="x86_64"
 
-# environment
-ENV REL=noble
-ENV ARCH=amd64
-
 # install packages
-RUN apk add --no-cache bash curl tzdata xz
+RUN apt update && DEBIAN_FRONTEND=noninteractive \
+    apt install --no-install-recommends -y \
+    bash \
+    curl \
+    tzdata \
+    xz-utils &&\
+    apt-get autoremove && apt-get clean && \
+    rm -rf /tmp/* /var/tmp/* /var/lib/apt/lists/*
 
-# grab base image
-RUN mkdir /rootfs && \
-    curl -o /rootfs.tar.gz -L https://partner-images.canonical.com/core/${REL}/current/ubuntu-${REL}-core-cloudimg-${ARCH}-root.tar.gz && \
-    tar xf  /rootfs.tar.gz -C /rootfs && \
-    rm -rf  /rootfs/var/log/*
-
-# add s6 overlay
-ADD https://github.com/just-containers/s6-overlay/releases/download/v${S6_VERSION}/s6-overlay-noarch.tar.xz /tmp
-RUN tar -C /rootfs -Jxpf /tmp/s6-overlay-noarch.tar.xz
-ADD https://github.com/just-containers/s6-overlay/releases/download/v${S6_VERSION}/s6-overlay-${S6_ARCH}.tar.xz /tmp
-RUN tar -C /rootfs -Jxpf /tmp/s6-overlay-${S6_ARCH}.tar.xz
-
-# add s6 optional symlinks
-ADD https://github.com/just-containers/s6-overlay/releases/download/v${S6_VERSION}/s6-overlay-symlinks-noarch.tar.xz /tmp
-RUN tar -C /rootfs -Jxpf /tmp/s6-overlay-symlinks-noarch.tar.xz
-ADD https://github.com/just-containers/s6-overlay/releases/download/v${S6_VERSION}/s6-overlay-symlinks-arch.tar.xz /tmp
-RUN tar -C /rootfs -Jxpf /tmp/s6-overlay-symlinks-arch.tar.xz
-
-# runtime stage by empty image
-FROM scratch
-COPY --from=rootfs-stage /rootfs/ /
+# grab s6-overlay
+RUN S6_URL = "https://github.com/just-containers/s6-overlay/releases/download" && \
+    curl -fSL --compressed "${S6_URL}/v${S6_VERSION}/s6-overlay-noarch.tar.xz" |  tar -xJ -C / && \
+    curl -fSL --compressed "${S6_URL}/v${S6_VERSION}/s6-overlay-${S6_ARCH}.tar.xz" |  tar -xJ -C / && \
+    curl -fSL --compressed "${S6_URL}/v${S6_VERSION}/s6-overlay-symlinks-noarch.tar.xz" |  tar -xJ -C / && \
+    curl -fSL --compressed "${S6_URL}/v${S6_VERSION}/s6-overlay-symlinks-arch.tar.xz" |  tar -xJ -C /
 
 # set environment variables
 ENV S6_CMD_WAIT_FOR_SERVICES_MAXTIME="0" \
     S6_VERBOSITY=1
-
-COPY rootfs/usr/bin/* /usr/bin/
 
 LABEL maintainer="suisrc@outlook.com"
 ENTRYPOINT ["/init"]
