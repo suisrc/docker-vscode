@@ -5,13 +5,13 @@
 ## Dockerfile
 
 基础组件  
-Dockerfile.proxyssh(proxyssh-24080501)(ssh代理)  
-Dockerfile.proxyvsc(proxyvsc-24080501)(vsc代理)  
-Dockerfile.kclient(kclient-23121601-vsas)(kasm终端)  
+Dockerfile.proxyssh(proxyssh-2.0.0)(ssh代理)  
+Dockerfile.proxyvsc(proxyvsc-2.0.0)(vsc代理)  
+Dockerfile.kclient(kclient-2.0.0)(kasm终端)  
   
 开发环境  
 Dockerfile.lite(lite-24080501)(轻量版，无cjk字体，注意， 无 vsode， 是 vscode-cli)  
-Dockerfile.jammy(jammy-24080501) ->  
+Dockerfile.noble(noble-24080501) ->  
 Dockerfile.nginx ->  
 Dockerfile.sshd ->  
 Dockerfile.vsccli(无 vscode，即用即下) |  

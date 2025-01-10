@@ -1,12 +1,12 @@
 ## 2. 安装 webtop [kclient], 独立备用, webtop 中都带有
 # ================================================================
 # kclient builder, fix kasm client bug
-FROM ubuntu:jammy as kclient-stage
+FROM ubuntu:noble as kclient-stage
 
 RUN echo "**** install build deps ****" && \
     apt-get update && apt-get install -y gnupg curl tar && \
     curl -s https://deb.nodesource.com/gpgkey/nodesource.gpg.key | apt-key add - && \
-    echo 'deb https://deb.nodesource.com/node_18.x jammy main' > /etc/apt/sources.list.d/nodesource.list && \
+    echo 'deb https://deb.nodesource.com/node_20.x noble main' > /etc/apt/sources.list.d/nodesource.list && \
     apt-get update && apt-get install -y \
     g++ \
     gcc \
@@ -17,7 +17,7 @@ RUN echo "**** install build deps ****" && \
 
 RUN echo "**** grab source ****" && \
     mkdir -p /kclient && \
-    curl -o /tmp/kclient.tar.gz -L "https://github.com/linuxserver/kclient/archive/refs/tags/0.3.6.tar.gz" && \
+    curl -o /tmp/kclient.tar.gz -L "https://github.com/linuxserver/kclient/archive/refs/tags/0.4.1.tar.gz" && \
     tar xf /tmp/kclient.tar.gz -C /kclient/ --strip-components=1 &&\
     echo "**** install node modules ****" && \
     cd /kclient && \
