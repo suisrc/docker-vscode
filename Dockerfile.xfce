@@ -32,9 +32,6 @@ RUN apt update && DEBIAN_FRONTEND=noninteractive \
     cups \
     cups-client \
     cups-pdf \
-    docker-ce \
-    docker-ce-cli \
-    docker-compose-plugin \
     dbus-x11 \
     dunst \
     ffmpeg \
