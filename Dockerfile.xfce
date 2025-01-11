@@ -5,7 +5,7 @@ ARG BASE_IMAGE_TAG
 # https://github.com/kasmtech/workspaces-core-images
 
 # kclient builder, fix kasm client bug
-FROM ghcr.io/suisrc/webtop:kclient-23121601-vsas as kclient-stage
+FROM ghcr.io/suisrc/webtop:kclient-2.0.0 as kclient-stage
 
 FROM ghcr.io/suisrc/webtop:${BASE_IMAGE_TAG}
 # =============================================================================================
