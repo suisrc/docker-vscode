@@ -80,7 +80,7 @@ RUN apt update && DEBIAN_FRONTEND=noninteractive \
     libyaml-tiny-perl \
     locales-all \
     mesa-va-drivers \
-    mesa-vulkan-drivers \\
+    mesa-vulkan-drivers \
     openbox \
     openssh-client \
     openssl \
