@@ -10,8 +10,8 @@ Dockerfile.proxyvsc(proxyvsc-2.0.0)(vsc代理)
 Dockerfile.kclient(kclient-2.0.0)(kasm终端)  
   
 开发环境  
-Dockerfile.lite(lite-24080501)(轻量版，无cjk字体，注意， 无 vsode， 是 vscode-cli)  
-Dockerfile.noble(noble-24080501) ->  
+Dockerfile.lite(lite)(轻量版，无cjk字体，注意， 无 vsode， 是 vscode-cli)  
+Dockerfile.base(debian12) ->  
 Dockerfile.nginx ->  
 Dockerfile.sshd ->  
 Dockerfile.vsccli(无 vscode，即用即下) |  
