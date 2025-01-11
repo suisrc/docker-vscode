@@ -48,7 +48,7 @@ RUN apt update && DEBIAN_FRONTEND=noninteractive \
     libgcrypt20 \
     libgl1-mesa-dri \
     libglu1-mesa \
-    libgnutls30 \
+    libgnutls30t64 \
     libgomp1 \
     libhash-merge-simple-perl \
     libjpeg-turbo8 \
