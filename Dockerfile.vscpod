@@ -37,8 +37,7 @@ RUN mkdir /usr/local/node && \
     /usr/bin/code-server --install-extension mhutchie.git-graph && \
     /usr/bin/code-server --install-extension esbenp.prettier-vscode && \
     /usr/bin/code-server --install-extension humao.rest-client && \
-    rm -rf /tmp/* /var/tmp/* $HOME/.openvscode-server/data/CachedExtensionVSIXs/* && \
-    ln -s ${WSC_HOME} ${HOME}/wsc && chown -R $USER:$USER ${VSC_HOME} ${WSC_HOME} ${HOME}
+    rm -rf /tmp/* /var/tmp/* $HOME/.openvscode-server/data/CachedExtensionVSIXs/*
 # add vscode s6-rc
 COPY rootfs/etc/s6-overlay/s6-rc.d/svc-vscode/ /etc/s6-overlay/s6-rc.d/svc-vscode/
 RUN  echo "" > /etc/s6-overlay/s6-rc.d/user/contents.d/svc-vscode
