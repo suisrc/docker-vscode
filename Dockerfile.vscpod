@@ -21,7 +21,7 @@ ENV SVC_SSHD="0" \
 COPY rootfs/home /home
 # 默认 vscode 使用 no-auth 模式，需要启动 nginx 进行权限控制
 # 可以使用 VSC_HOST 和 VSC_ARGS 自行控制权限和直连 vscode
-COPY rootfs/etc/nginx/demo/vscc.server.conf /etc/nginx/demo/
+COPY rootfs/etc/nginx/demo/vscm.server.conf /etc/nginx/demo/
 
 # install nodejs and vscode <- https://nodejs.org/en/
 RUN mkdir /usr/local/node && \

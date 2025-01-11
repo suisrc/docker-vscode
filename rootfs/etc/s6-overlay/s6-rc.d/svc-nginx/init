@@ -31,14 +31,14 @@ fi
 
 #########################################################################
 ## NGX_VSCC_CONF
-NGX_VSCC_CONF=/etc/nginx/conf.d/vscc.server.conf
-NGX_VSCC_DEMO=/etc/nginx/demo/vscc.server.conf
+NGX_VSCC_CONF=/etc/nginx/conf.d/vscm.server.conf
+NGX_VSCC_DEMO=/etc/nginx/demo/vscm.server.conf
 if [ -f ${NGX_VSCC_CONF} ]; then
-  echo "[nginx] vscc.server.conf exists, skip"
+  echo "[nginx] vscm.server.conf exists, skip"
 elif [ ! -f ${NGX_VSCC_DEMO} ]; then
-  echo "[nginx] vscc.server.conf demo not exists, skip"
+  echo "[nginx] vscm.server.conf demo not exists, skip"
 else
-  echo "[nginx] vscc.server.conf create ..."
+  echo "[nginx] vscm.server.conf create ..."
   cp -f ${NGX_VSCC_DEMO} ${NGX_VSCC_CONF}
   # 使用密码验证
   if [ ! -z ${PASSWORD+x} ]; then
