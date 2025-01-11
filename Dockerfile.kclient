@@ -15,11 +15,11 @@ RUN echo "**** install build deps ****" && \
     nodejs
 
 RUN echo "**** grab source ****" && \
-    mkdir -p /kclient && \
+    mkdir -p /build-out && \
     curl -o /tmp/kclient.tar.gz -L "https://github.com/linuxserver/kclient/archive/refs/tags/0.4.1.tar.gz" && \
-    tar xf /tmp/kclient.tar.gz -C /kclient/ --strip-components=1 &&\
+    tar xf /tmp/kclient.tar.gz -C /build-out/ --strip-components=1 &&\
     echo "**** install node modules ****" && \
-    cd /kclient && \
+    cd /build-out && \
     npm install && \
     rm -f package-lock.json
 
@@ -215,8 +215,8 @@ RUN \
 FROM ghcr.io/suisrc/webtop:noble-2.0.0
 # ================================================================
 # kclient, 访问终端， 提供终端页面， 上传/下载文件， 声音传输
-COPY --from=kclient-stage /kclient /kclient
-COPY --from=kserver-stage /kserver /kserver
+COPY --from=kclient-stage /build-out /kclient
+COPY --from=kserver-stage /build-out /kserver
 
 # update
 RUN apt update && DEBIAN_FRONTEND=noninteractive \
