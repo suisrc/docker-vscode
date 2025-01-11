@@ -6,9 +6,9 @@ FROM ghcr.io/suisrc/webtop:nginx-${BASE_IMAGE_TAG}
 # set environment variables
 ENV LANGUAGE="zh_CN.UTF-8" \
     LANG="zh_CN.UTF-8" \
-    USER="ubuntu" \
-    HOME="/home/ubuntu" \
-    ZSH_CUSTOM="/home/ubuntu/.oh-my-zsh/plugins"
+    USER="debian" \
+    HOME="/home/debian" \
+    ZSH_CUSTOM="/home/debian/.oh-my-zsh/plugins"
 
 # update linux
 RUN apt update && DEBIAN_FRONTEND=noninteractive \
@@ -45,7 +45,9 @@ RUN apt update && DEBIAN_FRONTEND=noninteractive \
     rm -rf /tmp/* /var/tmp/* /var/lib/apt/lists/*
 
 # creating the user and usergroup
-RUN echo $USER ALL=\(root\) NOPASSWD:ALL > /etc/sudoers.d/$USER && \
+RUN groupadd --gid 1000 $USER && \
+    useradd  --uid 1000 --gid $USER -d $HOME -m -s /bin/bash $USER && \
+    echo $USER ALL=\(root\) NOPASSWD:ALL > /etc/sudoers.d/$USER && \
     chmod 0440 /etc/sudoers.d/$USER && chmod g+rw /home && \
     sh -c "$(curl -fsSL https://raw.githubusercontent.com/ohmyzsh/ohmyzsh/master/tools/install.sh)" &&\
     git clone --depth 1 "https://github.com/zsh-users/zsh-autosuggestions" "${ZSH_CUSTOM}/zsh-autosuggestions" &&\
