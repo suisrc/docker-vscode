@@ -18,8 +18,10 @@ if [ ! -f '/etc/ssh/_init' ]; then
     echo y | ssh-keygen -q -t rsa -N '' -f /etc/ssh/ssh_host_ed25519_key
     # 配置root的登录密码
     echo ''
-    echo 'init sshd for user ...'
-    echo "user:${PASSWORD}" | chpasswd
+    if [[ -n "${USER}" ]] && [[ "$USER" != "root" ]] ; then
+        echo "init sshd for ${USER} ..."
+        echo "${USER}:${PASSWORD}" | chpasswd
+    fi
     echo "PasswordAuthentication yes" >> /etc/ssh/sshd_config
     # 配置root用户的ssh password
     if [[ -n "${PASSROOT}" ]]; then
