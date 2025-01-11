@@ -1,4 +1,4 @@
-#!/usr/bin/with-contenv bash
+#!/usr/bin/with-contenv with-user
 
 if [[ "${SVC_KCLIENT}" == "0" ]]; then
     echo 'disable kclient server ...'
@@ -8,7 +8,7 @@ if [[ "${SVC_KCLIENT}" == "0" ]]; then
 fi
 
 # DBus Setup
-dbus-daemon --system
+sudo dbus-daemon --system
 
 # Mic Setup
 # if [ ! -f '/dev/shm/mic.lock' ]; then

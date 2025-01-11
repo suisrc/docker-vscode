@@ -6,7 +6,7 @@ if [[ "${SVC_KASM}" == "0" ]]; then
     sudo s6-rc stop svc-kasmde
 fi
 
-echo "startwm[svc-kamsde] by $USER ============="
+echo "startwm[svc-kamsde] by $USER ================"
 cd $HOME
 sudo chmod +x  /defaults/startwm.sh
 exec /bin/bash /defaults/startwm.sh

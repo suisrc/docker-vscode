@@ -4,9 +4,8 @@ set -e
 # # 安装 vscode
 # ??替代  https://github.com/VSCodium/vscodium/releases/download/1.78.2.23132/codium_1.78.2.23132_amd64.deb
 CODE_URL="https://update.code.visualstudio.com/latest/linux-deb-x64/stable" &&\
-curl -o /tmp/vscode.deb -L "${CODE_URL}" &&\
-apt update && apt install -y /tmp/vscode.deb &&\
-cp /usr/share/applications/code.desktop $HOME/Desktop/vscode.desktop
+curl -o /tmp/vscode.deb -L "${CODE_URL}" && apt update && apt install -y /tmp/vscode.deb
+# cp /usr/share/applications/code.desktop $HOME/Desktop/vscode.desktop
 
 # 禁用沙盒
 # sed -i 's#/usr/share/code/code#& --no-sandbox##' /usr/share/applications/code.desktop
