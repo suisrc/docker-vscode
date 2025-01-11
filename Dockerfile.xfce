@@ -144,4 +144,4 @@ RUN apt-get update && DEBIAN_FRONTEND=noninteractive \
     rm -rf /tmp/* /var/tmp/* /var/lib/apt/lists/* && \
     mv /usr/share/backgrounds/*.jpg /usr/share/backgrounds/xfce/ && \
     cd /etc/s6-overlay/s6-rc.d/svc-vscode/ && mv -f run.0 run && \
-    chown -R $USER:$USER /defaults $HOME
+    chown -R $USER:$USER  $HOME

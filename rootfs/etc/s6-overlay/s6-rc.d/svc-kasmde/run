@@ -1,4 +1,4 @@
-#!/usr/bin/with-contenv bash
+#!/usr/bin/with-contenv with-user
 
 if [[ "${SVC_KASM}" == "0" ]]; then
     echo 'disable kams[de] server ...'
@@ -6,6 +6,7 @@ if [[ "${SVC_KASM}" == "0" ]]; then
     sudo s6-rc stop svc-kasmde
 fi
 
-dbus-daemon --system
+echo "startwm[svc-kamsde] by $USER"
 cd $HOME
-exec bash /defaults/startwm.sh
+sudo chmod +x /defaults/startwm.sh
+exec /defaults/startwm.sh
