@@ -6,11 +6,11 @@ on:
   #release:
   #  types: [published]
   push:
-    branches: [ main ]
+    branches: [ deb12 ]
 
 env:
   IMAGE_NAME: suisrc/webtop
-  IMAGE_VERSION: 'xfce-vscode-2.0.1'
+  IMAGE_VERSION: 'deb12-2.1.1'
   GITHUB_REGISTRY: ghcr.io
   DOCKER_REGISTRY: docker.io
   QUAY_REGISTRY: quay.io
