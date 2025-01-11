@@ -125,7 +125,7 @@ RUN APP_URL="https://github.com/kasmtech/KasmVNC/releases/download/v${KASM_VERSI
 # ================================================================
 # kclient, 访问终端， 提供终端页面， 上传/下载文件， 声音传输
 COPY --from=kclient-stage /kclient /kclient
-
+COPY --from=kclient-stage /kserver /
 # ================================================================
 # desktop for xfce4, 这里可更换 kde, openbox 等等, 替换完成，同步需要更改 rootfs/defaults/startwm.sh 中的内容
 # https://github.com/linuxserver/docker-kasm/pkgs/container/kasm
