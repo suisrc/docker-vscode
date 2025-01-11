@@ -12,7 +12,7 @@ if [[ ! -f ${HOME}/.vnc/self.csr ]]; then
     openssl req -x509 -nodes -days 3650 -newkey rsa:2048 \
     -keyout ${HOME}/.vnc/self.key \
     -out    ${HOME}/.vnc/self.csr \
-    -subj "/C=CN/ST=LN/L=DL/O=None/OU=SCC/CN=*"
+    -subj "/C=CN/ST=LN/L=DL/O=None/OU=SCC/CN=*" > /dev/null 2>&1
 fi
 
 #########################################################################
@@ -25,7 +25,7 @@ fi
 if [ ! -z ${PASSWORD+x} ]; then
     # openssl passwd -5 使用的是基于 SHA-256 的密码哈希算法
     random_str=$(cat /dev/urandom | tr -dc 'a-zA-Z0-9' | fold -w 10 | head -n 1)
-    echo "user:$(openssl passwd -5 -salt $random_str $PASSWORD):ow" > $PASSWORD_PATH
+    echo "admin:$(openssl passwd -5 -salt $random_str $PASSWORD):ow" > $PASSWORD_PATH
     chmod 600 $PASSWORD_PATH
 fi
 

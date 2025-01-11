@@ -6,7 +6,8 @@ if [[ "${SVC_AUDIO}" != "1" ]]; then
     sudo s6-rc stop svc-pulseaudio
     exit
 fi
-
+sleep 1
+echo "pulseaudio server started 1s ============="
 exec /usr/bin/pulseaudio \
     --log-level=0 \
     --log-target=stderr \

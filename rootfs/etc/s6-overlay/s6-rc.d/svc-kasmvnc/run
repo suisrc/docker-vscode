@@ -22,6 +22,7 @@ if [ -z ${DRINODE+x} ]; then
   DRINODE="/dev/dri/renderD128"
 fi
 
+echo "xvnc[svc-kasmvnc] by $USER =================="
 exec /usr/bin/Xvnc ${DISPLAY} \
     ${HW3D} \
     -PublicIP '127.0.0.1' \

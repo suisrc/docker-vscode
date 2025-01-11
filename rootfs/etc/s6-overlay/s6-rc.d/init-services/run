@@ -9,6 +9,10 @@ else
     sudo chown -R $USER:$USER $HOME
 fi
 
+if [[ ! -f "/tmp/.X11-unix" ]]; then
+  mkdir /tmp/.X11-unix /tmp/.X11-pipe 2>/dev/null
+  chmod 1777 /tmp/.X11-unix /tmp/.X11-pipe
+fi
 # =============================================================================================
 
 # echo "**** printer config ****"
