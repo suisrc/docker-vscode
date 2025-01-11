@@ -22,7 +22,7 @@ ENV TERM="xterm" \
     PERL5LIB=/usr/local/bin \
     OMP_WAIT_POLICY=PASSIVE \
     GOMP_SPINCOUNT=0 \
-    PULSE_RUNTIME_PATH=/defaults \
+    PULSE_RUNTIME_PATH=/tmp/pulse \
     NVIDIA_DRIVER_CAPABILITIES=all
 
 # update

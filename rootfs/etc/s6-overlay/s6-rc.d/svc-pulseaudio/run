@@ -7,8 +7,10 @@ if [[ "${SVC_AUDIO}" == "0" ]]; then
     exit
 fi
 sleep 1
-echo "pulseaudio server started 1s ============="
-exec /usr/bin/pulseaudio \
-    --log-level=0 \
-    --log-target=stderr \
-    --exit-idle-time=-1 > /dev/null 2>&1
+# 
+echo "pulseaudio server started 1s =============================="
+HOME=/tmp/pulse PULSE_RUNTIME_PATH=/tmp/pulse \
+    exec /usr/bin/pulseaudio \
+        --log-level=0 \
+        --log-target=stderr \
+        --exit-idle-time=-1 > /dev/null 2>&1
