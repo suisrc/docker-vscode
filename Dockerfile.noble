@@ -18,7 +18,7 @@ RUN apt update && DEBIAN_FRONTEND=noninteractive \
     curl -fSL --compressed "${S6_URL}v${S6_VERSION}/s6-overlay-noarch.tar.xz" |  tar -Jxp -C / && \
     curl -fSL --compressed "${S6_URL}v${S6_VERSION}/s6-overlay-${S6_ARCH}.tar.xz" |  tar -Jxp -C / && \
     curl -fSL --compressed "${S6_URL}v${S6_VERSION}/s6-overlay-symlinks-noarch.tar.xz" |  tar -Jxp -C / && \
-    curl -fSL --compressed "${S6_URL}v${S6_VERSION}/s6-overlay-symlinks-arch.tar.xz" |  tar -Jxp -C / &&
+    curl -fSL --compressed "${S6_URL}v${S6_VERSION}/s6-overlay-symlinks-arch.tar.xz" |  tar -Jxp -C / && \
     rm -rf /tmp/* /var/tmp/* /var/lib/apt/lists/*
 
 # set environment variables
