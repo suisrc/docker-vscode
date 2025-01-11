@@ -6,10 +6,10 @@ FROM ghcr.io/suisrc/webtop:${BASE_IMAGE_TAG}
 # ================================================================
 
 RUN mkdir -p ${HOME}/.go/bin
-ENV GO_VERSION=1.22.5 \
-    NODE_VERSION=18.20.4 \
-    JAVA_VERSION=jdk-17.0.8.1+1_openj9-0.40.0 \
-    MAVEN_VERSION=3.9.5 \
+ENV GO_VERSION=1.23.4 \
+    NODE_VERSION=20.18.1 \
+    JAVA_VERSION=jdk-17.0.9+9_openj9-0.41.0 \
+    MAVEN_VERSION=3.9.9 \
     GOPATH=${HOME}/go \
     JDK_HOME=/usr/local/java \
     JAVA_HOME=/usr/local/java \
@@ -17,7 +17,7 @@ ENV GO_VERSION=1.22.5 \
     PATH=/usr/local/golang/bin:/usr/local/node/bin:/usr/local/java/bin:/usr/local/maven/bin:${HOME}/go/bin:$PATH
 
 
-# https://nodejs.org/en/
+# https://nodejs.org/en/ PATH=/usr/local/node/bin:$PATH
 # ==============================================================================================================
 RUN if [ -d /usr/local/node ]; then exit 0; fi && \
     mkdir /usr/local/node && \
@@ -32,9 +32,7 @@ RUN mkdir /usr/local/golang && \
     go version
 
 # ==============================================================================================================
-# https://github.com/AdoptOpenJDK/openjdk11-binaries/releases
-# https://github.com/AdoptOpenJDK/semeru[11,17]-binaries/releases/**/ibm-semeru-open-jdk_x64_linux_xxx.tar.gz
-# 11 => jdk-11.0.17+8_openj9-0.35.0  17 => jdk-17.0.5+8_openj9-0.35.0
+# https://github.com/AdoptOpenJDK/semeru17-binaries
 RUN if [ -z ${JAVA_URL+x} ]; then \
         if [ -z ${JAVA_VERSION+x} ]; then \
             JAVA_VERSION=$(curl -sX GET "https://api.github.com/repos/AdoptOpenJDK/semeru17-binaries/releases/latest" \
@@ -49,7 +47,7 @@ RUN if [ -z ${JAVA_URL+x} ]; then \
     java -version
 
 # http://mirrors.tuna.tsinghua.edu.cn/apache/maven/maven-3/${MAVEN_VERSION}/binaries/apache-maven-${MAVEN_VERSION}-bin.tar.gz"
-# https://downloads.apache.org/maven/maven-3/${MAVEN_VERSION}/binaries/apache-maven-${MAVEN_VERSION}-bin.tar.gz
+# https://downloads.apache.org/maven/maven-3/
 RUN if [ -z ${MAVEN_URL+x} ]; then \
         MAVEN_URL="https://downloads.apache.org/maven/maven-3/${MAVEN_VERSION}/binaries/apache-maven-${MAVEN_VERSION}-bin.tar.gz"; \
     fi &&\
