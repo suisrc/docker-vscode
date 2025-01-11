@@ -6,9 +6,9 @@ FROM ghcr.io/suisrc/webtop:nginx-${BASE_IMAGE_TAG}
 # set environment variables
 ENV LANGUAGE="zh_CN.UTF-8" \
     LANG="zh_CN.UTF-8" \
-    USER_DEF="user" \
-    HOME="/home/user" \
-    ZSH_CUSTOM="/home/user/.oh-my-zsh/plugins"
+    USER="ubuntu" \
+    HOME="/home/ubuntu" \
+    ZSH_CUSTOM="/home/ubuntu/.oh-my-zsh/plugins"
 
 # update linux
 RUN apt update && DEBIAN_FRONTEND=noninteractive \
@@ -45,10 +45,8 @@ RUN apt update && DEBIAN_FRONTEND=noninteractive \
     rm -rf /tmp/* /var/tmp/* /var/lib/apt/lists/*
 
 # creating the user and usergroup
-RUN groupadd --gid 1001 $USER_DEF && \
-    useradd  --uid 1001 --gid $USER_DEF -d $HOME -m -s /bin/bash $USER_DEF && \
-    echo $USER_DEF ALL=\(root\) NOPASSWD:ALL > /etc/sudoers.d/$USER_DEF && \
-    chmod 0440 /etc/sudoers.d/$USER_DEF && chmod g+rw /home && \
+RUN echo $USER ALL=\(root\) NOPASSWD:ALL > /etc/sudoers.d/$USER && \
+    chmod 0440 /etc/sudoers.d/$USER && chmod g+rw /home && \
     sh -c "$(curl -fsSL https://raw.githubusercontent.com/ohmyzsh/ohmyzsh/master/tools/install.sh)" &&\
     git clone --depth 1 "https://github.com/zsh-users/zsh-autosuggestions" "${ZSH_CUSTOM}/zsh-autosuggestions" &&\
     echo "source ${ZSH_CUSTOM}/zsh-autosuggestions/zsh-autosuggestions.zsh" >> ~/.zshrc &&\

@@ -6,5 +6,6 @@ if [[ "${SVC_KASM}" == "0" ]]; then
     sudo s6-rc stop svc-kasmde
 fi
 
+dbus-daemon --system
 cd $HOME
 exec bash /defaults/startwm.sh

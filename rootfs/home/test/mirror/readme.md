@@ -62,127 +62,44 @@ trusted-host=mirrors.aliyun.com
 <settings xmlns="http://maven.apache.org/SETTINGS/1.0.0"
           xmlns:xsi="http://www.w3.org/2001/XMLSchema-instance"
           xsi:schemaLocation="http://maven.apache.org/SETTINGS/1.0.0 http://maven.apache.org/xsd/settings-1.0.0.xsd">
-    <!-- sed -i 's/USER_DEF-rdc-releases/xxxx/g' settings.xml -->
-    <!-- sed -i 's/password-rdc-releases/xxxx/g' settings.xml -->
-    <!-- sed -i 's/groups-rdc-releases/xxxx/g' settings.xml -->
-    <!-- sed -i 's/USER_DEF-rdc-snapshots/xxxx/g' settings.xml -->
-    <!-- sed -i 's/password-rdc-snapshots/xxxx/g' settings.xml -->
-    <!-- sed -i 's/groups-rdc-snapshots/xxxx/g' settings.xml -->
-    <!-- cp settings.xml /root/.m2/ -->
-
     <!-- <localRepository>/root/.m2/repository</localRepository> -->
     <!-- <localRepository>/drone/src/repository</localRepository> -->
+    <localRepository>/homg/ubuntu/.m2/repository</localRepository>
     <mirrors>
         <mirror>
-            <id>mirror</id>
-            <name>mirror</name>
-            <mirrorOf>!rdc-releases,!rdc-snapshots</mirrorOf> <!--central-->
-            <url>https://maven.aliyun.com/nexus/content/groups/public</url>
+            <id>maven-release</id>
+            <mirrorOf>external:*,!maven-snapshots</mirrorOf>
+            <url>http://nexus-ops:8081/repository/maven-rgroup/</url>
+        </mirror>
+        <mirror>
+            <id>maven-snapshots</id>
+            <mirrorOf>maven-snapshots</mirrorOf>
+            <url>http://nexus-ops:8081/repository/maven-sgroup/</url>
         </mirror>
     </mirrors>
-    <servers>
-        <server>
-            <id>rdc-releases</id>
-            <USER_DEF>USER_DEF-rdc-releases</USER_DEF>
-            <password>password-rdc-releases</password>
-        </server>
-        <server>
-            <id>rdc-snapshots</id>
-            <USER_DEF>USER_DEF-rdc-snapshots</USER_DEF>
-            <password>password-rdc-snapshots</password>
-        </server>
-    </servers>
     <profiles>
         <profile>
-            <id>maven-profile-id</id>
+            <id>default</id>
             <repositories>
                 <repository>
-                    <id>central</id>
-                    <url>https://maven.aliyun.com/nexus/content/groups/public</url>
-                    <releases>
-                        <enabled>true</enabled>
-                    </releases>
-                    <snapshots>
-                        <enabled>false</enabled>
-                    </snapshots>
-                </repository>
-                <repository>
-                    <id>snapshots</id>
-                    <url>https://maven.aliyun.com/nexus/content/groups/public</url>
-                    <releases>
-                        <enabled>false</enabled>
-                    </releases>
-                    <snapshots>
-                        <enabled>true</enabled>
-                    </snapshots>
-                </repository>
-                <repository>
-                    <id>rdc-releases</id>
-                    <url>https://repo.rdc.aliyun.com/repository/groups-rdc-releases</url>
-                    <releases>
-                        <enabled>true</enabled>
-                    </releases>
-                    <snapshots>
-                        <enabled>false</enabled>
-                    </snapshots>
-                </repository>
-                <repository>
-                    <id>rdc-snapshots</id>
-                    <url>https://repo.rdc.aliyun.com/repository/groups-rdc-snapshot</url>
-                    <releases>
-                        <enabled>false</enabled>
-                    </releases>
-                    <snapshots>
-                        <enabled>true</enabled>
-                    </snapshots>
+                    <id>maven-snapshots</id>
+                    <url>http://0.0.0.0/</url>
+                    <releases> <enabled>false</enabled> </releases>
+                    <snapshots> <enabled>true</enabled> </snapshots>
                 </repository>
             </repositories>
             <pluginRepositories>
                 <pluginRepository>
-                    <id>central</id>
-                    <url>https://maven.aliyun.com/nexus/content/groups/public</url>
-                    <releases>
-                        <enabled>true</enabled>
-                    </releases>
-                    <snapshots>
-                        <enabled>false</enabled>
-                    </snapshots>
-                </pluginRepository>
-                <pluginRepository>
-                    <id>snapshots</id>
-                    <url>https://maven.aliyun.com/nexus/content/groups/public</url>
-                    <releases>
-                        <enabled>false</enabled>
-                    </releases>
-                    <snapshots>
-                        <enabled>true</enabled>
-                    </snapshots>
-                </pluginRepository>
-                <pluginRepository>
-                    <id>rdc-releases</id>
-                    <url>https://repo.rdc.aliyun.com/repository/groups-rdc-releases</url>
-                    <releases>
-                        <enabled>true</enabled>
-                    </releases>
-                    <snapshots>
-                        <enabled>false</enabled>
-                    </snapshots>
-                </pluginRepository>
-                <pluginRepository>
-                    <id>rdc-snapshots</id>
-                    <url>https://repo.rdc.aliyun.com/repository/groups-rdc-snapshot</url>
-                    <releases>
-                        <enabled>false</enabled>
-                    </releases>
-                    <snapshots>
-                        <enabled>true</enabled>
-                    </snapshots>
+                    <id>maven-snapshots</id>
+                    <url>http://0.0.0.0/</url>
+                    <releases> <enabled>false</enabled> </releases>
+                    <snapshots> <enabled>true</enabled> </snapshots>
                 </pluginRepository>
             </pluginRepositories>
         </profile>
     </profiles>
     <activeProfiles>
-        <activeProfile>maven-profile-id</activeProfile>
+        <activeProfile>default</activeProfile>
     </activeProfiles>
 </settings>
 
