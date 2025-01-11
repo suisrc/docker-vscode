@@ -6,7 +6,7 @@ on:
   #release:
   #  types: [published]
   push:
-    branches: [ deb12 ]
+    branches: [ main ]
 
 env:
   IMAGE_NAME: suisrc/webtop
