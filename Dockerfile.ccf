@@ -1,7 +1,6 @@
 ## x. ccf 安装软件
 ARG BASE_IMAGE_TAG
-
-FROM ghcr.io/suisrc/webtop:ccf-${BASE_IMAGE_TAG}
+FROM ghcr.io/suisrc/webtop:ccc-${BASE_IMAGE_TAG}
 # ================================================================
 # https://github.com/fatedier/frp/releases
 ENV FRP_VERSION=0.61.1
