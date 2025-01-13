@@ -8,6 +8,8 @@ name = "vsc"
 type = "http"
 localPort = 6801
 subdomain = "vsc-{{ .Envs.FRP_USER }}"
+httpUser = "{{ .Envs.USER }}"
+httpPassword = "{{ .Envs.PASSWORD }}"
 transport.useEncryption = true
 transport.useCompression = false
 
@@ -17,6 +19,8 @@ type = "http"
 localPort = 6900
 locations = ["/"]
 subdomain = "dsk-{{ .Envs.FRP_USER }}"
+httpUser = "{{ .Envs.USER }}"
+httpPassword = "{{ .Envs.PASSWORD }}"
 transport.useEncryption = true
 transport.useCompression = false
 
@@ -26,5 +30,7 @@ type = "http"
 localPort = 6901
 locations = ["/websockify"]
 subdomain = "dsk-{{ .Envs.FRP_USER }}"
+httpUser = "{{ .Envs.USER }}"
+httpPassword = "{{ .Envs.PASSWORD }}"
 transport.useEncryption = true
 transport.useCompression = false

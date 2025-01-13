@@ -16,7 +16,6 @@ fi
 if [[ "${FRP_FILE}" == "" ]]; then
     FRP_FILE="/etc/frp/frpc.toml"
 fi
-
 sleep 1
 echo 'start frpc serve ...' 
 exec /usr/local/bin/frpc -c ${FRP_FILE}
