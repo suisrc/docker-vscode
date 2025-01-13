@@ -10,4 +10,4 @@ RUN FRP_PATH="https://github.com/fatedier/frp/releases/download/v${FRP_VERSION}/
 
 COPY rootfs/etc/frp /etc/frp
 COPY rootfs/etc/s6-overlay/s6-rc.d/svc-frpc /etc/s6-overlay/s6-rc.d/svc-frpc
-COPY echo "" > /etc/s6-overlay/s6-rc.d/user/contents.d/svc-frpc
+RUN echo "" > /etc/s6-overlay/s6-rc.d/user/contents.d/svc-frpc
