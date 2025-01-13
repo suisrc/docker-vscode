@@ -19,4 +19,4 @@ fi
 
 sleep 1
 echo 'start frpc serve ...' 
-exec /usr/bin/frpc -c ${FRP_FILE}
+exec /usr/local/bin/frpc -c ${FRP_FILE}
