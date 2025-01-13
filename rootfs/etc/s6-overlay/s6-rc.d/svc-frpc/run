@@ -8,10 +8,10 @@ if [[ "${FRP_ADDR}" == "" ]]; then
 fi
 
 if [[ "${FRP_PORT}" == "" ]]; then
-    FRP_PORT=9000
+    export FRP_PORT=9000
 fi
 if [[ "${FRP_USER}" == "" ]]; then
-    FRP_USER=`cat /etc/hostname`
+    export FRP_USER=`cat /etc/hostname`
 fi
 if [[ "${FRP_FILE}" == "" ]]; then
     FRP_FILE="/etc/frp/frpc.toml"
