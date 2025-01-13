@@ -4,7 +4,7 @@
 
 ## check vscode server
 if [[ "${SVC_VSCODE}" == "0" ]]; then
-    echo 'disable vscode server ...'
+    echo 'disable vscode serve ...'
     sleep 1
     sudo s6-rc stop svc-vscode
     exit
@@ -22,7 +22,7 @@ if [ ! -f "$HOME/.vscode_server_init" ]; then
     fi
 fi
 
-echo 'start vscode server ...'
+echo 'start vscode serve ...'
 ## VSC_ARGS: vscode参数
 if [[ "${SVC_VSCODE}" == "-1" ]]; then
     # tun server， 注册到vscode官方服务器, PS：未经测试，延迟高，而且一个账号最多5个设备

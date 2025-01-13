@@ -1,0 +1,14 @@
+## x. ccf 安装软件
+ARG BASE_IMAGE_TAG
+
+FROM ghcr.io/suisrc/webtop:ccf-${BASE_IMAGE_TAG}
+# ================================================================
+# https://github.com/fatedier/frp/releases
+ENV FRP_VERSION=0.61.1
+RUN FRP_PATH="https://github.com/fatedier/frp/releases/download/v${FRP_VERSION}/frp_${FRP_VERSION}_linux_amd64.tar.gz" && \
+    curl -o /tmp/frp.tar.gz -L "${FRP_PATH}" && mkdir /tmp/frp && tar -xzf /tmp/frp.tar.gz -C /tmp/frp/ --strip-components=1 && \
+    mv /tmp/frp/frpc /usr/local/bin/ && mv /tmp/frp/frps /usr/local/bin/ && rm -rf /tmp/* /var/tmp/*
+
+COPY rootfs/etc/frp /etc/frp
+COPY rootfs/etc/s6-overlay/s6-rc.d/svc-frpc /etc/s6-overlay/s6-rc.d/svc-frpc
+COPY echo "" > /etc/s6-overlay/s6-rc.d/user/contents.d/svc-frpc

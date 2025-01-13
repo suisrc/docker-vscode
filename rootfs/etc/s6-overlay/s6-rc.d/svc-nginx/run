@@ -1,13 +1,13 @@
 #!/usr/bin/with-contenv bash
 
 if [[ "${SVC_NGINX}" == "0" ]]; then
-    echo 'disable nginx server ...'
+    echo 'disable nginx serve ...'
     sleep 1
     sudo s6-rc stop svc-nginx
     exit
 fi
 
-# echo 'starting nginx server'
+# echo 'starting nginx serve'
 # /usr/local/openresty/nginx/sbin/nginx -> /usr/local/bin/nginx
 if [ ! `pgrep nginx` ]; then
     echo "nginx is not running, start it..."

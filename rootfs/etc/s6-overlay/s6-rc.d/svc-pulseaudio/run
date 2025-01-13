@@ -1,7 +1,7 @@
 #!/usr/bin/with-contenv with-user
 
 if [[ "${SVC_AUDIO}" == "0" ]]; then
-    echo 'disable pulseaudio server ...'
+    echo 'disable pulseaudio serve ...'
     sleep 1
     sudo s6-rc stop svc-pulseaudio
     exit

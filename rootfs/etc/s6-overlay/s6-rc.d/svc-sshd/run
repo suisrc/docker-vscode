@@ -1,7 +1,7 @@
 #!/usr/bin/with-contenv bash
 
 if [[ "${SVC_SSHD}" == "0" ]]; then
-    echo 'disable sshd server ...'
+    echo 'disable sshd serve ...'
     sleep 1
     sudo s6-rc stop svc-sshd
     exit
@@ -31,5 +31,5 @@ if [ ! -f '/etc/ssh/_init' ]; then
     fi
 fi
 
-echo 'start sshd server ... '
+echo 'start sshd serve ... '
 exec /usr/sbin/sshd -D

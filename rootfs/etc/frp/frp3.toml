@@ -1,0 +1,30 @@
+serverAddr = "{{ .Envs.FRP_ADDR }}"
+serverPort = {{ .Envs.FRP_PORT }}
+auth.token = "{{ .Envs.FRP_TOKEN }}"
+user = "{{ .Envs.FRP_USER }}"
+
+[[proxies]]
+name = "vsc"
+type = "http"
+localPort = 6801
+customDomains = ["{{ .Envs.FRP_DS_VSC }}"]
+transport.useEncryption = true
+transport.useCompression = false
+
+[[proxies]]
+name = "dsk"
+type = "http"
+localPort = 6900
+locations = ["/"]
+customDomains = ["{{ .Envs.FRP_DS_DSK }}"]
+transport.useEncryption = true
+transport.useCompression = false
+
+[[proxies]]
+name = "vnc"
+type = "http"
+localPort = 6901
+locations = ["/websockify"]
+customDomains = ["{{ .Envs.FRP_DS_DSK }}"]
+transport.useEncryption = true
+transport.useCompression = false

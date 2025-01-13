@@ -1,7 +1,7 @@
 #!/usr/bin/with-contenv with-user
 
 if [[ "${SVC_KASM}" == "0" ]]; then
-    echo 'disable kams[de] server ...'
+    echo 'disable kams[de] serve ...'
     sleep 1
     sudo s6-rc stop svc-kasmde
 fi
