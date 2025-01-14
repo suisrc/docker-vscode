@@ -9,13 +9,16 @@ FROM ghcr.io/suisrc/webtop:base-${BASE_IMAGE_TAG}
 # copy openresty
 COPY --from=openresty-stage /usr/local/openresty /usr/local/openresty
 COPY --from=openresty-stage /etc/nginx           /etc/nginx
-
+# copy rootfs all file
+COPY rootfs/ /
 # ================================================================
 # set environment variables
 ENV LANGUAGE="zh_CN.UTF-8" \
     LANG="zh_CN.UTF-8" \
     USER="debian" \
     HOME="/home/debian" \
+    SVC_SSHD="1"  \
+    SVC_NGINX="1" \
     ZSH_CUSTOM="/home/debian/.oh-my-zsh/plugins"
 
 # update linux
@@ -82,21 +85,5 @@ RUN groupadd --gid 1000 $USER && \
 # /etc/profile
 # ssh 连接会导致环境变量消失, 在docker中,可以通过进程ID=1上的环境变量还原, 通过profile文件还原
 
-# add nginx to s6-rc
-COPY rootfs/etc/nginx/ /etc/nginx/
-COPY rootfs/etc/s6-overlay/s6-rc.d/init-nginx/ /etc/s6-overlay/s6-rc.d/init-nginx/
-COPY rootfs/etc/s6-overlay/s6-rc.d/svc-nginx/ /etc/s6-overlay/s6-rc.d/svc-nginx/
-RUN  echo "" > /etc/s6-overlay/s6-rc.d/user/contents.d/init-nginx && \
-     echo "" > /etc/s6-overlay/s6-rc.d/user/contents.d/svc-nginx && \
-     rm -rf /etc/nginx/demo/*.conf
-
-WORKDIR /www
-
-# EXPOSE 80 443
+# EXPOSE 22 80 443
 WORKDIR $HOME
-
-# add sshd to s6-rc
-COPY rootfs/etc/s6-overlay/s6-rc.d/svc-sshd/ /etc/s6-overlay/s6-rc.d/svc-sshd/
-RUN  echo "" > /etc/s6-overlay/s6-rc.d/user/contents.d/svc-sshd
-
-# EXPOSE 22
