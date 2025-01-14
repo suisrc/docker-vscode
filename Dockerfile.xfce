@@ -12,6 +12,11 @@ FROM ghcr.io/suisrc/webtop:sshd-${BASE_IMAGE_TAG}
 # kasm (noVnc)
 
 # ================================================================
+# kclient, 访问终端， 提供终端页面， 上传/下载文件， 声音传输, IP 获取
+COPY --from=kclient-stage /kclient /kclient
+# COPY --from=kclient-stage /kserver /
+
+# ================================================================
 # https://github.com/fatedier/frp/releases
 ENV FRP_VERSION=0.61.1
 RUN FRP_PATH="https://github.com/fatedier/frp/releases/download/v${FRP_VERSION}/frp_${FRP_VERSION}_linux_amd64.tar.gz" && \
@@ -22,7 +27,8 @@ COPY others/etc-frp /etc/frp
 
 # ================================================================
 # set environment variables
-ENV TERM="xterm" \
+ENV SVC_XFCE="1" \
+    TERM="xterm" \
     DISPLAY=:1 \
     PERL5LIB=/usr/local/bin \
     OMP_WAIT_POLICY=PASSIVE \
@@ -41,8 +47,6 @@ RUN apt update && DEBIAN_FRONTEND=noninteractive \
     dunst \
     ffmpeg \
     file \
-    fonts-noto-color-emoji \
-    fonts-noto-core \
     fuse-overlayfs \
     intel-media-va-driver \
     kbd \
@@ -90,11 +94,7 @@ RUN apt update && DEBIAN_FRONTEND=noninteractive \
     procps \
     pulseaudio \
     pulseaudio-utils \
-    python3 \
     software-properties-common \
-    ssl-cert \
-    sudo \
-    util-linux \
     vulkan-tools \
     x11-apps \
     x11-common \
@@ -128,14 +128,10 @@ RUN KASM_VERSION="1.3.3" && \
     rm -rf /tmp/* /var/tmp/* /var/lib/apt/lists/*
 
 # ================================================================
-# kclient, 访问终端， 提供终端页面， 上传/下载文件， 声音传输
-COPY --from=kclient-stage /kclient /kclient
-# COPY --from=kclient-stage /kserver /
-
-# ================================================================
 # desktop for xfce4, 这里可更换 kde, openbox 等等, 替换完成，同步需要更改 rootfs/defaults/startwm.sh 中的内容
 # https://github.com/linuxserver/docker-kasm/pkgs/container/kasm
-# chown -R $USER:$USER ${VSC_HOME} ${WSC_HOME} ${HOME} && \
+# https://github.com/linuxserver/docker-baseimage-kasmvnc/tree/ubuntunoble
+# https://github.com/linuxserver/docker-webtop/tree/debian-xfce
 
 RUN apt-get update && DEBIAN_FRONTEND=noninteractive \
     apt-get install --no-install-recommends -y \
@@ -155,6 +151,4 @@ RUN apt-get update && DEBIAN_FRONTEND=noninteractive \
     rm -f /etc/xdg/autostart/xscreensaver.desktop && \
     apt-get autoremove && apt-get clean && \
     rm -rf /tmp/* /var/tmp/* /var/lib/apt/lists/* && \
-    mv /usr/share/backgrounds/*.jpg /usr/share/backgrounds/xfce/ && \
-    cd /etc/s6-overlay/s6-rc.d/svc-vscode/ && mv -f run.0 run && \
     chown -R $USER:$USER  $HOME
