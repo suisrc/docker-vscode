@@ -10,7 +10,7 @@ fi
 # ${HOME}/.vnc/self.pem不存在，新建自签证书
 if [[ ! -f ${HOME}/.vnc/self.csr ]]; then
     # Create cert for KasmVNC
-    echo "creating self-signed file to ${HOME}/.vnc/self.(csr/key) for ${NGX_DOMAIN}"
+    echo "creating self-signed file to ${HOME}/.vnc/self.(csr/key) for ${NGX_DOMAIN}, by NGX_DOMAIN"
     mkdir -p ${HOME}/.vnc
     openssl req -x509 -nodes -days 3650 -newkey rsa:2048 \
     -keyout ${HOME}/.vnc/self.key \

@@ -3,63 +3,63 @@
 ## 初始化，包括判断某些服务是否启动
 
 # nginx 服务  SVC_NGINX=1
-# echo "" > /etc/s6-overlay/user/contents.d/init-nginx
-# echo "" > /etc/s6-overlay/user/contents.d/svc-nginx       # init-nginx
+# echo "" > /etc/s6-overlay/s6-rc.d/user/contents.d/init-nginx
+# echo "" > /etc/s6-overlay/s6-rc.d/user/contents.d/svc-nginx       # init-nginx
 
 # sshd 服务
-# echo "" > /etc/s6-overlay/user/contents.d/svc-sshd
+# echo "" > /etc/s6-overlay/s6-rc.d/user/contents.d/svc-sshd
 
 # xfce 服务   SVC_XFCE=1
-# echo "" > /etc/s6-overlay/user/contents.d/init-kasm       # init-nginx
-# echo "" > /etc/s6-overlay/user/contents.d/init-video      # init-kasm
-# echo "" > /etc/s6-overlay/user/contents.d/init-service    # init-nginx init-kasm init-video
-# echo "" > /etc/s6-overlay/user/contents.d/svc-kclient     # init-service
-# echo "" > /etc/s6-overlay/user/contents.d/svc-pulseaudio  # init-service
-# echo "" > /etc/s6-overlay/user/contents.d/svc-kasmde      # init-service svc-kclient
-# echo "" > /etc/s6-overlay/user/contents.d/svc-kasmvnc     # init-service svc-kclient
+# echo "" > /etc/s6-overlay/s6-rc.d/user/contents.d/init-kasm       # init-nginx
+# echo "" > /etc/s6-overlay/s6-rc.d/user/contents.d/init-video      # init-kasm
+# echo "" > /etc/s6-overlay/s6-rc.d/user/contents.d/init-services    # init-nginx init-kasm init-video
+# echo "" > /etc/s6-overlay/s6-rc.d/user/contents.d/svc-kclient     # init-services
+# echo "" > /etc/s6-overlay/s6-rc.d/user/contents.d/svc-pulseaudio  # init-services
+# echo "" > /etc/s6-overlay/s6-rc.d/user/contents.d/svc-kasmde      # init-services svc-kclient
+# echo "" > /etc/s6-overlay/s6-rc.d/user/contents.d/svc-kasmvnc     # init-services svc-kclient
 
 # xfcf 服务(+frp) FRP_ADDR=xxx.xxx.xxx.xxx:xxx
-# echo "" > /etc/s6-overlay/user/contents.d/svc-frpc
+# echo "" > /etc/s6-overlay/s6-rc.d/user/contents.d/svc-frpc
 
 # vscode 服务 SVC_VSCODE=1 放在最后完成构建，因为 vscode 更新比较快， 甚至有的时候可能不需要
-# echo "" > /etc/s6-overlay/user/contents.d/svc-vscode
+# echo "" > /etc/s6-overlay/s6-rc.d/user/contents.d/svc-vscode
 
 ######################################################
 ## 服务是否启动判断，当然也可以映射当前文件，完成动态判断等
 
 ## 如果 /etc/s6-overlay/user/contents.d/ 目录不存在，则创建，存在，删除所有文件
-if [[ ! -d /etc/s6-overlay/user/contents.d ]];then
-    mkdir -p /etc/s6-overlay/user/contents.d
+if [[ ! -d /etc/s6-overlay/s6-rc.d/user/contents.d ]];then
+    mkdir -p /etc/s6-overlay/s6-rc.d/user/contents.d
 else
-    rm -f /etc/s6-overlay/user/contents.d/*
+    rm -f /etc/s6-overlay/s6-rc.d/user/contents.d/*
 fi
 
 ## 判断 nginx 服务是否启动
 if [[ "$SVC_NGINX" == "1" ]];then
-    echo "" > /etc/s6-overlay/user/contents.d/init-nginx
-    echo "" > /etc/s6-overlay/user/contents.d/svc-nginx
+    echo "" > /etc/s6-overlay/s6-rc.d/user/contents.d/init-nginx
+    echo "" > /etc/s6-overlay/s6-rc.d/user/contents.d/svc-nginx
 fi
 ## 判断 sshd 服务是否启动
 if [[ "$SVC_SSHD" == "1" ]];then
-    echo "" > /etc/s6-overlay/user/contents.d/svc-sshd
+    echo "" > /etc/s6-overlay/s6-rc.d/user/contents.d/svc-sshd
 fi
 ## 判断 xfce 服务是否启动, 依赖 SVC_NGINX=1
 if [[ "$SVC_NGINX" == "1" && "$SVC_XFCE" == "1" ]];then
-    echo "" > /etc/s6-overlay/user/contents.d/init-kasm
-    echo "" > /etc/s6-overlay/user/contents.d/init-video
-    echo "" > /etc/s6-overlay/user/contents.d/init-service
-    echo "" > /etc/s6-overlay/user/contents.d/svc-kclient
-    echo "" > /etc/s6-overlay/user/contents.d/svc-pulseaudio
-    echo "" > /etc/s6-overlay/user/contents.d/svc-kasmde
-    echo "" > /etc/s6-overlay/user/contents.d/svc-kasmvnc
+    echo "" > /etc/s6-overlay/s6-rc.d/user/contents.d/init-kasm
+    echo "" > /etc/s6-overlay/s6-rc.d/user/contents.d/init-video
+    echo "" > /etc/s6-overlay/s6-rc.d/user/contents.d/init-services
+    echo "" > /etc/s6-overlay/s6-rc.d/user/contents.d/svc-kclient
+    echo "" > /etc/s6-overlay/s6-rc.d/user/contents.d/svc-pulseaudio
+    echo "" > /etc/s6-overlay/s6-rc.d/user/contents.d/svc-kasmde
+    echo "" > /etc/s6-overlay/s6-rc.d/user/contents.d/svc-kasmvnc
 fi
-## 判断 frpc 服务是否启动, FRP_ADDR 不为空
-if [[ -n "$FRP_ADDR" ]];then
-    echo "" > /etc/s6-overlay/user/contents.d/svc-frpc
+## 判断 frpc 服务是否启动, FRP_ADDR 不为空， /usr/local/bin/frpc 存在
+if [[ -n "$FRP_ADDR" && -f /usr/local/bin/frpc ]];then
+    echo "" > /etc/s6-overlay/s6-rc.d/user/contents.d/svc-frpc
 fi
 ## 判断 vscode 服务是否启动
 if [[ "$SVC_VSCODE" == "1" ]];then
-    echo "" > /etc/s6-overlay/user/contents.d/svc-vscode
+    echo "" > /etc/s6-overlay/s6-rc.d/user/contents.d/svc-vscode
 fi
 
 
@@ -84,5 +84,9 @@ baseRouter.get('/sip', function (req, res) {
 });
 EOF
 # patch1212.js内容插入到文件/kclient/index.js //// Web File Browser //// 之上, 保留原有的代码
-sed -i "/\/\/\/\/ Web File Browser \/\/\/\// r /kclient/patch1212.js &/" /kclient/index.js
+sed -i "/\/\/\/\/ Web File Browser \/\/\/\// r /kclient/patch1212.js" /kclient/index.js
 fi
+
+echo "init-entry done, s6 will start services: `ls /etc/s6-overlay/s6-rc.d/user/contents.d | tr '\n' ' '`"
+
+
