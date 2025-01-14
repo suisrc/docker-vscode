@@ -1,8 +1,16 @@
-## 3. 安装 webtop [sshd]
-ARG BASE_IMAGE_TAG
-FROM ghcr.io/suisrc/webtop:nginx-${BASE_IMAGE_TAG}
-# ================================================================
 
+## 2. 安装 webtop [sshd]
+ARG BASE_IMAGE_TAG
+# ================================================================
+FROM suisrc/openresty:1.21.4.1-hu-3 as openresty-stage
+
+FROM ghcr.io/suisrc/webtop:base-${BASE_IMAGE_TAG}
+# ================================================================
+# copy openresty
+COPY --from=openresty-stage /usr/local/openresty /usr/local/openresty
+COPY --from=openresty-stage /etc/nginx           /etc/nginx
+
+# ================================================================
 # set environment variables
 ENV LANGUAGE="zh_CN.UTF-8" \
     LANG="zh_CN.UTF-8" \
@@ -11,21 +19,32 @@ ENV LANGUAGE="zh_CN.UTF-8" \
     ZSH_CUSTOM="/home/debian/.oh-my-zsh/plugins"
 
 # update linux
-RUN apt update && DEBIAN_FRONTEND=noninteractive \
+RUN mkdir /var/run/openresty &&\
+    ln -s /usr/local/openresty/nginx/sbin/nginx /usr/bin/nginx && \
+    ln -s /usr/local/openresty/nginx/html       /www &&\
+    apt update && DEBIAN_FRONTEND=noninteractive \
     apt install --no-install-recommends -y \
-    bash \
-    curl \
-    ca-certificates \
-    tzdata \
-    xz-utils &&\
     dpkg \
     sudo \
+    bash \
     zsh \
+    curl \
+    wget \
+    ca-certificates \
     jq \
     git \
     unzip \
     p7zip \
     xz-utils \
+    nano \
+    procps \
+    net-tools \
+    ntpdate \
+    iputils-ping \
+    locales \
+    libpcre3 \
+    inotify-tools &&\
+    tzdata \
     util-linux \
     ssl-cert \
     openssl \
@@ -63,6 +82,17 @@ RUN groupadd --gid 1000 $USER && \
 # /etc/profile
 # ssh 连接会导致环境变量消失, 在docker中,可以通过进程ID=1上的环境变量还原, 通过profile文件还原
 
+# add nginx to s6-rc
+COPY rootfs/etc/nginx/ /etc/nginx/
+COPY rootfs/etc/s6-overlay/s6-rc.d/init-nginx/ /etc/s6-overlay/s6-rc.d/init-nginx/
+COPY rootfs/etc/s6-overlay/s6-rc.d/svc-nginx/ /etc/s6-overlay/s6-rc.d/svc-nginx/
+RUN  echo "" > /etc/s6-overlay/s6-rc.d/user/contents.d/init-nginx && \
+     echo "" > /etc/s6-overlay/s6-rc.d/user/contents.d/svc-nginx && \
+     rm -rf /etc/nginx/demo/*.conf
+
+WORKDIR /www
+
+# EXPOSE 80 443
 WORKDIR $HOME
 
 # add sshd to s6-rc
