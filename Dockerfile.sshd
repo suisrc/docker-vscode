@@ -13,6 +13,11 @@ ENV LANGUAGE="zh_CN.UTF-8" \
 # update linux
 RUN apt update && DEBIAN_FRONTEND=noninteractive \
     apt install --no-install-recommends -y \
+    bash \
+    curl \
+    ca-certificates \
+    tzdata \
+    xz-utils &&\
     dpkg \
     sudo \
     zsh \

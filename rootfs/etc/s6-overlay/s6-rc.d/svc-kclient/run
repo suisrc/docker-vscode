@@ -9,6 +9,7 @@ fi
 
 # DBus Setup
 sudo dbus-daemon --system
+# /usr/bin/dbus-daemon --syslog --fork --print-pid 4 --print-address 6 --session
 
 # Mic Setup
 # if [ ! -f '/dev/shm/mic.lock' ]; then

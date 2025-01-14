@@ -4,17 +4,19 @@ set -e
 echo "init nginx config ..."
 #########################################################################
 # 处理证书配置
+if [[ "$NGX_DOMAIN" == "" ]]; then
+    NGX_DOMAIN="*.nip.io"
+fi
 # ${HOME}/.vnc/self.pem不存在，新建自签证书
 if [[ ! -f ${HOME}/.vnc/self.csr ]]; then
     # Create cert for KasmVNC
-    echo "creating self-signed file to ${HOME}/.vnc/self.(csr/key)"
+    echo "creating self-signed file to ${HOME}/.vnc/self.(csr/key) for ${NGX_DOMAIN}"
     mkdir -p ${HOME}/.vnc
     openssl req -x509 -nodes -days 3650 -newkey rsa:2048 \
     -keyout ${HOME}/.vnc/self.key \
     -out    ${HOME}/.vnc/self.csr \
-    -subj "/C=CN/ST=LN/L=DL/O=None/OU=CC/CN=*.nip.io" > /dev/null 2>&1
+    -subj "/C=CN/ST=LN/L=DL/O=None/OU=CC/CN=${NGX_DOMAIN}" > /dev/null 2>&1
 fi
-
 #########################################################################
 # 使用密码验证
 if [[ "$USER" == "" ]]; then
@@ -33,24 +35,24 @@ if [ ! -z ${PASSWORD+x} ]; then
 fi
 
 #########################################################################
-## NGX_VSCC_CONF
-NGX_VSCC_CONF=/etc/nginx/conf.d/vscm.server.conf
-NGX_VSCC_DEMO=/etc/nginx/demo/vscm.server.conf
-if [ -f ${NGX_VSCC_CONF} ]; then
+## NGX_VSCM_CONF，服务可以不启用，但是需要初始化占位
+NGX_VSCM_CONF=/etc/nginx/conf.d/vscm.server.conf
+NGX_VSCM_DEMO=/etc/nginx/demo/vscm.server.conf
+if [ -f ${NGX_VSCM_CONF} ]; then
   echo "[nginx] vscm.server.conf exists, skip"
-elif [ ! -f ${NGX_VSCC_DEMO} ]; then
+elif [ ! -f ${NGX_VSCM_DEMO} ]; then
   echo "[nginx] vscm.server.conf demo not exists, skip"
 else
   echo "[nginx] vscm.server.conf create ..."
-  cp -f ${NGX_VSCC_DEMO} ${NGX_VSCC_CONF}
+  cp -f ${NGX_VSCM_DEMO} ${NGX_VSCM_CONF}
   # 使用密码验证
   if [ ! -z ${PASSWORD+x} ]; then
-    sed -i 's/##//g' ${NGX_VSCC_CONF}
+    sed -i 's/##//g' ${NGX_VSCM_CONF}
   fi
 fi
 
 #########################################################################
-## NGX_KASM_CONF
+## NGX_KASM_CONF，服务可以不启用，但是需要初始化占位
 NGX_KASM_CONF=/etc/nginx/conf.d/kasm.server.conf
 NGX_KASM_DEMO=/etc/nginx/demo/kasm.server.conf
 if [ -f ${NGX_KASM_CONF} ]; then
@@ -65,3 +67,5 @@ else
     sed -i 's/##//g' ${NGX_KASM_CONF}
   fi
 fi
+
+echo "init nginx config done"

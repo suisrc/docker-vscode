@@ -11,17 +11,20 @@ Dockerfile.kclient(kclient-2.0.0)(kasm终端)
   
 开发环境  
 Dockerfile.lite(lite)(轻量版，无cjk字体，注意， 无 vsode， 是 vscode-cli)  
-Dockerfile.base(debian12) ->  
-Dockerfile.nginx ->  
-Dockerfile.sshd ->  
+Dockerfile.base(debian12) ->  只安装 s6, 并将/etc/s6-overlay/init-entry 注入到 /init 第二行  
+Dockerfile.sshd ->  只启动 sshd + nginx，构建一个可以简单的用于访问的 linux 微环境  
+Dockerfile.xfce -> 启动一个桌面环境，之所有桌面下放到这层，是因为桌面基本不太会进行变动  
+Dockerfile.xfcf -> 带有 frp 服务的 xfce 镜像，可用于向外注册服务, 包括桌面
+  
+提供以下四个版本，可建立在 nginx 或者 xfce 基础是
 Dockerfile.vsccli(无 vscode，即用即下) |  
 Dockerfile.vscode(微软原版) |  
 Dockerfile.vscpod(gitpod版) |  
-Dockerfile.vsccdr(open_vsc) ->  
-Dockerfile.dev ->  
-Dockerfile.xface ->  
-Dockerfile.ms ->  
-Dockerfile.playwright  
+Dockerfile.vsccdr(openvsc) ->  
+  
+Dockerfile.dev ->  golang + nodejs + java, 由于python安装简单，不在考虑范围内  
+Dockerfile.ms ->   安装 vscode 插件，并切换为 ms 源  
+Dockerfile.pw ->   安装 playwirght 环境  
 
 
 ## 鸣谢
