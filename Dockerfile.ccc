@@ -1,7 +1,7 @@
 ## x. ccc 安装软件
 ARG BASE_IMAGE_TAG
 
-FROM ghcr.io/suisrc/webtop:xfce-vscode-${BASE_IMAGE_TAG}
+FROM ghcr.io/suisrc/webtop:vscpod-xfce-${BASE_IMAGE_TAG}
 # ================================================================
 
 USER $USER
