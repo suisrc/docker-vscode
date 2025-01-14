@@ -1,13 +1,11 @@
 ## 4. 安装 webtop [vscode]
 ARG BASE_IMAGE_TAG
-FROM ghcr.io/suisrc/webtop:sshd-${BASE_IMAGE_TAG}
-# FROM ghcr.io/suisrc/webtop:sshd-xxx
+FROM ghcr.io/suisrc/webtop:${BASE_IMAGE_TAG}
 # ================================================================
 # --without-connection-token & --connection-token $VSC_TOKEN
 
 # set environment variables
-ENV SVC_SSHD="0" \
-    SVC_NGINX="1" \
+ENV SVC_VSCODE="1" \
     VSC_HOST="127.0.0.1" \
     VSC_ARGS="--without-connection-token" \
     NODE_VERSION="20.18.1" \
@@ -17,12 +15,7 @@ ENV SVC_SSHD="0" \
     WSC_HOME="/wsc" \
     EXTENSIONS=""
 
-# add rootfs/home
-COPY rootfs/home /home
-# 默认 vscode 使用 no-auth 模式，需要启动 nginx 进行权限控制
 # 可以使用 VSC_HOST 和 VSC_ARGS 自行控制权限和直连 vscode
-COPY rootfs/etc/nginx/demo/vscm.server.conf /etc/nginx/demo/
-
 # install nodejs and vscode <- https://nodejs.org/en/
 RUN mkdir /usr/local/node && \
     curl -fSL --compressed "https://nodejs.org/dist/v${NODE_VERSION}/node-v$NODE_VERSION-linux-x64.tar.xz" | \
@@ -38,6 +31,4 @@ RUN mkdir /usr/local/node && \
     /usr/bin/code-server --install-extension esbenp.prettier-vscode && \
     /usr/bin/code-server --install-extension humao.rest-client && \
     rm -rf /tmp/* /var/tmp/* $HOME/.openvscode-server/data/CachedExtensionVSIXs/*
-# add vscode s6-rc
-COPY rootfs/etc/s6-overlay/s6-rc.d/svc-vscode/ /etc/s6-overlay/s6-rc.d/svc-vscode/
-RUN  echo "" > /etc/s6-overlay/s6-rc.d/user/contents.d/svc-vscode
+
