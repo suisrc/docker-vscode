@@ -7,20 +7,18 @@ ARG BASE_IMAGE_TAG
 # kclient builder, fix kasm client bug
 FROM ghcr.io/suisrc/webtop:kclient-2.0.1 as kclient-stage
 
-FROM ghcr.io/suisrc/webtop:${BASE_IMAGE_TAG}
+FROM ghcr.io/suisrc/webtop:sshd-${BASE_IMAGE_TAG}
 # =============================================================================================
 # kasm (noVnc)
 
-# backup run file
-RUN  cd /etc/s6-overlay/s6-rc.d/svc-vscode/ && mv run run.0
-# copy rootfs all file
-COPY rootfs/ /
 # ================================================================
 # https://github.com/fatedier/frp/releases
 ENV FRP_VERSION=0.61.1
 RUN FRP_PATH="https://github.com/fatedier/frp/releases/download/v${FRP_VERSION}/frp_${FRP_VERSION}_linux_amd64.tar.gz" && \
     curl -o /tmp/frp.tar.gz -L "${FRP_PATH}" && mkdir /tmp/frp && tar -xzf /tmp/frp.tar.gz -C /tmp/frp/ --strip-components=1 && \
     mv /tmp/frp/frpc /usr/local/bin/ && mv /tmp/frp/frps /usr/local/bin/ && rm -rf /tmp/* /var/tmp/*
+# copy frp config
+COPY others/etc-frp /etc/frp
 
 # ================================================================
 # set environment variables

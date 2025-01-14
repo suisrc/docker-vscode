@@ -46,7 +46,7 @@ RUN mkdir /var/run/openresty &&\
     iputils-ping \
     locales \
     libpcre3 \
-    inotify-tools &&\
+    inotify-tools \
     tzdata \
     util-linux \
     ssl-cert \

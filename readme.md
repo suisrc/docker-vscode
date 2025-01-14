@@ -14,7 +14,6 @@ Dockerfile.lite(lite)(轻量版，无cjk字体，注意， 无 vsode， 是 vsco
 Dockerfile.base(debian12) ->  只安装 s6, 并将/etc/s6-overlay/init-entry 注入到 /init 第二行  
 Dockerfile.sshd ->  只启动 sshd + nginx，构建一个可以简单的用于访问的 linux 微环境  
 Dockerfile.xfce -> 启动一个桌面环境，之所有桌面下放到这层，是因为桌面基本不太会进行变动  
-Dockerfile.xfcf -> 带有 frp 服务的 xfce 镜像，可用于向外注册服务, 包括桌面
   
 提供以下四个版本，可建立在 nginx 或者 xfce 基础是
 Dockerfile.vsccli(无 vscode，即用即下) |  
