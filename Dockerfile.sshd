@@ -41,6 +41,7 @@ RUN mkdir /var/run/openresty &&\
     xz-utils \
     nano \
     procps \
+    iproute2 \
     net-tools \
     ntpdate \
     iputils-ping \

@@ -1,5 +1,8 @@
 #!/bin/bash
 
+# 优先运行自定义初始化脚本
+/bin/bash /usr/bin/init-custom
+
 ## 初始化，包括判断某些服务是否启动
 
 # nginx 服务  SVC_NGINX=1
