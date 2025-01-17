@@ -1,14 +1,15 @@
 #!/bin/bash
 
-## 优先运行自定义初始化脚本
+## 优先运行自定义初始化脚本，用于启动时初始化
 
-# 代理设置
+
+# 清理现有代理信息
 if [[ -f /etc/profile.d/proxy.sh ]];then
     rm -f /etc/profile.d/proxy.sh
     echo "[init-custom] delete /etc/profile.d/proxy.sh"
 fi
 if [[ -n "${PXY_ADDR}" ]];then
-    # 存在代理， 如果PXY_ADDR 是 :A 结尾，使用 http_proxy 代理，
+    # PlanA: 如果PXY_ADDR 是 :A 结尾，使用全局代理, 需要软件自身支持
     if [[ "${PXY_ADDR}" == *":A" ]];then
         proxy="${PXY_ADDR%A}$(hostname -a | tail -c 6)"
         # 修改全局代理 /etc/profile.d/proxy.sh
@@ -17,17 +18,18 @@ if [[ -n "${PXY_ADDR}" ]];then
 
 export ftp_proxy="${proxy}"
 export all_proxy="${proxy}"
-export no_proxy="localhost,10.0.0.0/8,127.0.0.1/8,172.16.0.0/12,192.168.0.0/16"
+export no_proxy="localhost,10.0.0.0/8,172.16.0.0/12,192.168.0.0/16"
 
 EOF
         chmod a+x /etc/profile.d/proxy.sh  # 增加所有人都可以执行的权限
         echo "[init-custom] http/https -> all_proxy: ${proxy}, by ${PXY_ADDR}"
     fi
+    # PlanB: 如果PXY_ADDR 是 :B 结尾，使用 tun2socks 代理
     if [[ "${PXY_ADDR}" == *":B" ]];then
         proxy="${PXY_ADDR%B}$(hostname -a | tail -c 6)"
         # 替换 xxx 替换为 proxy 地址
-        cp -f /usr/local/bin/gproxy.0 /usr/local/bin/gproxy
-        sed -i "s|xxx|${proxy}|g" /usr/local/bin/gproxy
+        cp -f /usr/local/bin/tproxy.0 /usr/local/bin/ttt
+        sed -i "s|xxx|${proxy}|g" /usr/local/bin/ttt
         echo "[init-custom] http/https -> tun2socks: ${proxy}, by ${PXY_ADDR}"
     fi
 fi
