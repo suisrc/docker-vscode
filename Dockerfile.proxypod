@@ -1,4 +1,4 @@
-FROM suisrc/openresty:1.27
+FROM nginx:1.27-alpine-slim
 
 COPY others/nginx.conf /etc/nginx/nginx.conf
 COPY others/podman.conf /etc/nginx/templates/default.conf.template
