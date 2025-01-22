@@ -88,6 +88,8 @@ baseRouter.get('/sip', function (req, res) {
 EOF
 # patch1212.js内容插入到文件/kclient/index.js //// Web File Browser //// 之上, 保留原有的代码
 sed -i "/\/\/\/\/ Web File Browser \/\/\/\// r /kclient/patch1212.js" /kclient/index.js
+# 'KasmVNC Client' => $(hostname -a)
+sed -i "s/'KasmVNC Client'/'KasmVNC-$(hostname -a)'/g" /kclient/index.js
 fi
 
 echo "init-entry done, s6 will start services: `ls /etc/s6-overlay/s6-rc.d/user/contents.d | tr '\n' ' '`"
