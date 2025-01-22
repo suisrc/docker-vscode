@@ -1,8 +1,10 @@
 ## x. ccc 安装软件
 ARG BASE_IMAGE_TAG
 
-FROM ghcr.io/suisrc/webtop:ccc-${BASE_IMAGE_TAG}
+# ${BASE_IMAGE_TAG} 为基础镜像版本
+FROM ghcr.io/suisrc/webtop:ccc-2.2.1
 # ================================================================
+# https://github.com/xjasonlyu/tun2socks/releases/
 
 # add software
 RUN apt-get update && DEBIAN_FRONTEND=noninteractive \

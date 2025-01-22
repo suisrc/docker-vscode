@@ -1,6 +1,14 @@
 #!/bin/bash
 
+## https://github.com/xjasonlyu/tun2socks/
+## https://github.com/heiher/hev-socks5-tunnel
 ## 全局代理， 使用 tun2socks 代理所有流量进行转发
+
+PROXY_SERVER="__server__"
+PROXY_EXCLUDED="__excluded__"
+
+# LAN_IP=$(ip -o -f inet address show eth0 | awk '/scope global/ {print $4}')
+GWT_IP=$(ip route show dev eth0 | grep default | awk '{print $3}')
 
 clear() {
     echo "clear tun2socks"
@@ -8,61 +16,61 @@ clear() {
     ip link set dev tun0 down
     ip tuntap del mode tun dev tun0
     ip route del default
-    ip route add default via 10.88.0.1 dev eth0 metric 10
+    # ip route del 192.168.0.0/16
+    for ADDR in $(echo ${PROXY_EXCLUDED} | tr ',' '\n'); do
+        ip route del $ADDR
+    done
+    ip route add default via $GWT_IP dev eth0
 
     echo "clear tun2socks done"
 }
 
-init() {
+route() {
     echo "init tun2socks"
-
     # 创建 tun0 198.18.0.0/15 网络基准测试地址
     ip tuntap add mode tun dev tun0
     ip addr add 198.18.0.1/32 dev tun0
     ip link set dev tun0 up
+    # 配置路由
     ip route del default
-    ip route add default via 198.18.0.1 dev tun0 metric 1
-    ip route add default via 10.88.0.1 dev eth0 metric 10
-
-    # # 有时我们需要为对应的接口禁用，以便它可以接收来自其他接口的数据包。rp_filter
-    # sysctl net.ipv4.conf.all.rp_filter=0
-    # sysctl net.ipv4.conf.eth0.rp_filter=0
+    ip route add default via 198.18.0.1 dev tun0 metric 5
+    ip route add default via $GWT_IP dev eth0 metric 10
+    # ip route add 192.168.0.0/16 via $gwt_ip dev eth0 onlink
+    for ADDR in $(echo ${PROXY_EXCLUDED} | tr ',' '\n'); do
+        ip route add $ADDR via $GWT_IP dev eth0 onlink
+    done
 
     echo "init tun2socks done"
 }
 
-run() {
+start() {
     echo "start tun2socks"
-    tun2socks --interface eth0 --device tun0 --proxy "xxx"
-}
-
-run2() {
-    # 判断是否存在 tun0， 不存在则初始化
-    if ip link show tun0 > /dev/null 2>&1; then
-        echo "Network device tun0 exists."
-    else
-        echo "Network device tun0 does not exist."
-        init # 初始化
-    fi
-    run # 启动
+    tun2socks --interface eth0 --device tun0 --proxy $PROXY_SERVER
 }
 
 case $1 in
     clear)
         clear
         ;;
-    init)
-        init
+    route)
+        route
         ;;
-    run)
-        run
+    start)
+        start
         ;;
     help)
-        echo "Usage: $0 {clear|init|run}"
+        echo "Usage: $0 {clear|route|start}"
         exit 1
         ;;
     *)
-        run2
+        # 判断是否存在 tun0， 不存在则初始化
+        if ip link show tun0 > /dev/null 2>&1; then
+            echo "Network device tun0 exists."
+        else
+            echo "Network device tun0 does not exist."
+            route # 初始化
+        fi
+        start # 启动
         ;;
 
 esac
