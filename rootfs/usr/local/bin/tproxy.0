@@ -10,6 +10,7 @@ PROXY_EXCLUDED="__excluded__"
 # LAN_IP=$(ip -o -f inet address show eth0 | awk '/scope global/ {print $4}')
 GWT_IP=$(ip route show dev eth0 | grep default | awk '{print $3}')
 
+# 清理路由
 clear() {
     echo "clear tun2socks"
 
@@ -25,6 +26,7 @@ clear() {
     echo "clear tun2socks done"
 }
 
+# 配置路由
 route() {
     echo "init tun2socks"
     # 创建 tun0 198.18.0.0/15 网络基准测试地址
@@ -43,6 +45,22 @@ route() {
     echo "init tun2socks done"
 }
 
+# 更改时区
+czone() {
+    sleep 3
+    ip_info=$(curl -s https://ipinfo.io)
+    echo "INFO[9999] public ip information"
+    echo $ip_info | jq
+    timezone=$(echo $ip_info | grep -oP '"timezone": "\K[^"]+')
+    if [ -z "$timezone" ]; then
+        echo "INFO[9999] unable to get timezone information"
+        return
+    fi
+    ln -sf /usr/share/zoneinfo/$timezone /etc/localtime
+    echo "INFO[9999] change system timezone: $timezone"
+}
+
+# 启动服务
 start() {
     echo "start tun2socks"
     tun2socks --interface eth0 --device tun0 --proxy $PROXY_SERVER
@@ -55,22 +73,26 @@ case $1 in
     route)
         route
         ;;
+    czone)
+        czone
+        ;;
     start)
         start
         ;;
     help)
-        echo "Usage: $0 {clear|route|start}"
+        echo "Usage: $0 {clear|route|czone|start}"
         exit 1
         ;;
     *)
-        # 判断是否存在 tun0， 不存在则初始化
-        if ip link show tun0 > /dev/null 2>&1; then
-            echo "Network device tun0 exists."
-        else
-            echo "Network device tun0 does not exist."
-            route # 初始化
-        fi
-        start # 启动
-        ;;
-
+      # 判断是否存在 tun0， 不存在则初始化
+      if ip link show tun0 > /dev/null 2>&1; then
+          echo "Network device tun0 exists."
+      else
+          echo "Network device tun0 does not exist."
+          route
+      fi
+      czone &
+      start
+      exit 1
+      ;;
 esac
