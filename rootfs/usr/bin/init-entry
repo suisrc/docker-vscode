@@ -15,11 +15,11 @@
 # xfce 服务   SVC_XFCE=1
 # echo "" > /etc/s6-overlay/s6-rc.d/user/contents.d/init-kasm       # init-nginx
 # echo "" > /etc/s6-overlay/s6-rc.d/user/contents.d/init-video      # init-kasm
-# echo "" > /etc/s6-overlay/s6-rc.d/user/contents.d/init-services    # init-nginx init-kasm init-video
+# echo "" > /etc/s6-overlay/s6-rc.d/user/contents.d/init-services   # init-nginx init-kasm init-video
 # echo "" > /etc/s6-overlay/s6-rc.d/user/contents.d/svc-kclient     # init-services
-# echo "" > /etc/s6-overlay/s6-rc.d/user/contents.d/svc-pulseaudio  # init-services
-# echo "" > /etc/s6-overlay/s6-rc.d/user/contents.d/svc-kasmde      # init-services svc-kclient
-# echo "" > /etc/s6-overlay/s6-rc.d/user/contents.d/svc-kasmvnc     # init-services svc-kclient
+# echo "" > /etc/s6-overlay/s6-rc.d/user/contents.d/svc-pulseaudio  # init-services (dbus-daemon)
+# echo "" > /etc/s6-overlay/s6-rc.d/user/contents.d/svc-kasmde      # init-services
+# echo "" > /etc/s6-overlay/s6-rc.d/user/contents.d/svc-kasmvnc     # init-services
 
 # xfcf 服务(+frp) FRP_ADDR=xxx.xxx.xxx.xxx:xxx
 # echo "" > /etc/s6-overlay/s6-rc.d/user/contents.d/svc-frpc

@@ -1,25 +1,4 @@
 #!/bin/bash
 
 ## 优先运行自定义初始化脚本，用于启动时初始化
-
-if [[ -n "${PXY_ADDR}" ]];then
-    if [[ "${PXY_ADDR}" == *":" ]];then
-        # 没有指定端口，使用容器别名后 5 位作为端口
-        proxy="${PXY_ADDR}$(hostname -a | tail -c 6)"
-    else
-        proxy="${PXY_ADDR}"
-    fi
-    # Default: 使用 tun2socks 代理
-    cp -f /usr/local/bin/tproxy.0 /usr/local/bin/tss
-    sed -i -e "s|__server__|${proxy}|g" -e "s|__excluded__|192.168.0.0/16|g"  /usr/local/bin/tss
-
-#     cat <<EOF > /usr/local/bin/tse
-# #!/bin/bash
-# export ftp_proxy="${proxy}"
-# export all_proxy="${proxy}"
-# export no_proxy="localhost,192.168.0.0/16"
-# EOF
-#     chmod +x /usr/local/bin/tss /usr/local/bin/tse
-
-    echo "[init-custom] http/https -> tun2socks: ${proxy}, by ${PXY_ADDR}"
-fi
+echo "INFO[9999] run custom init script by $0"

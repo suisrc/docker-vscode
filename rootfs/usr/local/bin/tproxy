@@ -4,22 +4,25 @@
 ## https://github.com/heiher/hev-socks5-tunnel
 ## 全局代理， 使用 tun2socks 代理所有流量进行转发
 
-# if [[ -n "${PXY_ADDR}" ]];then
-#     if [[ "${PXY_ADDR}" == *":" ]];then
-#         # 没有指定端口，使用容器别名后 5 位作为端口
-#         proxy="${PXY_ADDR}$(hostname -a | tail -c 6)"
-#     else
-#         proxy="${PXY_ADDR}"
-#     fi
-#     # Default: 使用 tun2socks 代理
-#     cp -f /usr/local/bin/tproxy.0 /usr/local/bin/tproxy
-#     sed -i -e "s|__server__|${proxy}|g" -e "s|__excluded__|192.168.0.0/16|g"  /usr/local/bin/tproxy
-#     echo "[init-custom] http/https -> tun2socks: ${proxy}, by ${PXY_ADDR}"
-# fi
+if [[ -z "${PXY_ADDR}" ]]; then
+    echo "PXY_ADDR env value is undefine"
+    exit 1
+fi
 
+if [[ "${PXY_ADDR}" == *":" ]];then
+    # 没有指定端口，使用容器别名后 5 位作为端口
+    PXY_SERVER="${PXY_ADDR}$(hostname -a | tail -c 6)"
+else
+    PXY_SERVER="${PXY_ADDR}"
+fi
 
-PXY_SERVER="__server__"
-PXY_EXCLUDED="__excluded__"
+if [[ -z "$PXY_EXCLUDED" ]]; then
+    PXY_EXCLUDED=${PXY_ADDR#*//}
+    PXY_EXCLUDED=${PXY_EXCLUDED%%:*}
+fi
+
+# PXY_SERVER="socks5://192.168.111.222:41011"
+# PXY_EXCLUDED="192.168.0.0/16"
 
 # LAN_IP=$(ip -o -f inet address show eth0 | awk '/scope global/ {print $4}')
 GWT_IP=$(ip route show dev eth0 | grep default | awk '{print $3}')
