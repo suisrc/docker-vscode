@@ -88,7 +88,7 @@ czone() {
 # 启动服务
 start() {
     echo "start tun2socks"
-    tun2socks --interface eth0 --device tun0 --proxy $PXY_SERVER
+    exec tun2socks --interface eth0 --device tun0 --proxy $PXY_SERVER
 }
 
 case $1 in
