@@ -1,8 +1,8 @@
 #!/bin/bash
 
-if [ "$(id -u)" -ne 0 ]; then
-    exec sudo -E bash $0
-fi
+# if [ "$(id -u)" -ne 0 ]; then
+#     exec sudo -E bash $0 $@
+# fi
 
 ##!/usr/bin/with-contenv bash
 set -e
@@ -28,8 +28,9 @@ if [[ -z "$PXY_EXCLUDED" ]]; then
     PXY_EXCLUDED=${PXY_EXCLUDED%%:*}
 fi
 
-# PXY_SERVER="socks5://192.168.111.222:41011"
-# PXY_EXCLUDED="192.168.0.0/16"
+## PXY_ADDR=""
+## PXY_SERVER="socks5://192.168.111.222:41001"
+## PXY_EXCLUDED="192.168.0.0/16"
 
 # LAN_IP=$(ip -o -f inet address show eth0 | awk '/scope global/ {print $4}')
 GWT_IP=$(ip route show dev eth0 | grep default | awk '{print $3}')
@@ -39,14 +40,14 @@ clear() {
     echo "..."
     echo "clear tun2socks"
 
-    ip link set dev tun0 down
-    ip tuntap del mode tun dev tun0
-    ip route del default
+    sudo ip link set dev tun0 down
+    sudo ip tuntap del mode tun dev tun0
+    sudo ip route del default
     # ip route del 192.168.0.0/16
-    for ADDR in $(echo ${PXY_EXCLUDED} | tr ',' '\n'); do
-        ip route del $ADDR
+    for addr in $(echo ${PXY_EXCLUDED} | tr ',' '\n'); do
+        sudo ip route del $addr
     done
-    ip route add default via $GWT_IP dev eth0
+    sudo ip route add default via $GWT_IP dev eth0
 
     echo "clear tun2socks done"
 }
@@ -55,16 +56,16 @@ clear() {
 route() {
     echo "init tun2socks"
     # 创建 tun0 198.18.0.0/15 网络基准测试地址
-    ip tuntap add mode tun dev tun0
-    ip addr add 198.18.0.1/32 dev tun0
-    ip link set dev tun0 up
+    sudo ip tuntap add mode tun dev tun0
+    sudo ip addr add 198.18.0.1/32 dev tun0
+    sudo ip link set dev tun0 up
     # 配置路由
-    ip route del default
-    ip route add default via 198.18.0.1 dev tun0 metric 5
-    ip route add default via $GWT_IP dev eth0 metric 10
+    sudo ip route del default
+    sudo ip route add default via 198.18.0.1 dev tun0 metric 5
+    sudo ip route add default via $GWT_IP dev eth0 metric 10
     # ip route add 192.168.0.0/16 via $gwt_ip dev eth0 onlink
-    for ADDR in $(echo ${PXY_EXCLUDED} | tr ',' '\n'); do
-        ip route add $ADDR via $GWT_IP dev eth0 onlink
+    for addr in $(echo ${PXY_EXCLUDED} | tr ',' '\n'); do
+        sudo ip route add $addr via $GWT_IP dev eth0 onlink
     done
 
     echo "init tun2socks done"
@@ -74,21 +75,21 @@ route() {
 czone() {
     sleep 3
     ip_info=$(curl -s https://ipinfo.io)
-    echo "INFO[9999] public ip information"
+    echo "ZONE[9999] public ip information"
     echo $ip_info | jq
     timezone=$(echo $ip_info | grep -oP '"timezone": "\K[^"]+')
-    if [ -z "$timezone" ]; then
-        echo "INFO[9999] unable to get timezone information"
-        return
+    if [ -n "$timezone" ]; then
+        sudo ln -sf /usr/share/zoneinfo/$timezone /etc/localtime
+        echo "ZONE[9999] change system timezone: $timezone"
+    else
+        echo "ZONE[9999] unable to get timezone information"
     fi
-    ln -sf /usr/share/zoneinfo/$timezone /etc/localtime
-    echo "INFO[9999] change system timezone: $timezone"
 }
 
 # 启动服务
 start() {
     echo "start tun2socks"
-    exec tun2socks --interface eth0 --device tun0 --proxy $PXY_SERVER
+    tun2socks --interface eth0 --device tun0 --proxy $PXY_SERVER
 }
 
 case $1 in
@@ -118,7 +119,7 @@ case $1 in
       fi
       czone &
       start
-      clear
-      exit 1
+      echo "..."
+      exit
       ;;
 esac
