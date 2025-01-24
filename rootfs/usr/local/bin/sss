@@ -1,7 +1,7 @@
 #!/bin/bash
 
 if [ "$(id -u)" -ne 0 ]; then
-    exec sudo -E "$@"  # 提权
+    exec sudo -E bash $0
 fi
 
 ##!/usr/bin/with-contenv bash
