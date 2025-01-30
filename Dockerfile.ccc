@@ -4,6 +4,9 @@ ARG BASE_IMAGE_TAG
 FROM ghcr.io/suisrc/webtop:vscpod-xfce-${BASE_IMAGE_TAG}
 # ================================================================
 
+# copy rootfs， 重复的文件覆盖
+COPY rootfs/ /
+
 USER $USER
 RUN sudo add-msedge && sudo fix-mchina &&\
     sudo apt-get autoremove && sudo apt-get clean && \

@@ -8,22 +8,13 @@ ARG BASE_IMAGE_TAG
 FROM ghcr.io/suisrc/webtop:kclient-2.0.1 as kclient-stage
 
 FROM ghcr.io/suisrc/webtop:sshd-${BASE_IMAGE_TAG}
-# =============================================================================================
+# ================================================================
 # kasm (noVnc)
 
 # ================================================================
 # kclient, 访问终端， 提供终端页面， 上传/下载文件， 声音传输, IP 获取
 COPY --from=kclient-stage /kclient /kclient
 # COPY --from=kclient-stage /kserver /
-
-# ================================================================
-# https://github.com/fatedier/frp/releases
-ENV FRP_VERSION=0.61.1
-RUN FRP_PATH="https://github.com/fatedier/frp/releases/download/v${FRP_VERSION}/frp_${FRP_VERSION}_linux_amd64.tar.gz" && \
-    curl -o /tmp/frp.tar.gz -L "${FRP_PATH}" && mkdir /tmp/frp && tar -xzf /tmp/frp.tar.gz -C /tmp/frp/ --strip-components=1 && \
-    mv /tmp/frp/frpc /usr/local/bin/ && mv /tmp/frp/frps /usr/local/bin/ && rm -rf /tmp/* /var/tmp/*
-# copy frp config
-COPY others/etc-frp /etc/frp
 
 # ================================================================
 # set environment variables

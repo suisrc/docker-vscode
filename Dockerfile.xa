@@ -1,0 +1,26 @@
+## x. a 安装代理软件
+ARG BASE_IMAGE_TAG
+
+# ${BASE_IMAGE_TAG} 为基础镜像版本
+FROM ghcr.io/suisrc/webtop:xfce-${BASE_IMAGE_TAG}
+# ================================================================
+# copy rootfs， 重复的文件覆盖
+# COPY rootfs/ /
+
+# ================================================================
+# https://github.com/fatedier/frp/releases
+# https://github.com/xjasonlyu/tun2socks/releases
+
+ENV FRP_VERSION=0.61.1 \
+    T2S_VERSION=2.5.2
+
+RUN FRP_URL="https://github.com/fatedier/frp/releases/download/v${FRP_VERSION}/frp_${FRP_VERSION}_linux_amd64.tar.gz" && \
+    curl -fSL "${FRP_URL}" -o /tmp/frp.tar.gz && mkdir /tmp/frp && tar -xzf /tmp/frp.tar.gz -C /tmp/frp/ --strip-components=1 && \
+    mv /tmp/frp/frpc /usr/local/bin/ && mv /tmp/frp/frps /usr/local/bin/ && \
+    T2S_URL="https://github.com/xjasonlyu/tun2socks/releases/download/v${T2S_VERSION}/tun2socks-linux-amd64.zip" && \
+    curl -fSL "${T2S_URL}" -o /tmp/tun2socks.zip  && cd /tmp && unzip tun2socks.zip && \
+    mv /tmp/tun2socks-linux-amd64 /usr/local/bin/tun2socks && chmod a+x /usr/local/bin/tun2socks && \
+    rm -rf /tmp/* /var/tmp/* /var/lib/apt/lists/*
+
+# copy frp config
+COPY others/etc-frp /etc/frp
