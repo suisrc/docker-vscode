@@ -1,11 +1,12 @@
 ## x. ccc 安装软件
 ARG BASE_IMAGE_TAG
 
-FROM ghcr.io/suisrc/webtop:vscpod-xfce-${BASE_IMAGE_TAG}
+# ${BASE_IMAGE_TAG} 基础镜像版本
+FROM ghcr.io/suisrc/webtop:vscpod-xa-2.2.1
 # ================================================================
 
 # copy rootfs， 重复的文件覆盖
-COPY rootfs/ /
+# COPY rootfs/ /
 
 USER $USER
 RUN sudo add-msedge && sudo fix-mchina &&\

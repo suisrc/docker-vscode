@@ -4,17 +4,5 @@ ARG BASE_IMAGE_TAG
 # ${BASE_IMAGE_TAG} 为基础镜像版本
 FROM ghcr.io/suisrc/webtop:ccc-2.2.1
 # ================================================================
-# https://github.com/xjasonlyu/tun2socks/releases/
-
-# add software
-RUN apt-get update && DEBIAN_FRONTEND=noninteractive \
-    apt-get install --no-install-recommends -y \
-    iproute2 &&\
-    mkdir /tmp/tun2socks && cd /tmp/tun2socks && \
-    curl -fSL -o tun2socks.zip "https://github.com/xjasonlyu/tun2socks/releases/download/v2.5.2/tun2socks-linux-amd64.zip" && \
-    unzip tun2socks.zip && mv tun2socks-linux-amd64 /usr/local/bin/tun2socks && chmod a+x /usr/local/bin/tun2socks && \
-    apt-get autoremove && apt-get clean && cd $HOME &&\
-    rm -rf /tmp/* /var/tmp/* /var/lib/apt/lists/*
-
 # copy rootfs， 重复的文件覆盖
 COPY rootfs/ /
