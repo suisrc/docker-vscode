@@ -1,0 +1,13 @@
+##  browser-use
+ARG BASE_IMAGE_TAG
+
+# ${BASE_IMAGE_TAG} 为基础镜像版本
+FROM ghcr.io/suisrc/webtop:ccc-2.2.1
+# ================================================================
+# 部署和运行 browser-use
+
+
+# Install Chrome
+RUN curl -fsSL https://dl.google.com/linux/linux_signing_key.pub | gpg --dearmor -o /usr/share/keyrings/google-chrome.gpg \
+    && echo "deb [arch=amd64 signed-by=/usr/share/keyrings/google-chrome.gpg] http://dl.google.com/linux/chrome/deb/ stable main" | tee /etc/apt/sources.list.d/google-chrome.list
+

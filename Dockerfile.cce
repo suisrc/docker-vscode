@@ -1,8 +1,0 @@
-## x. ccc 安装软件
-ARG BASE_IMAGE_TAG
-
-# ${BASE_IMAGE_TAG} 为基础镜像版本
-FROM ghcr.io/suisrc/webtop:ccc-2.2.1
-# ================================================================
-# copy rootfs， 重复的文件覆盖
-COPY rootfs/ /
