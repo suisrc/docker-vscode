@@ -1,0 +1,21 @@
+#!/usr/bin/bash
+
+set -e
+
+# 如果 /home/debian/browser/chrome 目录不存在，则创建
+if [ ! -d "/home/debian/browsers/chrome" ]; then
+    mkdir -p /home/debian/browsers/chrome
+fi
+
+google-chrome --user-data-dir=/home/debian/browsers/chrome \
+--window-position=0,0 \
+--start-maximized \
+--disable-dev-shm-usage \
+--disable-gpu \
+--disable-software-rasterizer \
+--no-first-run \
+--no-default-browser-check \
+--no-experiments \
+--remote-debugging-port=9222 \
+--remote-debugging-address=0.0.0.0 \
+"http://127.0.0.1:7788"

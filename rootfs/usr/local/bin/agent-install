@@ -1,0 +1,19 @@
+#!/usr/bin/bash
+set -e
+
+# 如果 /home/debian/browser/agent 目录不存在，则创建
+if [ ! -d "/home/debian/browser/agent" ]; then
+    mkdir -p /home/debian/browser/agent
+else
+    rm -rf /home/debian/browser/agent/*
+fi
+
+cd /home/debian/browser/agent
+git clone --depth=1  https://github.com/browser-use/web-ui.git ./
+
+# 安装依赖
+uv venv --python 3.11
+. ./venv/bin/activate
+
+uv pip install -r requirements.txt
+playwright install --with-deps chrome

@@ -2,7 +2,7 @@
 ARG BASE_IMAGE_TAG
 
 # ${BASE_IMAGE_TAG} 为基础镜像版本
-FROM ghcr.io/suisrc/webtop:ccc-2.2.1
+FROM ghcr.io/suisrc/webtop:vscpod-xa-2.2.1
 # ================================================================
 # 部署和运行 browser-use
 # https://github.com/browser-use/web-ui
@@ -10,8 +10,10 @@ FROM ghcr.io/suisrc/webtop:ccc-2.2.1
 # copy rootfs， 重复的文件覆盖
 COPY rootfs/ /
 
-# Install Chrome
-RUN add-chrome &&\
+ENV PLAYWRIGHT_BROWSERS_PATH=/home/debian/browsers/ms-playwright
+
+# Install browser-use playwrigth chrome
+RUN agent-install &&\
     apt-get autoremove && apt-get clean && \
     rm -rf /tmp/* /var/tmp/* /var/lib/apt/lists/*
 
