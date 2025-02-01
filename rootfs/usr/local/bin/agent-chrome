@@ -2,7 +2,7 @@
 
 set -e
 
-# 如果 $HOME/browser/chrome 目录不存在，则创建
+# 如果 $HOME/browsers/chrome 目录不存在，则创建
 if [ ! -d "$HOME/browsers/chrome" ]; then
     mkdir -p $HOME/browsers/chrome
 fi

@@ -3,6 +3,6 @@ set -e
 
 if [ `pwd` != "$HOME/browsers/agent" ]; then
     cd $HOME/browsers/agent
-    . ./venv/bin/activate
+    . .venv/bin/activate
 fi
 python webui.py --ip 127.0.0.1 --port 7788

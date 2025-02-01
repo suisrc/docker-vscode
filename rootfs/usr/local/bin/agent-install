@@ -1,15 +1,15 @@
 #!/usr/bin/bash
 set -e
 
-# 如果 $HOME/browser/agent 目录不存在，则创建
-if [ ! -d "$HOME/browser/agent" ]; then
-    mkdir -p $HOME/browser/agent
+# 如果 $HOME/browsers/agent 目录不存在，则创建
+if [ ! -d "$HOME/browsers/agent" ]; then
+    mkdir -p $HOME/browsers/agent
 else
-    rm -rf $HOME/browser/agent/*
+    rm -rf $HOME/browsers/agent/*
 fi
 
-cd $HOME/browser/agent
-git clone --depth=1  https://github.com/browser-use/web-ui.git ./
+cd $HOME/browsers/agent
+git clone --depth=1  https://github.com/browsers-use/web-ui.git ./
 
 # 安装依赖
 uv venv --python 3.11
