@@ -1,5 +1,10 @@
 #!/usr/bin/bash
 set -e
 
-# 安装 chromium, 由于chrome 和 chromium 差不多，这里就不安装chrome了
-apt update && apt install -y chromium chromium-sandbox
+## 配置下载仓库
+curl -fsSL https://dl.google.com/linux/linux_signing_key.pub | gpg --dearmor -o /usr/share/keyrings/google-chrome.gpg
+echo "deb [arch=amd64 signed-by=/usr/share/keyrings/google-chrome.gpg] http://dl.google.com/linux/chrome/deb/ stable main" | tee /etc/apt/sources.list.d/google-chrome.list
+
+# 安装最新版本
+apt update && DEBIAN_FRONTEND=noninteractive \
+apt install --no-install-recommends -y  google-chrome-stable
