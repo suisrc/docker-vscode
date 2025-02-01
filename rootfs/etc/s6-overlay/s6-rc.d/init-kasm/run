@@ -6,10 +6,12 @@ echo "init kasm config ..."
 if [[ ! -f "${HOME}/.config/openbox/autostart" ]]; then
   mkdir -p  ${HOME}/.config/openbox
   cp /defaults/autostart ${HOME}/.config/openbox/autostart
+  chown -R ${USER}:${USER} ${HOME}/.config/openbox
 fi
 if [[ ! -f "${HOME}/.config/openbox/menu.xml" ]]; then
   mkdir -p  ${HOME}/.config/openbox
   cp /defaults/menu.xml ${HOME}/.config/openbox/menu.xml
+  chown -R ${USER}:${USER} ${HOME}/.config/openbox
 fi
 if [[ -f /usr/local/etc/kasmvnc/kasmvnc.yaml.lsio ]]; then
   mv \

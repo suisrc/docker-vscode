@@ -6,7 +6,7 @@ if [[ "$USER" == "root" ]] || [[ "$USER" == "" ]] ; then
     echo "init services server by root"
 else
     echo "init services server by $USER"
-    sudo chown -R $USER:$USER $HOME
+    # sudo chown -R $USER:$USER $HOME
 fi
 
 if [[ ! -f "/tmp/.X11-unix" ]]; then

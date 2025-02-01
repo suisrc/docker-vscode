@@ -16,6 +16,7 @@ if [[ ! -f ${HOME}/.vnc/self.csr ]]; then
     -keyout ${HOME}/.vnc/self.key \
     -out    ${HOME}/.vnc/self.csr \
     -subj "/C=CN/ST=LN/L=DL/O=None/OU=CC/CN=${NGX_DOMAIN}" > /dev/null 2>&1
+    chown -R ${USER}:${USER} ${HOME}/.vnc
 fi
 #########################################################################
 # 使用密码验证

@@ -2,12 +2,12 @@
 
 set -e
 
-# 如果 /home/debian/browser/chrome 目录不存在，则创建
-if [ ! -d "/home/debian/browsers/chrome" ]; then
-    mkdir -p /home/debian/browsers/chrome
+# 如果 $HOME/browser/chrome 目录不存在，则创建
+if [ ! -d "$HOME/browsers/chrome" ]; then
+    mkdir -p $HOME/browsers/chrome
 fi
 
-google-chrome --user-data-dir=/home/debian/browsers/chrome \
+google-chrome --user-data-dir=$HOME/browsers/chrome \
 --window-position=0,0 \
 --start-maximized \
 --disable-dev-shm-usage \
