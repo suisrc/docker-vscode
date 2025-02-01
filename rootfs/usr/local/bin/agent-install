@@ -9,7 +9,7 @@ else
 fi
 
 cd $HOME/browsers/agent
-git clone --depth=1  https://github.com/browsers-use/web-ui.git ./
+git clone --depth=1  https://github.com/browser-use/web-ui.git ./
 
 # 安装依赖
 uv venv --python 3.11
