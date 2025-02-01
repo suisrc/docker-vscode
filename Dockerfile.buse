@@ -7,6 +7,8 @@ FROM ghcr.io/suisrc/webtop:ccc-2.2.1
 # 部署和运行 browser-use
 # https://github.com/browser-use/web-ui
 
+# copy rootfs， 重复的文件覆盖
+COPY rootfs/ /
 
 # Install Chrome
 RUN add-chrome &&\
