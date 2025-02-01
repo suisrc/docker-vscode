@@ -11,8 +11,9 @@ fi
 if [[ ! -f "${HOME}/.config/openbox/menu.xml" ]]; then
   mkdir -p  ${HOME}/.config/openbox
   cp /defaults/menu.xml ${HOME}/.config/openbox/menu.xml
-  chown -R ${USER}:${USER} ${HOME}/.config/openbox
 fi
+chown -R ${USER}:${USER} ${HOME}/.config
+
 if [[ -f /usr/local/etc/kasmvnc/kasmvnc.yaml.lsio ]]; then
   mv \
     /usr/local/etc/kasmvnc/kasmvnc.yaml.lsio \
