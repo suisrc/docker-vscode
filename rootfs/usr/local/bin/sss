@@ -43,11 +43,11 @@ clear() {
     sudo ip link set dev tun0 down
     sudo ip tuntap del mode tun dev tun0
     sudo ip route del default
+    sudo ip route add default via $GWT_IP dev eth0
     # ip route del 192.168.0.0/16
     for addr in $(echo ${PXY_EXCLUDED} | tr ',' '\n'); do
         sudo ip route del $addr
     done
-    sudo ip route add default via $GWT_IP dev eth0
 
     echo "clear tun2socks done"
 }
