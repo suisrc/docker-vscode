@@ -7,8 +7,8 @@ FROM ghcr.io/suisrc/webtop:vscpod-xa-2.2.1
 # 部署和运行 browser-use
 # https://github.com/browser-use/web-ui
 
-# copy rootfs， 重复的文件覆盖
-COPY rootfs/ /
+# copy rootfs，重复的文件覆盖
+# COPY rootfs/ /
 
 ENV PLAYWRIGHT_BROWSERS_PATH=$HOME/browsers/ms-playwright
 
