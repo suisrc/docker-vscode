@@ -10,7 +10,7 @@ on:
 
 env:
   IMAGE_NAME: suisrc/webtop
-  IMAGE_VERSION: 'xa-2.2.1'
+  IMAGE_VERSION: 'vscpod-2.2.1'
   GITHUB_REGISTRY: ghcr.io
   DOCKER_REGISTRY: docker.io
   QUAY_REGISTRY: quay.io
