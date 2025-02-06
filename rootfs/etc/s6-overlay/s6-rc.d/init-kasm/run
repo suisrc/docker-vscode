@@ -48,5 +48,5 @@ if [[ ! -z ${NO_FULL+x} ]] && [[ ! -f /fulllock ]]; then
   touch /fulllock
 fi
 
-# config -> home/user
+# config -> home/debian
 sudo sed -i "s|/config|${HOME}|" /kclient/index.js

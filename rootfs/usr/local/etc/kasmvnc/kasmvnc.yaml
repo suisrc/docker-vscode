@@ -1,6 +1,6 @@
 network:
   ssl:
-    pem_certificate: ${HOME}/.vnc/self.pem
-    pem_key: ${HOME}/.vnc/self.pem
+    pem_certificate: /home/.vnc/self.csr
+    pem_key: /home/.vnc/self.key
   udp:
     public_ip: 127.0.0.1

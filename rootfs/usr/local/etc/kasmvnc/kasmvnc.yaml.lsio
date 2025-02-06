@@ -10,8 +10,8 @@ network:
     stun_server: auto
   ssl:
     require_ssl: false
-    pem_certificate: /config/ssl/cert.pem
-    pem_key: /config/ssl/cert.key
+    pem_certificate: /home/.vnc/self.csr
+    pem_key: /home/.vnc/self.key
 
 logging:
   log_writer_name: all

@@ -7,32 +7,32 @@ echo "init nginx config ..."
 if [[ "$NGX_DOMAIN" == "" ]]; then
     NGX_DOMAIN="*.nip.io"
 fi
-# ${HOME}/.vnc/self.pem不存在，新建自签证书
-if [[ ! -f ${HOME}/.vnc/self.csr ]]; then
+# /home/.vnc/self.csr 不存在，新建自签证书
+if [[ ! -f /home/.vnc/self.csr ]]; then
     # Create cert for KasmVNC
-    echo "creating self-signed file to ${HOME}/.vnc/self.(csr/key) for ${NGX_DOMAIN}, by NGX_DOMAIN"
-    mkdir -p ${HOME}/.vnc
+    echo "creating self-signed file to /home/.vnc/self.(csr/key) for ${NGX_DOMAIN}, by NGX_DOMAIN"
+    mkdir -p /home/.vnc
     openssl req -x509 -nodes -days 3650 -newkey rsa:2048 \
-    -keyout ${HOME}/.vnc/self.key \
-    -out    ${HOME}/.vnc/self.csr \
+    -keyout /home/.vnc/self.key \
+    -out    /home/.vnc/self.csr \
     -subj "/C=CN/ST=LN/L=DL/O=None/OU=CC/CN=${NGX_DOMAIN}" > /dev/null 2>&1
-    chown -R ${USER}:${USER} ${HOME}/.vnc
+    chown -R ${USER}:${USER} /home/.vnc
 fi
 #########################################################################
 # 使用密码验证
 if [[ "$USER" == "" ]]; then
     USER="debian"
 fi
-PASSWORD_PATH="$HOME/.passwd"
-if [[ -f $PASSWORD_PATH ]]; then
+PASSWD_PATH="/home/.passwd"
+if [[ -f $PASSWD_PATH ]]; then
     echo -e "purging existing VNC password settings"
-    rm -f $PASSWORD_PATH
+    rm -f $PASSWD_PATH
 fi
 if [ ! -z ${PASSWORD+x} ]; then
     # openssl passwd -5 使用的是基于 SHA-256 的密码哈希算法
     random_str=$(cat /dev/urandom | tr -dc 'a-zA-Z0-9' | fold -w 10 | head -n 1)
-    echo "$USER:$(openssl passwd -5 -salt $random_str $PASSWORD):ow" > $PASSWORD_PATH
-    chmod 600 $PASSWORD_PATH
+    echo "$USER:$(openssl passwd -5 -salt $random_str $PASSWORD):ow" > $PASSWD_PATH
+    chmod 600 $PASSWD_PATH
 fi
 
 #########################################################################
