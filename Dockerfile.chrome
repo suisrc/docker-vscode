@@ -1,0 +1,16 @@
+## x. ccc 安装软件
+ARG BASE_IMAGE_TAG
+
+# ${BASE_IMAGE_TAG} 基础镜像版本
+FROM ghcr.io/suisrc/webtop:vscpod-xa-2.2.1
+# ================================================================
+
+# copy rootfs， 重复的文件覆盖
+COPY rootfs/ /
+
+# 安装 chrome 浏览器
+USER $USER
+RUN sudo add-chrome && sudo fix-mchina &&\
+    sudo apt-get autoremove && sudo apt-get clean && \
+    sudo rm -rf /tmp/* /var/tmp/* /var/lib/apt/lists/*
+USER root

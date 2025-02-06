@@ -6,8 +6,9 @@ FROM ghcr.io/suisrc/webtop:vscpod-xa-2.2.1
 # ================================================================
 
 # copy rootfs， 重复的文件覆盖
-# COPY rootfs/ /
+COPY rootfs/ /
 
+# 安装 msedge 浏览器
 USER $USER
 RUN sudo add-msedge && sudo fix-mchina &&\
     sudo apt-get autoremove && sudo apt-get clean && \
