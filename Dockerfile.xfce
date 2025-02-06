@@ -112,7 +112,6 @@ RUN apt update && DEBIAN_FRONTEND=noninteractive \
     rm -rf /tmp/* /var/tmp/* /var/lib/apt/lists/*
 
 # ================================================================
-# kasm vnc
 # https://github.com/kasmtech/KasmVNC/releases/
 RUN KASM_VERSION="1.3.3" && \
     APP_URL="https://github.com/kasmtech/KasmVNC/releases/download/v${KASM_VERSION}/kasmvncserver_bookworm_${KASM_VERSION}_amd64.deb" && \
@@ -125,8 +124,8 @@ RUN KASM_VERSION="1.3.3" && \
 
 # ================================================================
 # desktop for xfce4, 这里可更换 kde, openbox 等等, 替换完成，同步需要更改 rootfs/defaults/startwm.sh 中的内容
-# https://github.com/linuxserver/docker-kasm/pkgs/container/kasm
 # https://github.com/linuxserver/docker-baseimage-kasmvnc/tree/ubuntunoble
+# https://github.com/linuxserver/docker-kasm/pkgs/container/kasm
 # https://github.com/linuxserver/docker-webtop/tree/debian-xfce
 
 RUN apt-get update && DEBIAN_FRONTEND=noninteractive \
