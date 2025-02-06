@@ -19,3 +19,4 @@ RUN code-server --install-extension golang.go &&\
     code-server --install-extension redhat.vscode-xml &&\
     code-server --install-extension bungcip.better-toml &&\
     rm -rf /tmp/* /var/tmp/* $HOME/.local/share/code-server/CachedExtensionVSIXs/* $HOME/.openvscode-server/data/CachedExtensionVSIXs/*
+

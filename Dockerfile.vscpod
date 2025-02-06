@@ -26,4 +26,3 @@ RUN VSC_RURL="https://github.com/gitpod-io/openvscode-server/releases" && \
     /usr/bin/code-server --install-extension esbenp.prettier-vscode && \
     /usr/bin/code-server --install-extension humao.rest-client && \
     rm -rf /tmp/* /var/tmp/* $HOME/.openvscode-server/data/CachedExtensionVSIXs/*
-
