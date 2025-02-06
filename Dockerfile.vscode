@@ -10,7 +10,6 @@ ENV SVC_VSCODE="1" \
     VSC_ARGS=" --accept-server-license-terms --without-connection-token" \
     VSCR_VERSION="1.96.2" \
     VSCR_NEW_URL="" \
-    PATH=/usr/local/node/bin:$PATH \
     VSC_HOME="/vsc" \
     WSC_HOME="/wsc" \
     EXTENSIONS=""
