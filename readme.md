@@ -17,10 +17,9 @@ Dockerfile.xfce -> 启动一个桌面环境，之所有桌面下放到这层，�
 Dockerfile.xa   -> 在xfce基础上，增加 tun2socks 和 frp 软件支持， 支持全局代理和内网穿透  
   
 提供以下四个版本，可建立在 nginx 或者 xfce 基础是
-Dockerfile.vsccli(无 vscode，即用即下) |  
-Dockerfile.vscode(微软原版) |  
+Dockerfile.vscode(vscode版) |  
 Dockerfile.vscpod(gitpod版) |  
-Dockerfile.vsccdr(openvsc) ->  
+Dockerfile.vsccdr(coder版) ->  
   
 Dockerfile.dev ->  golang + nodejs + java, 由于python安装简单，不在考虑范围内  
 Dockerfile.ms ->   安装 vscode 插件，并切换为 ms 源  
