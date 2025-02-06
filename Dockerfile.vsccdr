@@ -8,7 +8,6 @@ FROM ghcr.io/suisrc/webtop:${BASE_IMAGE_TAG}
 ENV SVC_VSCODE="1" \
     VSC_HOST="127.0.0.1" \
     VSC_ARGS="--auth none" \
-    NODE_VERSION="20.18.1" \
     VSCR_VERSION="4.96.2" \
     PATH=/usr/local/node/bin:$PATH \
     VSC_HOME="/vsc" \
@@ -19,10 +18,10 @@ ENV SVC_VSCODE="1" \
 COPY rootfs/etc/nginx/demo/vscm.server.conf /etc/nginx/demo/
 
 # install nodejs and vscode <- https://nodejs.org/en/
-RUN mkdir /usr/local/node && \
-    curl -fSL --compressed "https://nodejs.org/dist/v${NODE_VERSION}/node-v$NODE_VERSION-linux-x64.tar.xz" | \
-    tar -xJ -C /usr/local/node --strip-components=1 && npm install -g yarn && node --version && npm --version && \
-    VSC_RURL="https://github.com/coder/code-server/releases" && \
+# RUN mkdir /usr/local/node && \
+#     curl -fSL --compressed "https://nodejs.org/dist/v${NODE_VERSION}/node-v$NODE_VERSION-linux-x64.tar.xz" | \
+#     tar -xJ -C /usr/local/node --strip-components=1 && npm install -g yarn && node --version && npm --version && \
+RUN VSC_RURL="https://github.com/coder/code-server/releases" && \
     VSC_PATH="${VSC_RURL}/download/v${VSCR_VERSION}/code-server-${VSCR_VERSION}-linux-amd64.tar.gz" && \
     curl -o /tmp/vsc.tar.gz -L "${VSC_PATH}" && mkdir -p ${VSC_HOME} ${WSC_HOME} && tar -xzf /tmp/vsc.tar.gz -C ${VSC_HOME}/ --strip-components=1 && \
     rm -f ${VSC_HOME}/node      && ln -s /usr/local/node/bin/node ${VSC_HOME}/node && \

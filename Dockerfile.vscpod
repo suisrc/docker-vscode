@@ -8,7 +8,6 @@ FROM ghcr.io/suisrc/webtop:${BASE_IMAGE_TAG}
 ENV SVC_VSCODE="1" \
     VSC_HOST="127.0.0.1" \
     VSC_ARGS="--without-connection-token" \
-    NODE_VERSION="20.18.1" \
     VSCR_VERSION="1.96.4" \
     PATH=/usr/local/node/bin:$PATH \
     VSC_HOME="/vsc" \
