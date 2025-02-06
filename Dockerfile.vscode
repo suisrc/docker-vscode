@@ -21,12 +21,6 @@ COPY rootfs/etc/nginx/demo/vscm.server.conf /etc/nginx/demo/
 # https://github.com/suisrc/docker-vscode/releases
 # https://nodejs.org/dist/v18.20.4/node-v18.20.4-linux-x64.tar.xz
 # https://github.com/suisrc/docker-vscode/releases/download/v1.96.2/vscode-linux-x64.tar
-# ENV NODE_VERSION="20.18.2" \
-#     PATH=/usr/local/node/bin:$PATH
-# RUN if [ -d /usr/local/node ]; then exit 0; fi && \
-#     mkdir /usr/local/node && \
-#     curl -fSL --compressed "https://nodejs.org/dist/v${NODE_VERSION}/node-v$NODE_VERSION-linux-x64.tar.xz" | \
-#     tar -xJ -C /usr/local/node --strip-components=1 && npm install -g yarn && node --version && npm --version && \
 RUN VSC_PATH="https://github.com/suisrc/docker-vscode/releases/download/v${VSCR_VERSION}/vscode-linux-x64.tar" && \
     curl -o /tmp/vsc.tar -L "${VSC_PATH}" && mkdir -p ${VSC_HOME} ${WSC_HOME} && tar -xf /tmp/vsc.tar -C ${VSC_HOME}/ && \
     ln -s /usr/local/node/bin/node ${VSC_HOME}/node && \

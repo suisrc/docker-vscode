@@ -1,19 +1,25 @@
 #!/usr/bin/bash
 set -e
 
-# 如果 $HOME/browsers/agent 目录不存在，则创建
-if [ ! -d "$HOME/browsers/agent" ]; then
-    mkdir -p $HOME/browsers/agent
-else
-    rm -rf $HOME/browsers/agent/*
+if [ $# -ne 1 ]; then
+    echo "Usage: $0 <git-repo>"
+    exit 1
 fi
 
-cd $HOME/browsers/agent
-git clone --depth=1  https://github.com/browser-use/web-ui.git ./
+# 如果 $HOME/agent 目录不存在，则创建
+if [ ! -d "$HOME/agent-server" ]; then
+    mkdir -p $HOME/agent-server
+else
+    rm   -rf $HOME/agent-server
+    mkdir -p $HOME/agent-server
+fi
+
+# git --depth=1, 只克隆最新的一次提交
+cd $HOME/agent-server && git clone $1 ./
 
 # 安装依赖
 uv venv --python 3.11
-. .venv/bin/activate
+.  .venv/bin/activate
 
 uv pip install -r requirements.txt
 playwright install --with-deps chrome
