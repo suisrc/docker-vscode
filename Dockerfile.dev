@@ -7,24 +7,25 @@ FROM ghcr.io/suisrc/webtop:${BASE_IMAGE_TAG}
 
 RUN mkdir -p ${HOME}/.go/bin
 ENV GO_VERSION=1.23.4 \
-    NODE_VERSION=20.18.1 \
     JAVA_VERSION=jdk-17.0.9+9_openj9-0.41.0 \
     MAVEN_VERSION=3.9.9 \
     GOPATH=${HOME}/go \
     JDK_HOME=/usr/local/java \
     JAVA_HOME=/usr/local/java \
     MAVEN_HOME=/usr/local/maven \
-    PATH=/usr/local/golang/bin:/usr/local/node/bin:/usr/local/java/bin:/usr/local/maven/bin:${HOME}/go/bin:$PATH
+    PATH=/usr/local/golang/bin:/usr/local/java/bin:/usr/local/maven/bin:${HOME}/go/bin:$PATH
 
 # 替换 profile， 否则 remote-ssh 无法加载环境变量 PATH
 COPY /others/etc-profile /etc/profile
 
-# https://nodejs.org/en/ PATH=/usr/local/node/bin:$PATH
 # ==============================================================================================================
-RUN if [ -d /usr/local/node ]; then exit 0; fi && \
-    mkdir /usr/local/node && \
-    curl -fSL --compressed "https://nodejs.org/dist/v${NODE_VERSION}/node-v$NODE_VERSION-linux-x64.tar.xz" | \
-    tar -xJ -C /usr/local/node --strip-components=1 && npm install -g yarn && node --version && npm --version
+# https://nodejs.org/en/
+# ENV NODE_VERSION="20.18.2" \
+#     PATH=/usr/local/node/bin:$PATH
+# RUN if [ -d /usr/local/node ]; then exit 0; fi && \
+#     mkdir /usr/local/node && \
+#     curl -fSL --compressed "https://nodejs.org/dist/v${NODE_VERSION}/node-v$NODE_VERSION-linux-x64.tar.xz" | \
+#     tar -xJ -C /usr/local/node --strip-components=1 && npm install -g yarn && node --version && npm --version
 
 # ==============================================================================================================
 # https://golang.google.cn/dl/
@@ -34,7 +35,7 @@ RUN mkdir /usr/local/golang && \
     go version
 
 # ==============================================================================================================
-# https://github.com/AdoptOpenJDK/semeru17-binaries
+# https://github.com/AdoptOpenJDK/semeru17-binaries/
 RUN if [ -z ${JAVA_URL+x} ]; then \
         if [ -z ${JAVA_VERSION+x} ]; then \
             JAVA_VERSION=$(curl -sX GET "https://api.github.com/repos/AdoptOpenJDK/semeru17-binaries/releases/latest" \

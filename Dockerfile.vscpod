@@ -18,7 +18,8 @@ ENV SVC_VSCODE="1" \
 # install nodejs and vscode <- https://nodejs.org/en/
 # ENV NODE_VERSION="20.18.2" \
 #     PATH=/usr/local/node/bin:$PATH
-# RUN mkdir /usr/local/node && \
+# RUN if [ -d /usr/local/node ]; then exit 0; fi && \
+#     mkdir /usr/local/node && \
 #     curl -fSL --compressed "https://nodejs.org/dist/v${NODE_VERSION}/node-v$NODE_VERSION-linux-x64.tar.xz" | \
 #     tar -xJ -C /usr/local/node --strip-components=1 && npm install -g yarn && node --version && npm --version && \
 RUN VSC_RURL="https://github.com/gitpod-io/openvscode-server/releases" && \
