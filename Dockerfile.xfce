@@ -104,6 +104,7 @@ RUN apt update && DEBIAN_FRONTEND=noninteractive \
     xserver-xorg-video-nouveau \
     xserver-xorg-video-qxl \
     xterm \
+    tilix \
     xutils \
     zlib1g && \
     apt-get autoremove && apt-get clean && \
