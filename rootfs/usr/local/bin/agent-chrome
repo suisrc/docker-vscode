@@ -2,7 +2,6 @@
 
 set -e
 
-
 # 初始化参数变量
 name="chrome"
 port=9222
@@ -44,11 +43,37 @@ if [ ! -d "$data" ]; then
     mkdir -p $data
 fi
 
-# 启动浏览器
+# 需要配置外网访问， 使用 nginx stream 绑定到外网网卡上
+if [ $host == "0.0.0.0" ]; then
+# 获取第一网卡，用于局域网暴露服务
+LAN_IP=$(hostname -I | awk '{print $1}')
+NGX_CF=/etc/nginx/conf.d/$port.stream.conf
+# cat 即使使用 sudo 也会导致权限不足，使用 tee 替换
+sudo tee $NGX_CF > /dev/null <<EOF
+server {
+    listen        $LAN_IP:$port;
+    proxy_pass    127.0.0.1:$port;
+    proxy_timeout 300s;
+    access_log    off;
+}
+EOF
+# 终止服务后，清理配置文件
+cleanup() {
+    echo ...
+    echo rm $NGX_CF...
+    sudo rm -f $NGX_CF
+}
+trap cleanup EXIT
+fi
+
+# 启动浏览器 --headless
+# https://issues.chromium.org/issues/41487252, 好吧，由于 --remote-debugging-address 不工作
+# 不得不使用 nginx 进行处理，那么自定义的port将没有任何意义，因此使用 nginx stream 进行桥接
+# 但是需要注意，chrome 对于 Header Host 又校验，必须是 localhost 或者 ip address, 否则会异常
 google-chrome \
 --user-data-dir=$data \
 --remote-debugging-port=$port \
---remote-debugging-address=$host \
+--remote-debugging-address=127.0.0.1\
 --window-position=0,0 \
 --start-maximized \
 --disable-dev-shm-usage \
@@ -57,4 +82,5 @@ google-chrome \
 --no-first-run \
 --no-default-browser-check \
 --no-experiments \
-"http://127.0.0.1:7788"
+"http://127.0.0.1:${port}/json/version"
+
