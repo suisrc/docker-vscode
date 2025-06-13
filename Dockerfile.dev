@@ -10,30 +10,29 @@ ENV GO_VERSION=1.24.4  \
     GOPATH=${HOME}/.go \
     PATH=/usr/local/golang/bin:${HOME}/.go/bin:$PATH
 
+SHELL ["/bin/bash", "-c"]
 # ==============================================================================================================
-# https://golang.google.cn/dl/
-RUN mkdir /usr/local/golang && \
-    curl -fSL --compressed "https://dl.google.com/go/go${GO_VERSION}.linux-amd64.tar.gz" | \
-    tar -xz -C /usr/local/golang --strip-components=1 &&\
-    go version
-    # ; exit 0
-
-RUN usermod -s /bin/bash root
 RUN sdk install java 8.0.452-sem && sdk install java 17.0.15-sem && sdk install maven
 RUN nvm install 24 && nvm install 14
 
 # ==============================================================================================================
-# golang extension
-# RUN go install github.com/ramya-rao-a/go-outline@latest &&\
-#     go install github.com/cweill/gotests/gotests@latest &&\
-#     go install github.com/fatih/gomodifytags@latest &&\
-#     go install github.com/josharian/impl@latest &&\
-#     go install github.com/haya14busa/goplay/cmd/goplay@latest &&\
-#     go install github.com/go-delve/delve/cmd/dlv@latest &&\
-#     go install honnef.co/go/tools/cmd/staticcheck@latest &&\
-#     go install golang.org/x/tools/gopls@latest &&\
-#     go install github.com/google/wire/cmd/wire@latest; exit 0
+# https://golang.google.cn/dl/
+RUN mkdir /usr/local/golang && \
+    curl -fSL --compressed "https://dl.google.com/go/go${GO_VERSION}.linux-amd64.tar.gz" | \
+    tar -xz -C /usr/local/golang --strip-components=1 && go version
 
+# golang extension
+RUN go install github.com/ramya-rao-a/go-outline@latest &&\
+    go install github.com/cweill/gotests/gotests@latest &&\
+    go install github.com/fatih/gomodifytags@latest &&\
+    go install github.com/josharian/impl@latest &&\
+    go install github.com/haya14busa/goplay/cmd/goplay@latest &&\
+    go install github.com/go-delve/delve/cmd/dlv@latest &&\
+    go install honnef.co/go/tools/cmd/staticcheck@latest &&\
+    go install golang.org/x/tools/gopls@latest &&\
+    go install github.com/google/wire/cmd/wire@latest; exit 0
+
+# ==============================================================================================================
 # python extension
 # RUN pip3 install --upgrade pip &&\
 #     pip3 install --user pylint &&\
