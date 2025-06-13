@@ -1,0 +1,58 @@
+#! /bin/bash
+
+## . .venv/bin/activate
+## pip install -r requirements.txt
+## pip freeze > requirements.txt
+
+## 如果 .init 不存在则创建， 存储时间戳, 用于判断是否已经初始化过
+if [ -f .init ]; then
+    echo "已经初始化过了, 请不要重复初始化"
+    exit 0
+fi
+echo $(date) > .init
+
+# 修改源, 通过输入 y/n 来选择是否修改, 默认是 n
+# read -p "是否修改 linux 源为清华源? [y/n], 默认n: " choice
+# if [ "$choice" == "y" ]; then
+#     echo "修改 linux 源为清华源"
+#     sed -i \
+#         -e "s/deb.debian.org/mirrors.tuna.tsinghua.edu.cn/g"  \
+#         -e "s/security.debian.org/mirrors.tuna.tsinghua.edu.cn/g"  \
+#         -e "s/archive.ubuntu.com/mirrors.tuna.tsinghua.edu.cn/g"  \
+#         -e "s/security.ubuntu.com/mirrors.tuna.tsinghua.edu.cn/g" \
+#         /etc/apt/sources.list
+#     # 更新源
+#     apt update
+# fi
+
+# 检查 python3 是否安装， 如果没有安装则安装, pip&venv vs uv 
+if ! command -v python3 &> /dev/null; then
+    echo "安装 python3 中..."
+    apt  install -y python3
+fi
+
+# 修改pip的源为清华大学的源, 通过输入 y/n 来选择是否修改, 默认是 n
+read -p "是否修改 uvpip 源为清华源? [y/n], 默认n: " choice
+if [ "$choice" == "y" ]; then
+    echo "修改 uvpip 源为清华源"
+    cat > pyproject.toml <<EOF
+[[tool.uv.index]]
+url = "https://mirrors.tuna.tsinghua.edu.cn/pypi/web/simple"
+default = true
+EOF
+fi
+
+# 创建一个虚拟环境
+echo "创建虚拟环境中..."
+uv venv --python 3.11 && . .venv/bin/activate
+
+cat > .venv/bin/pip <<EOF
+uv pip \$@
+EOF
+chmod +x .venv/bin/pip
+
+# # 安装依赖
+# echo "安装依赖中..."
+# pip install -r requirements.txt
+
+echo "初始化完成!!!"
