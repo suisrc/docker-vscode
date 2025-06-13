@@ -12,7 +12,8 @@ ENV GO_VERSION=1.24.4  \
 
 SHELL ["/bin/bash", "-c"]
 # ==============================================================================================================
-RUN sdk install java 8.0.452-sem && sdk install java 17.0.15-sem && sdk install maven
+RUN . "$HOME/.sdkman/bin/sdkman-init.sh" &&\
+    sdk install java 8.0.452-sem && sdk install java 17.0.15-sem && sdk install maven
 RUN nvm install 24 && nvm install 14
 
 # ==============================================================================================================
