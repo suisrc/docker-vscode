@@ -18,7 +18,7 @@ RUN mkdir /usr/local/golang && \
     go version
     # ; exit 0
 
-RUN bash "$HOME/.sdkman/bin/sdkman-init.sh" &&\
+RUN usermod -s /bin/bash root &&\
     sdk install java 8.0.452-sem &&\
     sdk install java 17.0.15-sem &&\
     sdk install maven
