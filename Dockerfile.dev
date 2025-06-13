@@ -12,7 +12,7 @@ ENV GO_VERSION=1.24.4  \
 
 # ==============================================================================================================
 RUN . "$HOME/.sdkman/bin/sdkman-init.sh" &&\
-    sdk install java 8.0.452-sem && sdk install java 17.0.15-sem && sdk use java 17.0.15-sem && sdk install maven
+    sdk install java 8.0.452-sem && sdk install java 17.0.15-sem && sdk use java 17.0.15-sem && sdk install maven 3.9.10
 RUN nvm install 24 && nvm install 14
 
 # ==============================================================================================================
