@@ -18,8 +18,9 @@ RUN mkdir /usr/local/golang && \
     go version
     # ; exit 0
 
-RUN bash -c "sdk install java 8.0.452-sem && sdk install java 17.0.15-sem && sdk install maven"
-RUN bash -c "nvm install 24 && nvm install 14"
+RUN usermod -s /bin/bash root
+RUN sdk install java 8.0.452-sem && sdk install java 17.0.15-sem && sdk install maven
+RUN nvm install 24 && nvm install 14
 
 # ==============================================================================================================
 # golang extension
