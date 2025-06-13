@@ -16,7 +16,7 @@ RUN . "$HOME/.sdkman/bin/sdkman-init.sh" &&\
 
 RUN export NVM_DIR="$([ -z "${XDG_CONFIG_HOME-}" ] && printf %s "${HOME}/.nvm" || printf %s "${XDG_CONFIG_HOME}/nvm")" &&\
     [ -s "$NVM_DIR/nvm.sh" ] && \. "$NVM_DIR/nvm.sh"  --no-use &&\
-    nvm install 24 && nvm install 14
+    nvm install 14 && nvm install 24
 
 # ==============================================================================================================
 # https://golang.google.cn/dl/
