@@ -1,8 +1,9 @@
-## x. 安装 nodejs
+## x
 ARG BASE_IMAGE_TAG
 
 # ================================================================
-FROM ghcr.io/suisrc/webtop:sshd-${BASE_IMAGE_TAG}
+# ${BASE_IMAGE_TAG}
+FROM ghcr.io/suisrc/webtop:sshd-2.2.2
 
 # ================================================================
 # https://nodejs.org/en/
@@ -15,3 +16,30 @@ RUN if [ -d /usr/local/node ]; then exit 0; fi && \
     tar -xJ -C /usr/local/node --strip-components=1 && npm install -g yarn && node --version && npm --version && \
     apt-get autoremove && apt-get clean && \
     rm -rf /tmp/* /var/tmp/* /var/lib/apt/lists/*
+
+# ================================================================
+COPY others/etc-frp        /etc/frp
+COPY others/etc-profile    /etc/profile
+COPY rootfs/usr/local/bin  /usr/local/bin
+# ================================================================
+
+ENV FRP_VERSION=0.62.1 \
+    T2S_VERSION=2.6.0 \
+    UVX_VERSION=0.7.12 \
+    MVN_VERSION=0.40.3 \
+    XAV_VERSION=0.0.1
+
+RUN FRP_URL="https://github.com/fatedier/frp/releases/download/v${FRP_VERSION}/frp_${FRP_VERSION}_linux_amd64.tar.gz" && \
+    curl -fSL "${FRP_URL}" -o /tmp/frp.tar.gz && mkdir /tmp/frp && tar -xzf /tmp/frp.tar.gz -C /tmp/frp/ --strip-components=1 && \
+    mv /tmp/frp/frpc /usr/local/bin/ && mv /tmp/frp/frps /usr/local/bin/ && \
+    T2S_URL="https://github.com/xjasonlyu/tun2socks/releases/download/v${T2S_VERSION}/tun2socks-linux-amd64.zip" && \
+    curl -fSL "${T2S_URL}" -o /tmp/tun2socks.zip  && cd /tmp && unzip tun2socks.zip && \
+    mv /tmp/tun2socks-linux-amd64 /usr/local/bin/tun2socks && chmod a+x /usr/local/bin/tun2socks && \
+    UVX_URL="https://github.com/astral-sh/uv/releases/download/${UVX_VERSION}/uv-x86_64-unknown-linux-gnu.tar.gz" && \
+    curl -fSL "${UVX_URL}" -o /tmp/uv.tar.gz && tar -xzf /tmp/uv.tar.gz -C /usr/bin/ --strip-components=1 && \
+    curl -o- "https://raw.githubusercontent.com/nvm-sh/nvm/v${MVN_VERSION}/install.sh" | bash && \
+    export NVM_DIR="$([ -z "${XDG_CONFIG_HOME-}" ] && printf %s "${HOME}/.nvm" || printf %s "${XDG_CONFIG_HOME}/nvm")" && \
+    [ -s "$NVM_DIR/nvm.sh" ] && \. "$NVM_DIR/nvm.sh" --no-use && \
+    curl -s  "https://get.sdkman.io" | bash && source "$HOME/.sdkman/bin/sdkman-init.sh" && \
+    rm -rf /tmp/* /var/tmp/* /var/lib/apt/lists/*
+

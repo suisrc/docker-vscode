@@ -6,26 +6,9 @@ FROM ghcr.io/suisrc/webtop:${BASE_IMAGE_TAG}
 # ================================================================
 
 RUN mkdir -p ${HOME}/.go/bin
-ENV GO_VERSION=1.23.4 \
-    JAVA_VERSION=jdk-17.0.9+9_openj9-0.41.0 \
-    MAVEN_VERSION=3.9.9 \
-    GOPATH=${HOME}/go \
-    JDK_HOME=/usr/local/java \
-    JAVA_HOME=/usr/local/java \
-    MAVEN_HOME=/usr/local/maven \
-    PATH=/usr/local/golang/bin:/usr/local/java/bin:/usr/local/maven/bin:${HOME}/go/bin:$PATH
-
-# 替换 profile， 否则 remote-ssh 无法加载环境变量 PATH
-COPY /others/etc-profile /etc/profile
-
-# ==============================================================================================================
-# https://nodejs.org/en/
-# ENV NODE_VERSION="20.18.2" \
-#     PATH=/usr/local/node/bin:$PATH
-# RUN if [ -d /usr/local/node ]; then exit 0; fi && \
-#     mkdir /usr/local/node && \
-#     curl -fSL --compressed "https://nodejs.org/dist/v${NODE_VERSION}/node-v$NODE_VERSION-linux-x64.tar.xz" | \
-#     tar -xJ -C /usr/local/node --strip-components=1 && npm install -g yarn && node --version && npm --version
+ENV GO_VERSION=1.24.4  \
+    GOPATH=${HOME}/.go \
+    PATH=/usr/local/golang/bin:${HOME}/.go/bin:$PATH
 
 # ==============================================================================================================
 # https://golang.google.cn/dl/
@@ -33,38 +16,15 @@ RUN mkdir /usr/local/golang && \
     curl -fSL --compressed "https://dl.google.com/go/go${GO_VERSION}.linux-amd64.tar.gz" | \
     tar -xz -C /usr/local/golang --strip-components=1 &&\
     go version
+    # ; exit 0
 
-# ==============================================================================================================
-# https://github.com/AdoptOpenJDK/semeru17-binaries/
-RUN if [ -z ${JAVA_URL+x} ]; then \
-        if [ -z ${JAVA_VERSION+x} ]; then \
-            JAVA_VERSION=$(curl -sX GET "https://api.github.com/repos/AdoptOpenJDK/semeru17-binaries/releases/latest" \
-            | awk '/tag_name/{print $4;exit}' FS='[""]'); \
-        fi && \
-        JAVA_URL=$(curl -sX GET "https://api.github.com/repos/AdoptOpenJDK/semeru17-binaries/releases/tags/${JAVA_VERSION}" \
-            | jq -r 'first(.assets[] | select(.browser_download_url | contains("jdk_x64_linux_") and endswith(".tar.gz") ) | .browser_download_url)'); \
-    fi &&\
-    mkdir /usr/local/java && \
-    curl -fSL --compressed ${JAVA_URL} | \
-    tar -xz -C /usr/local/java --strip-components=1 &&\
-    java -version
+RUN sdk install java 8.0.452-sem &&\
+    sdk install java 17.0.15-sem &&\
+    sdk install maven
 
-# http://mirrors.tuna.tsinghua.edu.cn/apache/maven/maven-3/${MAVEN_VERSION}/binaries/apache-maven-${MAVEN_VERSION}-bin.tar.gz"
-# https://downloads.apache.org/maven/maven-3/
-RUN if [ -z ${MAVEN_URL+x} ]; then \
-        MAVEN_URL="https://downloads.apache.org/maven/maven-3/${MAVEN_VERSION}/binaries/apache-maven-${MAVEN_VERSION}-bin.tar.gz"; \
-    fi &&\
-    mkdir /usr/local/maven &&\
-    curl -fSL --compressed ${MAVEN_URL} | \
-    tar -xz -C /usr/local/maven --strip-components=1 &&\
-    sed -i -e "159d" -e "s/  <\/mirrors>/    -->\n&/g" /usr/local/maven/conf/settings.xml &&\
-    mvn -version
+RUN nvm install 24 &&\
+    nvm install 14
 
-# ==============================================================================================================
-# RUN apt update && apt install -y python3 python3-pip python3-venv && ln -s /usr/bin/python3 /usr/local/bin/py &&\
-#     apt autoremove -y && apt clean && rm -rf /tmp/* /var/tmp/* /var/lib/apt/lists/*
-
-# COPY rootfs/usr/bin/ /usr/bin/
 # ==============================================================================================================
 # golang extension
 # RUN go install github.com/ramya-rao-a/go-outline@latest &&\

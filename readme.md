@@ -5,8 +5,8 @@
 ## Dockerfile
 
 基础组件  
-Dockerfile.proxyssh(proxyssh-2.0.0)(ssh代理)  
-Dockerfile.proxyvsc(proxyvsc-2.0.0)(vsc代理)  
+Dockerfile.ssh(proxyssh-2.0.0)(ssh代理)  
+Dockerfile.ngx(ssh-2.2.2)(vsc代理)  
 Dockerfile.kclient(kclient-2.0.0)(kasm终端)  
   
 开发环境  
