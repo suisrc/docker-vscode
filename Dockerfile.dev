@@ -18,13 +18,12 @@ RUN mkdir /usr/local/golang && \
     go version
     # ; exit 0
 
-RUN bash &&\
+RUN bash "$HOME/.sdkman/bin/sdkman-init.sh" &&\
     sdk install java 8.0.452-sem &&\
     sdk install java 17.0.15-sem &&\
     sdk install maven
 
-RUN bash &&\
-    nvm install 24 &&\
+RUN nvm install 24 &&\
     nvm install 14
 
 # ==============================================================================================================
