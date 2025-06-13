@@ -13,7 +13,10 @@ ENV GO_VERSION=1.24.4  \
 # ==============================================================================================================
 RUN . "$HOME/.sdkman/bin/sdkman-init.sh" &&\
     sdk install java 8.0.452-sem && sdk install java 17.0.15-sem && sdk use java 17.0.15-sem && sdk install maven 3.9.10
-RUN nvm install 24 && nvm install 14
+
+RUN export NVM_DIR="$([ -z "${XDG_CONFIG_HOME-}" ] && printf %s "${HOME}/.nvm" || printf %s "${XDG_CONFIG_HOME}/nvm")" &&\
+    [ -s "$NVM_DIR/nvm.sh" ] && \. "$NVM_DIR/nvm.sh"  --no-use &&\
+    nvm install 24 && nvm install 14
 
 # ==============================================================================================================
 # https://golang.google.cn/dl/
