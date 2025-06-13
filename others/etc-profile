@@ -12,6 +12,7 @@ export $(sudo cat /proc/1/environ |tr '\0' '\n' | xargs)
 # export NVM_DIR="$([ -z "${XDG_CONFIG_HOME-}" ] && printf %s "${HOME}/.nvm" || printf %s "${XDG_CONFIG_HOME}/nvm")"
 # [ -s "$NVM_DIR/nvm.sh" ] && \. "$NVM_DIR/nvm.sh" --no-use # This loads nvm, without auto-using the default version
 # source "$HOME/.sdkman/bin/sdkman-init.sh"
+export LC_ALL=C.UTF-8
 
 if [ "${PS1-}" ]; then
   if [ "${BASH-}" ] && [ "$BASH" != "/bin/sh" ]; then

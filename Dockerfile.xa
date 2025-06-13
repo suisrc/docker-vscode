@@ -13,9 +13,9 @@ COPY rootfs/usr/local/bin  /usr/local/bin
 # ================================================================
 # frps&frpc  https://github.com/fatedier/frp/releases
 # tun2socks  https://github.com/xjasonlyu/tun2socks/releases
-# vux python https://github.com/astral-sh/uv
+# sdk java   https://sdkman.io/usage
 # nvm nodejs https://github.com/nvm-sh/nvm
-# sdk java   https://sdkman.io/install/
+# vux python https://github.com/astral-sh/uv
 
 ENV FRP_VERSION=0.62.1 \
     T2S_VERSION=2.6.0 \
@@ -23,6 +23,7 @@ ENV FRP_VERSION=0.62.1 \
     MVN_VERSION=0.40.3 \
     XAV_VERSION=0.0.1
 
+SHELL ["/bin/bash", "-c"]
 RUN apt update && DEBIAN_FRONTEND=noninteractive \
     apt install --no-install-recommends -y zip &&\
     FRP_URL="https://github.com/fatedier/frp/releases/download/v${FRP_VERSION}/frp_${FRP_VERSION}_linux_amd64.tar.gz" && \
@@ -36,6 +37,6 @@ RUN apt update && DEBIAN_FRONTEND=noninteractive \
     curl -o- "https://raw.githubusercontent.com/nvm-sh/nvm/v${MVN_VERSION}/install.sh" | bash && \
     export NVM_DIR="$([ -z "${XDG_CONFIG_HOME-}" ] && printf %s "${HOME}/.nvm" || printf %s "${XDG_CONFIG_HOME}/nvm")" && \
     [ -s "$NVM_DIR/nvm.sh" ] && \. "$NVM_DIR/nvm.sh" --no-use && \
-    curl -s  "https://get.sdkman.io" | bash && bash "$HOME/.sdkman/bin/sdkman-init.sh" && \
+    curl -s  "https://get.sdkman.io" | bash && . "$HOME/.sdkman/bin/sdkman-init.sh" && \
     rm -rf /tmp/* /var/tmp/* /var/lib/apt/lists/*
 
