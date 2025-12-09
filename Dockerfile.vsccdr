@@ -8,7 +8,7 @@ FROM ghcr.io/suisrc/webtop:${BASE_IMAGE_TAG}
 ENV SVC_VSCODE="1" \
     VSC_HOST="127.0.0.1" \
     VSC_ARGS="--auth none" \
-    VSCR_VERSION="4.96.2" \
+    VSCR_VERSION="4.106.3" \
     VSC_HOME="/vsc" \
     WSC_HOME="/wsc" \
     EXTENSIONS=""
