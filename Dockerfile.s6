@@ -3,7 +3,7 @@
 FROM alpine:3.18 as rootfs-stage
 
 # https://github.com/just-containers/s6-overlay
-ARG S6_VERSION="3.2.0.2"
+ARG S6_VERSION="3.2.1.0"
 ARG S6_ARCH="x86_64"
 ARG S6_URL="https://github.com/just-containers/s6-overlay/releases/download/"
 
@@ -20,7 +20,7 @@ RUN mkdir /rootfs && \
 FROM debian:12-slim
 # ================================================================
 # https://github.com/just-containers/s6-overlay
-ARG S6_VERSION="3.2.0.2"
+ARG S6_VERSION="3.2.1.0"
 ARG S6_ARCH="x86_64"
 
 # install packages
