@@ -6,13 +6,13 @@ FROM ghcr.io/suisrc/webtop:${BASE_IMAGE_TAG}
 # ================================================================
 
 RUN mkdir -p ${HOME}/.go/bin
-ENV GO_VERSION=1.24.4  \
+ENV GO_VERSION=1.25.5  \
     GOPATH=${HOME}/.go \
     PATH=/usr/local/golang/bin:${HOME}/.go/bin:$PATH
 
 # ==============================================================================================================
 RUN . "$HOME/.sdkman/bin/sdkman-init.sh" &&\
-    sdk install java 8.0.452-sem && sdk install java 17.0.15-sem && sdk use java 17.0.15-sem && sdk install maven 3.9.10
+    sdk install java 8.0.472-sem && sdk install java 25.0.1-sem && sdk use java 25.0.1-sem && sdk install maven 3.9.11
 
 # RUN export NVM_DIR="$([ -z "${XDG_CONFIG_HOME-}" ] && printf %s "${HOME}/.nvm" || printf %s "${XDG_CONFIG_HOME}/nvm")" &&\
 #     [ -s "$NVM_DIR/nvm.sh" ] && \. "$NVM_DIR/nvm.sh"  --no-use &&\
