@@ -3,11 +3,11 @@ ARG BASE_IMAGE_TAG
 
 # ================================================================
 # ${BASE_IMAGE_TAG}
-FROM ghcr.io/suisrc/webtop:sshd-2.2.2
+FROM ghcr.io/suisrc/webtop:sshd-2.3.1
 
 # ================================================================
 # https://nodejs.org/en/
-ENV NODE_VERSION="20.18.2" \
+ENV NODE_VERSION="24.11.1" \
     PATH=/usr/local/node/bin:$PATH
 
 RUN if [ -d /usr/local/node ]; then exit 0; fi && \

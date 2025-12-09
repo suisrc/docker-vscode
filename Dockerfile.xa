@@ -3,35 +3,25 @@ ARG BASE_IMAGE_TAG
 
 # ================================================================
 # ${BASE_IMAGE_TAG}
-FROM ghcr.io/suisrc/webtop:xfce-2.2.2
+FROM ghcr.io/suisrc/webtop:xfce-2.3.1
 
 # ================================================================
 # 替换 profile， 否则 remote-ssh 无法加载环境变量 PATH
-COPY others/etc-frp        /etc/frp
 COPY others/etc-profile    /etc/profile
 COPY rootfs/usr/local/bin  /usr/local/bin
-# ================================================================
-# frps&frpc  https://github.com/fatedier/frp/releases
-# tun2socks  https://github.com/xjasonlyu/tun2socks/releases
-# sdk java   https://sdkman.io/usage
-# nvm nodejs https://github.com/nvm-sh/nvm
-# vux python https://github.com/astral-sh/uv
 
-ENV FRP_VERSION=0.62.1 \
-    T2S_VERSION=2.6.0 \
-    UVX_VERSION=0.7.12 \
+# ================================================================
+# vux python https://github.com/astral-sh/uv
+# nvm nodejs https://github.com/nvm-sh/nvm
+# sdk java   https://sdkman.io/usage
+
+ENV UVX_VERSION=0.9.16 \
     MVN_VERSION=0.40.3 \
     XAV_VERSION=0.0.1
 
 SHELL ["/bin/bash", "-c"]
 RUN apt update && DEBIAN_FRONTEND=noninteractive \
     apt install --no-install-recommends -y zip &&\
-    FRP_URL="https://github.com/fatedier/frp/releases/download/v${FRP_VERSION}/frp_${FRP_VERSION}_linux_amd64.tar.gz" && \
-    curl -fSL "${FRP_URL}" -o /tmp/frp.tar.gz && mkdir /tmp/frp && tar -xzf /tmp/frp.tar.gz -C /tmp/frp/ --strip-components=1 && \
-    mv /tmp/frp/frpc /usr/local/bin/ && mv /tmp/frp/frps /usr/local/bin/ && \
-    T2S_URL="https://github.com/xjasonlyu/tun2socks/releases/download/v${T2S_VERSION}/tun2socks-linux-amd64.zip" && \
-    curl -fSL "${T2S_URL}" -o /tmp/tun2socks.zip  && cd /tmp && unzip tun2socks.zip && \
-    mv /tmp/tun2socks-linux-amd64 /usr/local/bin/tun2socks && chmod a+x /usr/local/bin/tun2socks && \
     UVX_URL="https://github.com/astral-sh/uv/releases/download/${UVX_VERSION}/uv-x86_64-unknown-linux-gnu.tar.gz" && \
     curl -fSL "${UVX_URL}" -o /tmp/uv.tar.gz && tar -xzf /tmp/uv.tar.gz -C /usr/bin/ --strip-components=1 && \
     curl -o- "https://raw.githubusercontent.com/nvm-sh/nvm/v${MVN_VERSION}/install.sh" | bash && \
@@ -39,4 +29,20 @@ RUN apt update && DEBIAN_FRONTEND=noninteractive \
     [ -s "$NVM_DIR/nvm.sh" ] && \. "$NVM_DIR/nvm.sh" --no-use && \
     curl -s  "https://get.sdkman.io" | bash && . "$HOME/.sdkman/bin/sdkman-init.sh" && \
     rm -rf /tmp/* /var/tmp/* /var/lib/apt/lists/*
+
+
+# ================================================================
+# COPY others/etc-frp        /etc/frp
+# frps&frpc  https://github.com/fatedier/frp/releases
+# tun2socks  https://github.com/xjasonlyu/tun2socks/releases
+
+# FRP_VERSION=0.62.1 \
+# T2S_VERSION=2.6.0
+
+# FRP_URL="https://github.com/fatedier/frp/releases/download/v${FRP_VERSION}/frp_${FRP_VERSION}_linux_amd64.tar.gz" && \
+# curl -fSL "${FRP_URL}" -o /tmp/frp.tar.gz && mkdir /tmp/frp && tar -xzf /tmp/frp.tar.gz -C /tmp/frp/ --strip-components=1 && \
+# mv /tmp/frp/frpc /usr/local/bin/ && mv /tmp/frp/frps /usr/local/bin/ && \
+# T2S_URL="https://github.com/xjasonlyu/tun2socks/releases/download/v${T2S_VERSION}/tun2socks-linux-amd64.zip" && \
+# curl -fSL "${T2S_URL}" -o /tmp/tun2socks.zip  && cd /tmp && unzip tun2socks.zip && \
+# mv /tmp/tun2socks-linux-amd64 /usr/local/bin/tun2socks && chmod a+x /usr/local/bin/tun2socks && \
 
