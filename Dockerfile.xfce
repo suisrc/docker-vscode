@@ -1,21 +1,8 @@
 ## x. 安装 webtop for xfce4, 支持 vscode-cdr 和 vscode-pod 安装
 # ================================================================
 ARG BASE_IMAGE_TAG
-# https://github.com/linuxserver/docker-baseimage-kasmvnc
-# https://github.com/kasmtech/workspaces-core-images
-
-# kclient builder, fix kasm client bug
-# FROM ghcr.io/suisrc/webtop:kclient-2.0.1 as kclient-stage
 
 FROM ghcr.io/suisrc/webtop:sshd-${BASE_IMAGE_TAG}
-# ================================================================
-# kasm (noVnc)
-
-# ================================================================
-# kclient, 访问终端， 提供终端页面， 上传/下载文件， 声音传输, IP 获取
-# COPY --from=kclient-stage /kclient /kclient
-# COPY --from=kclient-stage /kserver /kserver # 安装KasmVNC后可忽略
-
 # ================================================================
 # set environment variables
 ENV SVC_XFCE="1" \

@@ -14,6 +14,9 @@ if [[ ! -f "/tmp/.X11-unix" ]]; then
   chmod 1777 /tmp/.X11-unix /tmp/.X11-pipe
 fi
 
+# DBus Setup
+sudo dbus-daemon --system
+# /usr/bin/dbus-daemon --syslog --fork --print-pid 4 --print-address 6 --session
 
 # =============================================================================================
 

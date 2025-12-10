@@ -15,9 +15,7 @@
 # xfce 服务   SVC_XFCE=1
 # echo "" > /etc/s6-overlay/s6-rc.d/user/contents.d/init-kasm       # init-nginx
 # echo "" > /etc/s6-overlay/s6-rc.d/user/contents.d/init-video      # init-kasm
-# echo "" > /etc/s6-overlay/s6-rc.d/user/contents.d/init-services   # init-nginx init-kasm init-video
-# echo "" > /etc/s6-overlay/s6-rc.d/user/contents.d/svc-kclient     # init-services
-# echo "" > /etc/s6-overlay/s6-rc.d/user/contents.d/svc-pulseaudio  # init-services (dbus-daemon)
+# echo "" > /etc/s6-overlay/s6-rc.d/user/contents.d/init-services   # init-nginx init-kasm init-video (dbus-daemon)
 # echo "" > /etc/s6-overlay/s6-rc.d/user/contents.d/svc-kasmde      # init-services
 # echo "" > /etc/s6-overlay/s6-rc.d/user/contents.d/svc-kasmvnc     # init-services
 
@@ -51,8 +49,6 @@ if [[ "$SVC_NGINX" == "1" && "$SVC_XFCE" == "1" ]];then
     echo "" > /etc/s6-overlay/s6-rc.d/user/contents.d/init-kasm
     echo "" > /etc/s6-overlay/s6-rc.d/user/contents.d/init-video
     echo "" > /etc/s6-overlay/s6-rc.d/user/contents.d/init-services
-    echo "" > /etc/s6-overlay/s6-rc.d/user/contents.d/svc-kclient
-    echo "" > /etc/s6-overlay/s6-rc.d/user/contents.d/svc-pulseaudio
     echo "" > /etc/s6-overlay/s6-rc.d/user/contents.d/svc-kasmde
     echo "" > /etc/s6-overlay/s6-rc.d/user/contents.d/svc-kasmvnc
 fi
@@ -63,33 +59,6 @@ fi
 ## 判断 vscode 服务是否启动
 if [[ "$SVC_VSCODE" == "1" ]];then
     echo "" > /etc/s6-overlay/s6-rc.d/user/contents.d/svc-vscode
-fi
-
-
-## ==================================================
-# 插入 /kclient/index.js 中一段代码， 插入到 //// Web File Browser //// 之上
-# 主要功能是通过 kclient/sip 获取当前容器的IP地址
-if [[ "$SVC_XFCE" == "1" && ! -f /kclient/patch1212.js ]];then
-cat << EOF > /kclient/patch1212.js
-const os = require('os');
-baseRouter.get('/sip', function (req, res) {
-  const interfaces = os.networkInterfaces();
-  for (const interfaceName in interfaces) {
-      for (const iface of interfaces[interfaceName]) {
-          // 过滤 IPv4 地址，并且排除内部（loopback）地址
-          if (iface.family === 'IPv4' && !iface.internal) {
-            res.end(iface.address);
-            return;
-          }
-      }
-  }
-  res.end('0.0.0.0'); // 如果没有找到 IP 地址，返回默认值
-});
-EOF
-# patch1212.js内容插入到文件/kclient/index.js //// Web File Browser //// 之上, 保留原有的代码
-sed -i "/\/\/\/\/ Web File Browser \/\/\/\// r /kclient/patch1212.js" /kclient/index.js
-# 'KasmVNC Client' => $(hostname -a)
-sed -i "s/'KasmVNC Client'/'KasmVNC-$(hostname -a)'/g" /kclient/index.js
 fi
 
 echo "init-entry done, s6 will start services: `ls /etc/s6-overlay/s6-rc.d/user/contents.d | tr '\n' ' '`"
