@@ -1,0 +1,50 @@
+#!/usr/bin/with-contenv bash
+set -e
+echo "init kasm config ..."
+
+# default file copies first run
+if [[ ! -f "${HOME}/.config/openbox/autostart" ]]; then
+  mkdir -p  ${HOME}/.config/openbox
+  cp /defaults/autostart ${HOME}/.config/openbox/autostart
+  chown -R ${USER}:${USER} ${HOME}/.config/openbox
+fi
+if [[ ! -f "${HOME}/.config/openbox/menu.xml" ]]; then
+  mkdir -p  ${HOME}/.config/openbox
+  cp /defaults/menu.xml ${HOME}/.config/openbox/menu.xml
+fi
+chown -R ${USER}:${USER} ${HOME}/.config
+
+if [[ -f /usr/local/etc/kasmvnc/kasmvnc.yaml.lsio ]]; then
+  mv \
+    /usr/local/etc/kasmvnc/kasmvnc.yaml.lsio \
+    /usr/local/etc/kasmvnc/kasmvnc.yaml
+fi
+# XDG Home
+printf "${HOME}/.XDG" > /run/s6/container_environment/XDG_RUNTIME_DIR
+if [ ! -d "${HOME}/.XDG" ]; then
+  mkdir -p ${HOME}/.XDG
+  chown -R ${USER}:${USER} ${HOME}/.XDG
+fi
+
+# Locale Support
+if [ ! -z ${LC_ALL+x} ]; then
+  printf "${LC_ALL%.UTF-8}" > /run/s6/container_environment/LANGUAGE
+  printf "${LC_ALL}" > /run/s6/container_environment/LANG
+fi
+
+# Remove window borders
+if [[ ! -z ${NO_DECOR+x} ]] && [[ ! -f /decorlock ]]; then
+  sed -i \
+    's|</applications>|  <application class="*"> <decor>no</decor> </application>\n</applications>|' \
+    /etc/xdg/openbox/rc.xml
+  touch /decorlock
+fi
+
+# Fullscreen everything in openbox unless the user explicitly disables it
+if [[ ! -z ${NO_FULL+x} ]] && [[ ! -f /fulllock ]]; then
+  sed -i \
+    '/<application class="\*"><maximized>yes<\/maximized><\/application>/d' \
+    /etc/xdg/openbox/rc.xml
+  touch /fulllock
+fi
+

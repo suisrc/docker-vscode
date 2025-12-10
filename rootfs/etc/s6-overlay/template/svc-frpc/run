@@ -1,0 +1,25 @@
+#!/usr/bin/with-contenv bash
+
+if [[ "${FRP_ADDR}" == "" ]]; then
+    echo 'disable frpc serve ...'
+    sleep 1
+    sudo s6-rc stop svc-frpc
+    exit
+fi
+
+if [[ "${FRP_PORT}" == "" ]]; then
+    export FRP_PORT=9000
+fi
+if [[ "${FRP_USER}" == "" ]]; then
+    FRP_USER=`hostname -a`
+    if [[ "${FRP_USER}" == "" ]]; then
+        FRP_USER=`hostname` # for backup
+    fi
+    export FRP_USER
+fi
+if [[ "${FRP_FILE}" == "" ]]; then
+    FRP_FILE="/etc/frp/frpc.toml"
+fi
+sleep 1
+echo 'start frpc serve ...' 
+exec /usr/local/bin/frpc -c ${FRP_FILE}

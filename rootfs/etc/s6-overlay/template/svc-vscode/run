@@ -1,0 +1,18 @@
+#!/usr/bin/with-contenv bash
+
+if [[ "${SVC_VSCODE}" == "0" ]]; then
+    echo 'disable vscode serve ...'
+    sleep 1
+    sudo s6-rc stop svc-vscode
+    exit
+fi
+
+if [ ! -f "$HOME/.vscode_server_init" ]; then
+    echo `date` > $HOME/.vscode_server_init
+    # 不能使用 init-vscode 调度，原因是需要在 with-user 环境下执行
+    zsh /etc/s6-overlay/s6-rc.d/svc-vscode/init
+fi
+
+echo 'start vscode serve ...'
+## VSC_ARGS: vscode参数
+exec code-server --host ${VSC_HOST:-0.0.0.0} --port ${VSC_PORT:-6801} $VSC_ARGS
