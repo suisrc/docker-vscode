@@ -15,8 +15,11 @@ if [[ ! -f "/tmp/.X11-unix" ]]; then
 fi
 
 # DBus Setup
-sudo dbus-daemon --system
-# /usr/bin/dbus-daemon --syslog --fork --print-pid 4 --print-address 6 --session
+if [[ -f "/run/dbus/pid" ]]; then
+    sudo rm "/run/dbus/pid"
+fi
+sudo /usr/bin/dbus-daemon --syslog --fork --print-address --system
+# /usr/bin/dbus-daemon --syslog --fork --print-pid 5 --print-address 7 --session
 
 # =============================================================================================
 
