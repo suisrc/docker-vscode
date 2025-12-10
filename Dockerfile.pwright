@@ -2,7 +2,7 @@
 ARG BASE_IMAGE_TAG
 
 # ${BASE_IMAGE_TAG} 为基础镜像版本
-FROM ghcr.io/suisrc/webtop:vscpod-xa-2.2.2
+FROM ghcr.io/suisrc/webtop:chrome-2.3.5
 # ================================================================
 # 部署和运行 browser-use
 # https://github.com/browser-use/web-ui
