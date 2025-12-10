@@ -3,7 +3,7 @@ ARG BASE_IMAGE_TAG
 
 # ================================================================
 # ${BASE_IMAGE_TAG}
-FROM ghcr.io/suisrc/webtop:xfce-2.3.4
+FROM ghcr.io/suisrc/webtop:xfce-2.3.5
 
 # ================================================================
 # 替换 profile， 否则 remote-ssh 无法加载环境变量 PATH
