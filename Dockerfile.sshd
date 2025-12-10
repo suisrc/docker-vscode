@@ -2,7 +2,7 @@
 ## 2. 安装 webtop [sshd]
 ARG BASE_IMAGE_TAG
 # ================================================================
-FROM suisrc/openresty:1.21.4.1-hu-3 as openresty-stage
+FROM suisrc/openresty:1.27.1.2-hd-1 as openresty-stage
 
 FROM ghcr.io/suisrc/webtop:s6-${BASE_IMAGE_TAG}
 # ================================================================

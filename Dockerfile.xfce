@@ -5,7 +5,7 @@ ARG BASE_IMAGE_TAG
 # https://github.com/kasmtech/workspaces-core-images
 
 # kclient builder, fix kasm client bug
-FROM ghcr.io/suisrc/webtop:kclient-2.0.1 as kclient-stage
+# FROM ghcr.io/suisrc/webtop:kclient-2.0.1 as kclient-stage
 
 FROM ghcr.io/suisrc/webtop:sshd-${BASE_IMAGE_TAG}
 # ================================================================
@@ -13,8 +13,8 @@ FROM ghcr.io/suisrc/webtop:sshd-${BASE_IMAGE_TAG}
 
 # ================================================================
 # kclient, 访问终端， 提供终端页面， 上传/下载文件， 声音传输, IP 获取
-COPY --from=kclient-stage /kclient /kclient
-# COPY --from=kclient-stage /kserver /
+# COPY --from=kclient-stage /kclient /kclient
+# COPY --from=kclient-stage /kserver /kserver # 安装KasmVNC后可忽略
 
 # ================================================================
 # set environment variables
@@ -113,7 +113,7 @@ RUN apt update && DEBIAN_FRONTEND=noninteractive \
 
 # ================================================================
 # https://github.com/kasmtech/KasmVNC/releases/
-RUN KASM_VERSION="1.3.4" && \
+RUN KASM_VERSION="1.4.0" && \
     APP_URL="https://github.com/kasmtech/KasmVNC/releases/download/v${KASM_VERSION}/kasmvncserver_bookworm_${KASM_VERSION}_amd64.deb" && \
     curl -o /tmp/app.deb -L "${APP_URL}" && dpkg -i /tmp/app.deb && \
     mkdir /usr/local/node && \

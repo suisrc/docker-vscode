@@ -8,12 +8,17 @@ if [[ "${SVC_KASM}" == "0" ]]; then
     exit
 fi
 
+if [ -z ${TITLE+x} ]; then
+    TITLE=`hostname` # default title
+fi
+
 if [ -z ${VNC_HOST+x} ]; then
     VNC_HOST="127.0.0.1" # default to localhost
 fi
 if [ -z ${VNC_PORT+x} ]; then
     VNC_PORT=6901 # default to port
 fi
+
 # Pass gpu flags if mounted
 if ls /dev/dri/renderD* 1> /dev/null 2>&1; then
   HW3D="-hw3d"
@@ -24,8 +29,8 @@ fi
 
 echo "xvnc[svc-kasmvnc] by $USER =================="
 exec /usr/bin/Xvnc ${DISPLAY} \
+    -desktop ${TITLE} \
     ${HW3D} \
-    -PublicIP '127.0.0.1' \
     -drinode ${DRINODE} \
     -disableBasicAuth \
     -SecurityTypes None \
@@ -34,7 +39,11 @@ exec /usr/bin/Xvnc ${DISPLAY} \
     -http-header Cross-Origin-Opener-Policy=same-origin \
     -geometry '1024x768' \
     -sslOnly 0 \
+    -UseIPv6 0 \
     -RectThreads 0 \
-    -websocketPort ${VNC_PORT} \
     -interface ${VNC_HOST} \
-    -Log *:stdout:10
+    -websocketPort ${VNC_PORT} \
+    -PublicIP '127.0.0.1' \
+    -Log *:stderr:30
+
+# -Log *:stderr:30 | *:stdout:10
