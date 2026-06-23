@@ -19,9 +19,9 @@ RUN apt update && DEBIAN_FRONTEND=noninteractive \
     nano \
     procps \
     net-tools \
-    netcat \
+    netcat-openbsd \
     tzdata \
-    ntpdate \
+    ntpsec-ntpdate \
     iputils-ping \
     locales \
     openssl \
