@@ -9,7 +9,7 @@ Dockerfile.ssh(proxyssh-2.0.0)(ssh代理)
 Dockerfile.ngx(ssh-2.2.2)(vsc代理)  
   
 开发环境  
-Dockerfile.lite(lite)(轻量版，无cjk字体，注意， 无 vsode， 是 vscode-cli)  
+Dockerfile.lite(lite)(轻量版，无cjk字体)  
 Dockerfile.s6   -> 只安装 s6, 并将/etc/s6-overlay/init-entry 注入到 /init 第二行  
 Dockerfile.sshd -> 只启动 sshd + nginx，构建一个可以简单的用于访问的 linux 微环境  
 Dockerfile.xfce -> 启动一个桌面环境，之所有桌面下放到这层，是因为桌面基本不太会进行变动  

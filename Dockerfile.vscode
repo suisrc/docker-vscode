@@ -8,10 +8,9 @@ FROM ghcr.io/suisrc/webtop:${BASE_IMAGE_TAG}
 ENV SVC_VSCODE="1" \
     VSC_HOST="127.0.0.1" \
     VSC_ARGS=" --accept-server-license-terms --without-connection-token" \
-    VSCR_VERSION="1.96.2" \
     VSCR_NEW_URL="" \
     VSC_HOME="/vsc" \
-    WSC_HOME="/wsc" \
+    DEFAULT_FOLDER="/app" \
     EXTENSIONS=""
 
 # 可以使用 VSC_HOST 和 VSC_ARGS 自行控制权限和直连 vscode

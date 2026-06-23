@@ -1,10 +1,10 @@
-FROM golang:1.20-bullseye as builder
+FROM golang:1.26-trixie as builder
 
 RUN apt-get update && apt-get install -y git
 RUN mkdir /build/ && git clone https://github.com/suisrc/sshproxy.git /build/
 RUN cd /build/ && go build -ldflags "-w -s" -o ./_app .
 
-FROM debian:bullseye-slim
+FROM debian:trixie-slim
 # ================================================================
 # KEYS_FOLDER, LISTEN_ADDR, TARGET_ADDR
 USER root

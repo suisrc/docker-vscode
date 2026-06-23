@@ -7,7 +7,7 @@
     "editor.renderWhitespace": "all",
     "editor.suggestSelection": "first",
     "editor.fontSize": 16,
-    "editor.fontLigatures": true,
+    "editor.fontLigatures": false,
     "explorer.confirmDelete": false,
     "extensions.autoUpdate": false,
     "extensions.autoCheckUpdates": false,
