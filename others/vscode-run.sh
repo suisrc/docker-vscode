@@ -28,4 +28,5 @@ exec code-cli serve-web --accept-server-license-terms \
     --socket-path /home/webtop/.vscode.sock \
     --cli-data-dir ${VSC_HOME}/vscdir \
     --server-data-dir ${VSC_HOME}/vscode \
+    --default-folder ${DEFAULT_FOLDER} \
     $VSC_ARGS
