@@ -1,6 +1,6 @@
 ## 1. 构建基础镜像## 1. 构建一个基础镜像, 带有 s6-overlay
 # ================================================================
-FROM alpine:3.18 as rootfs-stage
+FROM alpine:3.24 as rootfs-stage
 
 # https://github.com/just-containers/s6-overlay
 ARG S6_VERSION="3.2.3.0"
@@ -17,7 +17,7 @@ RUN mkdir /rootfs && \
     curl -fSL --compressed "${S6_URL}v${S6_VERSION}/s6-overlay-symlinks-noarch.tar.xz" |  tar -Jxp -C /rootfs && \
     curl -fSL --compressed "${S6_URL}v${S6_VERSION}/s6-overlay-symlinks-arch.tar.xz" |  tar -Jxp -C /rootfs
 
-FROM debian:12-slim
+FROM debian:trixie-slim
 # ================================================================
 # https://github.com/just-containers/s6-overlay
 ARG S6_VERSION="3.2.3.0"

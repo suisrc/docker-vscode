@@ -24,9 +24,20 @@ if [ ! -f "$HOME/.vscode_init" ]; then
 fi
 
 echo 'start vscode server ...'
-exec code-cli serve-web --accept-server-license-terms \
-    --socket-path /home/webtop/.vscode.sock \
-    --cli-data-dir ${VSC_HOME}/vscdir \
-    --server-data-dir ${VSC_HOME}/vscode \
-    --default-folder ${DEFAULT_FOLDER} \
-    $VSC_ARGS
+if [[ -z "${VSC_SOCK}" ]]; then
+    echo 'start vscode server with http ...'
+    exec code-cli serve-web --accept-server-license-terms \
+        --host ${VSC_HOST:-127.0.0.1} --port ${VSC_PORT:-6801} \
+        --cli-data-dir ${VSC_HOME}/vscdir \
+        --server-data-dir ${VSC_HOME}/vscode \
+        --default-folder ${DEFAULT_FOLDER} \
+        $VSC_ARGS
+else
+    echo 'start vscode server with unix socket ...'
+    exec code-cli serve-web --accept-server-license-terms \
+        --socket-path ${VSC_SOCK} \
+        --cli-data-dir ${VSC_HOME}/vscdir \
+        --server-data-dir ${VSC_HOME}/vscode \
+        --default-folder ${DEFAULT_FOLDER} \
+        $VSC_ARGS
+fi

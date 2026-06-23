@@ -14,7 +14,8 @@ env:
   GITHUB_REGISTRY: ghcr.io
   DOCKER_REGISTRY: docker.io
   QUAY_REGISTRY: quay.io
-  ALIYUN_REGISTRY: registry.cn-hongkong.aliyuncs.com
+  ACR_REGISTRY: registry.cn-hongkong.aliyuncs.com
+  TCR_REGISTRY: hkccr.ccs.tencentyun.com
 
 jobs:
   main:
@@ -45,6 +46,20 @@ jobs:
         run: |
           REGISTRY_URL=$DOCKER_REGISTRY
           echo "${{ secrets.DOCKER_TOKEN }}" | docker login $REGISTRY_URL -u ${{ secrets.DOCKER_USER }} --password-stdin
+
+          IMAGE_ID=$REGISTRY_URL/$IMAGE_NAME
+          echo IMAGE_ID=$IMAGE_ID
+          VERSION=$IMAGE_VERSION  #-${{ github.job }}
+          echo VERSION=$VERSION
+
+          docker tag image $IMAGE_ID:$VERSION
+          docker push $IMAGE_ID:$VERSION
+
+
+      - name: Push tencent image
+        run: |
+          REGISTRY_URL=$TCR_REGISTRY
+          echo "${{ secrets.TCR_TOKEN }}" | docker login $REGISTRY_URL -u ${{ secrets.TCR_USER }} --password-stdin
 
           IMAGE_ID=$REGISTRY_URL/$IMAGE_NAME
           echo IMAGE_ID=$IMAGE_ID
