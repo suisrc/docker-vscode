@@ -43,12 +43,12 @@ codez serve-web --accept-server-license-terms \
     --cli-data-dir ${VSC_HOME:-/vsc} \
     --server-data-dir ${VSC_HOME:-/vsc} \
     --default-folder ${DEFAULT_FOLDER:-/app} \
-    --connection-token ${PASSWORD}
+    --connection-token ${PASSWORD} \
     $VSC_ARGS &
 PID1=$!
 BACKEND_URL="unix://${VSC_SOCK:-/var/run/vscode.sock}" PROXY_PORT=${VSC_PORT:-7080} authz &
 PID2=$!
-# wait for any of the processes to exit
+echo "wait for vscode server or authz process to exit"
 wait -n $PID1 $PID2
 EXIT_CODE=$?
 echo "vscode server exited with code $EXIT_CODE"
