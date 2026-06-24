@@ -1,12 +1,12 @@
 FROM golang:1.26-trixie as builder
 
 RUN apt-get update && apt-get install -y git
-COPY authz/ /build/
-RUN cd /build/ && CGO_ENABLED=0 go build -ldflags="-s -w" -o authz .
+COPY codea/ /build/
+RUN cd /build/ && CGO_ENABLED=0 go build -ldflags="-s -w" -o codea .
 
 FROM debian:trixie-slim
 
-COPY --from=builder  /build/authz  /usr/local/bin/authz
+COPY --from=builder  /build/codea  /usr/local/bin/codea
 
 # set environment variables
 ENV VSC_HOST="0.0.0.0" \
@@ -18,6 +18,7 @@ ENV VSC_HOST="0.0.0.0" \
     HOME="/root" \
     ZSH_CUSTOM="/root/.oh-my-zsh/plugins" \
     EXTENSIONS=""
+# VSC_CACHE="/app/.vscode"
 
 RUN apt update && DEBIAN_FRONTEND=noninteractive \
     apt install --no-install-recommends -y \

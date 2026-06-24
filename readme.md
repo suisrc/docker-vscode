@@ -14,15 +14,9 @@ Dockerfile.s6   -> 只安装 s6, 并将/etc/s6-overlay/init-entry 注入到 /ini
 Dockerfile.sshd -> 只启动 sshd + nginx，构建一个可以简单的用于访问的 linux 微环境  
 Dockerfile.xfce -> 启动一个桌面环境，之所有桌面下放到这层，是因为桌面基本不太会进行变动  
 Dockerfile.xa   -> 在xfce基础上，增加 tun2socks 和 frp 软件支持， 支持全局代理和内网穿透  
-  
-提供以下四个版本，可建立在 nginx 或者 xfce 基础是
-Dockerfile.vscode(vscode版) |  
-Dockerfile.vscpod(gitpod版) |  
-Dockerfile.vsccdr(coder版) ->  
-  
-Dockerfile.dev ->  golang + nodejs + java, 由于python安装简单，不在考虑范围内  
-Dockerfile.ms ->   安装 vscode 插件，并切换为 ms 源  
-Dockerfile.pw ->   安装 playwirght 环境  
+Dockerfile.vscode
+Dockerfile.dev     ->  golang + nodejs + java, 由于python安装简单，不在考虑范围内 
+Dockerfile.pwright ->  安装 playwirght 环境  
 
 
 ## 鸣谢
@@ -35,28 +29,63 @@ https://github.com/linuxserver/docker-webtop
 https://github.com/linuxserver/docker-baseimage-kasmvnc  
 https://github.com/linuxserver/docker-baseimage-ubuntu  
 
-## 其他
-lite: vscode 轻量版本，cjk 字体不存在  
-jammy: ubuntu 22.04基础镜像  
-nginx: jammy基础上安装了nginx  
-sshd: nginx基础上安装了sshd  
-nodejs: nodejs的环境  
-vscode: vsccdr, vscpod; sshd基础上安装了vscode  
-  
-xface-~: 安装桌面环境  
-dev-~: 专注于开发环境  
-ms-dev-~: 开发环境，使用 ms 插件库  
-playwright-~: 开发环境，使用 playwright-ms 插件库  
+## codea
 
-## login-proxy
 
 ```sh
 code-server --host 0.0.0.0 --port 6802 --connection-token 77885566
-BACKEND_URL=http://127.0.0.1:6802 ./authz/authz
+BACKEND_URL=http://127.0.0.1:6802 ./codea/codea
 
 rm /var/run/vscode.sock && code-server --socket-path /var/run/vscode.sock --connection-token 77885566
-BACKEND_URL=unix:///var/run/vscode.sock ./authz/authz
+BACKEND_URL=unix:///var/run/vscode.sock PROXY_USE_SSL=1 PROXY_PORT=7080 ./codea/codea
+
+./codea/codea --ssl --backend unix:///var/run/vscode.sock --service "code-server --socket-path /var/run/vscode.sock --connection-token 77885566"
+
+BACKEND_URL=http://127.0.0.1:6802 ./codea
+
+curl http://127.0.0.1:7080/__vscode/api/latest/server-linux-x64-web/stable
+wget --trust-server-names http://127.0.0.1:7080/__vscode/commit:7e7950df89d055b5a378379db9ee14290772148a/server-linux-x64-web/stable
 ```
+
+```sh
+VSCODE_CLI_UPDATE_URL=http://127.0.0.1:${PROXY_PORT:-7080}/__vscode
+
+# **最新版本检查 API**
+GET {update_endpoint}/__vscode/api/latest/{platform}/{quality}
+
+# **下载指定 commit**
+GET {update_endpoint}/__vscode/commit:{commit}/{platform}/{quality}
+
+# **下载指定 commit**
+GET {update_endpoint}/__vscode/download/{quality}/{commit}/vscode-{platform}.{ext}
+
+
+# **最新版本检查 API**
+# https://update.code.visualstudio.com/api/latest/server-linux-x64-web/stable
+# {"name":"1.126.0","version":"7e7950df89d055b5a378379db9ee14290772148a","productVersion":"1.126.0","timestamp":1782207609516}
+
+# **下载指定 commit** 会重定向执行下载
+# https://update.code.visualstudio.com/commit:7e7950df89d055b5a378379db9ee14290772148a/server-linux-x64-web/stable
+# https://vscode.download.prss.microsoft.com/dbazure/download/stable/7e7950df89d055b5a378379db9ee14290772148a/vscode-server-linux-x64-web.tar.gz
+
+```
+
+### Platform Segment
+
+| Platform | Segment |
+|---|---|
+| Linux x64 | `server-linux-x64-web` |
+| Linux ARM64 | `server-linux-arm64-web` |
+| macOS x64 | `server-darwin-web` |
+| macOS ARM64 | `server-darwin-arm64-web` |
+| Windows x64 | `server-win32-x64-web` |
+
+### Quality Segment
+| Quality | Segment |
+|---|---|
+| `Stable` | `stable` |
+| `Insiders` | `insider` |
+| `Exploration` | `exploration` |
 
 ## 升级说明
 

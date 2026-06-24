@@ -4,7 +4,7 @@
 
 ## check vscode server
 if [[ "${SVC_VSCODE}" == "0" ]]; then
-    echo 'disable vscode server ...'
+    echo 'disable vscode server.'
     sleep 1
     sudo s6-rc stop svc-vscode
     exit
@@ -13,7 +13,7 @@ fi
 ## init vscode config
 if [ ! -f "$HOME/.vscode_init" ]; then
     echo `date` > $HOME/.vscode_init
-    echo 'init vscode config ...'
+    echo 'init vscode config.'
     # git config pull.rebase false
     if [ $GIT_USER_NAME ]; then
         git config --global user.name "$GIT_USER_NAME"
@@ -23,9 +23,9 @@ if [ ! -f "$HOME/.vscode_init" ]; then
     fi
 fi
 
-echo 'start vscode server ...'
+# start vscode server
 if [[ -z "${PASSWORD}" ]]; then
-    echo 'start vscode server with http without password ...'
+    echo 'start vscode server with http without password.'
     exec codez serve-web --accept-server-license-terms \
         --host ${VSC_HOST:-127.0.0.1} --port ${VSC_PORT:-7080} \
         --cli-data-dir ${VSC_HOME:-/vsc} \
@@ -36,24 +36,13 @@ if [[ -z "${PASSWORD}" ]]; then
     # exec 结束后会直接替换当前进程，所以后续的代码不会执行
 fi
 
-echo 'start vscode server with unix socket with password ...'
-rm -f ${VSC_SOCK:-/var/run/vscode.sock} # 删除 sock
+# codea 是一个用于授权的工具，它会在启动 vscode server 前进行授权验证，确保只有通过验证的用户才能访问 vscode server
+echo 'start vscode server with unix socket with password.'
+exec codea --backend unix://${VSC_SOCK:-/var/run/vscode.sock} --service "\
 codez serve-web --accept-server-license-terms \
     --socket-path ${VSC_SOCK:-/var/run/vscode.sock} \
     --cli-data-dir ${VSC_HOME:-/vsc} \
     --server-data-dir ${VSC_HOME:-/vsc} \
     --default-folder ${DEFAULT_FOLDER:-/app} \
     --connection-token ${PASSWORD} \
-    $VSC_ARGS &
-PID1=$!
-BACKEND_URL="unix://${VSC_SOCK:-/var/run/vscode.sock}" PROXY_PORT=${VSC_PORT:-7080} authz &
-PID2=$!
-echo "wait for vscode server or authz process to exit"
-wait -n $PID1 $PID2
-EXIT_CODE=$?
-echo "vscode server exited with code $EXIT_CODE"
-# kill the other process if it's still running
-kill $PID1 $PID2 2>/dev/null
-# wait for both processes to exit
-wait $PID1 $PID2 2>/dev/null
-exit $EXIT_CODE
+    $VSC_ARGS"
