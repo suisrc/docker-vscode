@@ -48,6 +48,16 @@ dev-~: 专注于开发环境
 ms-dev-~: 开发环境，使用 ms 插件库  
 playwright-~: 开发环境，使用 playwright-ms 插件库  
 
+## login-proxy
+
+```sh
+code-server --host 0.0.0.0 --port 6802 --connection-token 77885566
+BACKEND_URL=http://127.0.0.1:6802 ./authz/authz
+
+rm /var/run/vscode.sock && code-server --socket-path /var/run/vscode.sock --connection-token 77885566
+BACKEND_URL=unix:///var/run/vscode.sock ./authz/authz
+```
+
 ## 升级说明
 
 由于观测到vscode升级非常频繁，而且也带来了一些问题，比如插件兼容性问题。所以在20240805后的版本中，vscode, vsccdr, vscpod将只有基础版本，vsccli将提供高级功能，包括dev开发环境， xface UI页面等功能
