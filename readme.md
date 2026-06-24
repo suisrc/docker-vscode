@@ -34,12 +34,12 @@ https://github.com/linuxserver/docker-baseimage-ubuntu
 
 ```sh
 code-server --host 0.0.0.0 --port 6802 --connection-token 77885566
-BACKEND_URL=http://127.0.0.1:6802 ./codea/codea
+BACKEND_URL=http://127.0.0.1:6802 ./codea
 
 rm /var/run/vscode.sock && code-server --socket-path /var/run/vscode.sock --connection-token 77885566
-BACKEND_URL=unix:///var/run/vscode.sock PROXY_USE_SSL=1 PROXY_PORT=7080 ./codea/codea
+BACKEND_URL=unix:///var/run/vscode.sock PROXY_USE_SSL=1 PROXY_PORT=7080 ./codea
 
-./codea/codea --ssl --backend unix:///var/run/vscode.sock --service "code-server --socket-path /var/run/vscode.sock --connection-token 77885566"
+./codea --ssl --backend unix:///var/run/vscode.sock --service "code-server --socket-path /var/run/vscode.sock --connection-token 77885566"
 
 BACKEND_URL=http://127.0.0.1:6802 ./codea
 

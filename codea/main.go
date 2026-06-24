@@ -27,6 +27,7 @@ import (
 	"os/signal"
 	"path"
 	"path/filepath"
+	"strconv"
 	"strings"
 	"syscall"
 	"time"
@@ -53,7 +54,7 @@ type Config struct {
 func loadConfig() Config {
 	backendURL := os.Getenv("BACKEND_URL")
 	serviceCmd := os.Getenv("SERVICE_CMD")
-	proxyPort := os.Getenv("PROXY_PORT")
+	proxyPort := os.Getenv("VSC_PORT")
 	if proxyPort == "" {
 		proxyPort = "7080"
 	}
@@ -244,6 +245,9 @@ func main() {
 	// /__vscode/ – VS Code update API proxy with local cache.
 	mux.Handle("/__vscode/", newVscodeUpdateHandler())
 
+	// /__proxy/ – generic external proxy: /__proxy/{scheme}:{host}/path → {scheme}://{host}/path
+	mux.HandleFunc("/__proxy/", handleExternalProxy)
+
 	// All other requests go through the reverse proxy.
 	mux.HandleFunc("/", func(w http.ResponseWriter, r *http.Request) {
 		proxy.ServeHTTP(w, r)
@@ -257,17 +261,33 @@ func main() {
 	}
 
 	if cfg.ProxyUseSSL {
+		// HTTP on ProxyPort, HTTPS on ProxyPort+1
+		portNum, err := strconv.Atoi(cfg.ProxyPort)
+		if err != nil {
+			log.Fatalf("invalid VSC_PORT %q: %v", cfg.ProxyPort, err)
+		}
+		httpsAddr := fmt.Sprintf(":%d", portNum+1)
+
 		cert, err := generateSelfSignedCert()
 		if err != nil {
 			log.Fatalf("generate self-signed cert: %v", err)
 		}
 		tlsCfg := &tls.Config{Certificates: []tls.Certificate{cert}}
+
+		// Start HTTP server in background.
+		go func() {
+			log.Printf("HTTP1 listening on %s", addr)
+			if err := http.ListenAndServe(addr, mux); err != nil {
+				log.Fatalf("HTTP server: %v", err)
+			}
+		}()
+
+		log.Printf("HTTPS listening on %s (self-signed certificate)", httpsAddr)
 		srv := &http.Server{
-			Addr:      addr,
+			Addr:      httpsAddr,
 			Handler:   mux,
 			TLSConfig: tlsCfg,
 		}
-		log.Printf("HTTPS enabled (self-signed certificate)")
 		if err := srv.ListenAndServeTLS("", ""); err != nil {
 			log.Fatal(err)
 		}
@@ -291,6 +311,78 @@ func applyProxyHeaders(req *http.Request, hdrs map[string]string) {
 			req.Header.Set(name, val)
 		}
 	}
+}
+
+// =============================================================================
+// External Proxy — handles /__proxy/ endpoints
+// =============================================================================
+
+// handleExternalProxy proxies /__proxy/{scheme}:{host}/path → {scheme}://{host}/path
+// If no scheme is given, defaults to https.
+// Examples:
+//
+//	/__proxy/https:main.vscode-cdn.net/path → https://main.vscode-cdn.net/path
+//	/__proxy/main.vscode-cdn.net/path       → https://main.vscode-cdn.net/path
+func handleExternalProxy(w http.ResponseWriter, r *http.Request) {
+	p := strings.TrimPrefix(r.URL.Path, "/__proxy/")
+	if p == "" || p == "/" {
+		http.Error(w, "missing domain/path", http.StatusBadRequest)
+		return
+	}
+
+	// Extract scheme:host from the first segment.
+	// Format: scheme:host/rest or host/rest
+	var scheme, host, rest string
+	slashIdx := strings.Index(p, "/")
+	if slashIdx >= 0 {
+		rest = p[slashIdx:]
+		p = p[:slashIdx]
+	} else {
+		rest = "/"
+	}
+
+	if idx := strings.Index(p, ":"); idx >= 0 {
+		scheme = p[:idx]
+		host = p[idx+1:]
+	} else {
+		scheme = "https"
+		host = p
+	}
+
+	if host == "" {
+		http.Error(w, "missing host", http.StatusBadRequest)
+		return
+	}
+
+	targetURL := fmt.Sprintf("%s://%s%s", scheme, host, rest)
+	if r.URL.RawQuery != "" {
+		targetURL += "?" + r.URL.RawQuery
+	}
+
+	log.Printf("[ext-proxy] %s %s → %s", r.Method, r.URL.Path, targetURL)
+
+	target, err := url.Parse(targetURL)
+	if err != nil {
+		http.Error(w, "invalid target URL", http.StatusBadRequest)
+		return
+	}
+
+	rp := httputil.NewSingleHostReverseProxy(target)
+	rp.Director = func(req *http.Request) {
+		req.URL.Scheme = target.Scheme
+		req.URL.Host = target.Host
+		req.URL.Path = target.Path
+		req.URL.RawQuery = target.RawQuery
+		req.Host = target.Host
+		// Strip /__proxy/... prefix headers.
+		req.Header.Set("X-Forwarded-For", r.RemoteAddr)
+	}
+	rp.ErrorHandler = func(w http.ResponseWriter, r *http.Request, err error) {
+		log.Printf("[ext-proxy] error proxying %s: %v", targetURL, err)
+		http.Error(w, "proxy error", http.StatusBadGateway)
+	}
+
+	rp.ServeHTTP(w, r)
 }
 
 // =============================================================================

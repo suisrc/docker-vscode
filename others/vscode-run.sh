@@ -46,3 +46,6 @@ codez serve-web --accept-server-license-terms \
     --default-folder ${DEFAULT_FOLDER:-/app} \
     --connection-token ${PASSWORD} \
     $VSC_ARGS"
+
+# VSCODE_CLI_UPDATE_URL=http://127.0.0.1:7080/__vscode
+# PROXY_HEADER_x-forwarded-port=443
