@@ -42,11 +42,12 @@ var (
 
 // Config holds proxy configuration.
 type Config struct {
-	BackendURL  string
-	ServiceCmd  string // optional shell command to run as the backend
-	ProxyPort   string
-	TokenCookie string // cookie name, default "vscode-tkn"
-	ProxyUseSSL bool   // enable HTTPS with a self-signed cert
+	BackendURL   string
+	ServiceCmd   string // optional shell command to run as the backend
+	ProxyPort    string
+	TokenCookie  string            // cookie name, default "vscode-tkn"
+	ProxyUseSSL  bool              // enable HTTPS with a self-signed cert
+	ProxyHeaders map[string]string // PROXY_HEADER_Xxx=Val → set/override; PROXY_HEADER_Xxx= → delete
 }
 
 func loadConfig() Config {
@@ -74,12 +75,33 @@ func loadConfig() Config {
 		log.Fatal("BACKEND_URL is required (set via env or -backend flag)")
 	}
 	return Config{
-		BackendURL:  backendURL,
-		ServiceCmd:  serviceCmd,
-		ProxyPort:   proxyPort,
-		TokenCookie: cookie,
-		ProxyUseSSL: useSSLFlag,
+		BackendURL:   backendURL,
+		ServiceCmd:   serviceCmd,
+		ProxyPort:    proxyPort,
+		TokenCookie:  cookie,
+		ProxyUseSSL:  useSSLFlag,
+		ProxyHeaders: parseProxyHeaders(),
 	}
+}
+
+// parseProxyHeaders reads PROXY_HEADER_* env vars.
+// PROXY_HEADER_Xxx=Val → set/override header Xxx to Val.
+// PROXY_HEADER_Xxx=     → delete header Xxx.
+func parseProxyHeaders() map[string]string {
+	hdrs := make(map[string]string)
+	const prefix = "PROXY_HEADER_"
+	for _, e := range os.Environ() {
+		k, v, _ := strings.Cut(e, "=")
+		if !strings.HasPrefix(k, prefix) {
+			continue
+		}
+		name := k[len(prefix):]
+		if name == "" {
+			continue
+		}
+		hdrs[name] = v
+	}
+	return hdrs
 }
 
 func main() {
@@ -137,6 +159,7 @@ func main() {
 			Director: func(req *http.Request) {
 				req.URL.Scheme = "http"
 				req.URL.Host = "unix"
+				applyProxyHeaders(req, cfg.ProxyHeaders)
 			},
 			Transport: &http.Transport{
 				DialContext: func(ctx context.Context, _, _ string) (net.Conn, error) {
@@ -147,6 +170,11 @@ func main() {
 		}
 	} else {
 		proxy = httputil.NewSingleHostReverseProxy(backendURL)
+		origDirector := proxy.Director
+		proxy.Director = func(req *http.Request) {
+			origDirector(req)
+			applyProxyHeaders(req, cfg.ProxyHeaders)
+		}
 	}
 
 	// Pre-render login page for ModifyResponse (can't stream template there).
@@ -224,6 +252,9 @@ func main() {
 	addr := ":" + cfg.ProxyPort
 	log.Printf("proxy starting on %s → %s", addr, cfg.BackendURL)
 	log.Printf("token cookie: %s", cfg.TokenCookie)
+	if len(cfg.ProxyHeaders) > 0 {
+		log.Printf("proxy headers: %v", cfg.ProxyHeaders)
+	}
 
 	if cfg.ProxyUseSSL {
 		cert, err := generateSelfSignedCert()
@@ -243,6 +274,21 @@ func main() {
 	} else {
 		if err := http.ListenAndServe(addr, mux); err != nil {
 			log.Fatal(err)
+		}
+	}
+}
+
+// applyProxyHeaders rewrites request headers according to PROXY_HEADER_* env vars.
+// PROXY_HEADER_Xxx=Val → set/override header Xxx; PROXY_HEADER_Xxx= → delete header Xxx.
+func applyProxyHeaders(req *http.Request, hdrs map[string]string) {
+	if len(hdrs) == 0 {
+		return
+	}
+	for name, val := range hdrs {
+		if val == "" {
+			req.Header.Del(name)
+		} else {
+			req.Header.Set(name, val)
 		}
 	}
 }

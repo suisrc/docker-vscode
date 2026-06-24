@@ -48,7 +48,7 @@ wget --trust-server-names http://127.0.0.1:7080/__vscode/commit:7e7950df89d055b5
 ```
 
 ```sh
-VSCODE_CLI_UPDATE_URL=http://127.0.0.1:${PROXY_PORT:-7080}/__vscode
+VSCODE_CLI_UPDATE_URL=http://127.0.0.1:7080/__vscode
 
 # **最新版本检查 API**
 GET {update_endpoint}/__vscode/api/latest/{platform}/{quality}
@@ -67,6 +67,12 @@ GET {update_endpoint}/__vscode/download/{quality}/{commit}/vscode-{platform}.{ex
 # **下载指定 commit** 会重定向执行下载
 # https://update.code.visualstudio.com/commit:7e7950df89d055b5a378379db9ee14290772148a/server-linux-x64-web/stable
 # https://vscode.download.prss.microsoft.com/dbazure/download/stable/7e7950df89d055b5a378379db9ee14290772148a/vscode-server-linux-x64-web.tar.gz
+
+```
+
+```sh
+
+docker pull hkccr.ccs.tencentyun.com/suisrc/webtop:lite-3.0.1.bate2
 
 ```
 
