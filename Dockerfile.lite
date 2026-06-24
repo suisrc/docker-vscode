@@ -1,7 +1,7 @@
 FROM golang:1.26-trixie as builder
 
 RUN apt-get update && apt-get install -y git
-COPY login/ /build/
+COPY authz/ /build/
 RUN cd /build/ && CGO_ENABLED=0 go build -ldflags="-s -w" -o authz .
 
 FROM debian:trixie-slim
