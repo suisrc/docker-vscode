@@ -39,12 +39,15 @@ BACKEND_URL=http://127.0.0.1:6802 ./codea
 rm /var/run/vscode.sock && code-server --socket-path /var/run/vscode.sock --connection-token 77885566
 BACKEND_URL=unix:///var/run/vscode.sock PROXY_USE_SSL=1 PROXY_PORT=7080 ./codea
 
-./codea --ssl --backend unix:///var/run/vscode.sock --service "code-server --socket-path /var/run/vscode.sock --connection-token 77885566"
+./codea --ssl --backend "/test/=text://test;/=unix:///var/run/vscode.sock" --service "code-server --socket-path /var/run/vscode.sock --connection-token 77885566"
 
 BACKEND_URL=http://127.0.0.1:6802 ./codea
 
 curl http://127.0.0.1:7080/__vscode/api/latest/server-linux-x64-web/stable
 wget --trust-server-names http://127.0.0.1:7080/__vscode/commit:7e7950df89d055b5a378379db9ee14290772148a/server-linux-x64-web/stable
+
+BACKEND_URL="text://hello world" ./codea
+curl http://127.0.0.1:7080
 ```
 
 ```sh

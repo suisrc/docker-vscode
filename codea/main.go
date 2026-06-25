@@ -14,7 +14,6 @@ import (
 	"encoding/pem"
 	"flag"
 	"fmt"
-	"html/template"
 	"io"
 	"log"
 	"math/big"
@@ -33,22 +32,34 @@ import (
 	"time"
 )
 
-//go:embed login.html logout.html
-var templateFS embed.FS
+//go:embed login.html logout.html logout.vsc.js
+var staticFS embed.FS
 
-var (
-	tmplLogin  *template.Template
-	tmplLogout *template.Template
-)
+// mustAsset reads an embedded asset by name, failing fast at startup if missing.
+func mustAsset(name string) []byte {
+	b, err := staticFS.ReadFile(name)
+	if err != nil {
+		log.Fatalf("embed asset %q: %v", name, err)
+	}
+	return b
+}
 
 // Config holds proxy configuration.
 type Config struct {
-	BackendURL   string
+	Backends     []Backend
 	ServiceCmd   string // optional shell command to run as the backend
 	ProxyPort    string
 	TokenCookie  string            // cookie name, default "vscode-tkn"
 	ProxyUseSSL  bool              // enable HTTPS with a self-signed cert
 	ProxyHeaders map[string]string // PROXY_HEADER_Xxx=Val → set/override; PROXY_HEADER_Xxx= → delete
+}
+
+// Backend describes a single proxy target with its routing prefix.
+type Backend struct {
+	Prefix string // routing prefix, "/" for root
+	Scheme string // http, https, unix, file, text
+	Target string // host:port, socket path, dir path, or literal text
+	RawURL string // original URL for logging
 }
 
 func loadConfig() Config {
@@ -65,7 +76,7 @@ func loadConfig() Config {
 	useSSL := os.Getenv("PROXY_USE_SSL")
 	useSSLFlag := useSSL == "1" || strings.ToLower(useSSL) == "true"
 
-	flag.StringVar(&backendURL, "backend", backendURL, "Backend service URL")
+	flag.StringVar(&backendURL, "backend", backendURL, "Backend service URL(s)")
 	flag.StringVar(&serviceCmd, "service", serviceCmd, "Backend service Cmd")
 	flag.StringVar(&proxyPort, "port", proxyPort, "Proxy listen port")
 	flag.StringVar(&cookie, "cookie", cookie, "Token cookie name")
@@ -75,13 +86,120 @@ func loadConfig() Config {
 	if backendURL == "" {
 		log.Fatal("BACKEND_URL is required (set via env or -backend flag)")
 	}
+
+	backends := parseBackends(backendURL)
+	if len(backends) == 0 {
+		log.Fatal("BACKEND_URL parsed to zero backends")
+	}
+
 	return Config{
-		BackendURL:   backendURL,
+		Backends:     backends,
 		ServiceCmd:   serviceCmd,
 		ProxyPort:    proxyPort,
 		TokenCookie:  cookie,
 		ProxyUseSSL:  useSSLFlag,
 		ProxyHeaders: parseProxyHeaders(),
+	}
+}
+
+// parseBackends parses BACKEND_URL into a list of Backend entries.
+//
+// Single backend:
+//
+//	http://host:port, unix:///path/sock, file:///path/to/dir, text://content
+//
+// Multi backend (order-preserving, "/prefix/=scheme://..." separated by ";"):
+//
+//	/api/=http://api:8080;/cdn/=file:///var/www;/x/=text://hello
+func parseBackends(raw string) []Backend {
+	// Multi-backend detection: a multi-backend string has the form
+	// "/prefix=scheme://..." (the "=" precedes the first "://"). This holds
+	// even for a single segment like "/=unix:///path", which has no ";".
+	if isMultiBackend(raw) {
+		segs := splitBackendSegments(raw)
+		if backends := parseMultiBackends(segs); len(backends) > 0 {
+			return backends
+		}
+	}
+
+	// Single backend: root prefix "/".
+	if b := newBackend("/", raw); b != nil {
+		return []Backend{*b}
+	}
+	return nil
+}
+
+// isMultiBackend reports whether raw uses the "/prefix=scheme://..." form.
+// It returns true when an "=" appears before the first "://" (i.e. there is a
+// routing prefix in front of the backend URL). This correctly classifies both
+// "/=unix:///path" (single multi-backend segment) and
+// "/a/=http://x;/b/=https://y" (multiple segments), while rejecting plain
+// single-backend URLs like "http://h?a=b" where "=" is only in the query.
+func isMultiBackend(raw string) bool {
+	eqIdx := strings.Index(raw, "=")
+	if eqIdx < 0 {
+		return false
+	}
+	schemeIdx := strings.Index(raw, "://")
+	// "=" must come before the scheme separator (and a scheme must exist).
+	return schemeIdx > eqIdx
+}
+
+// parseMultiBackends parses already-split segments into backends.
+func parseMultiBackends(segments []string) []Backend {
+	var backends []Backend
+	for _, seg := range segments {
+		prefix, urlStr, ok := strings.Cut(seg, "=")
+		if !ok {
+			log.Printf("WARNING: backend segment missing '=': %q, skipping", seg)
+			continue
+		}
+		prefix = strings.TrimSpace(prefix)
+		urlStr = strings.TrimSpace(urlStr)
+		if prefix == "" || urlStr == "" {
+			log.Printf("WARNING: empty prefix or url in segment: %q", seg)
+			continue
+		}
+		if !strings.HasPrefix(prefix, "/") {
+			prefix = "/" + prefix
+		}
+		if b := newBackend(prefix, urlStr); b != nil {
+			backends = append(backends, *b)
+		}
+	}
+	return backends
+}
+
+// splitBackendSegments splits a multi-backend string on ";" outside of the URL portion.
+// Format: /a/=http://x;/b/=https://y
+func splitBackendSegments(raw string) []string {
+	// ";/" is the natural delimiter: semicolon followed by a new prefix starting with "/"
+	parts := strings.Split(raw, ";/")
+	result := make([]string, 0, len(parts))
+	for i, p := range parts {
+		if i == 0 {
+			result = append(result, p)
+		} else {
+			result = append(result, "/"+p)
+		}
+	}
+	return result
+}
+
+// newBackend creates a Backend by parsing scheme:// from rawURL.
+func newBackend(prefix, rawURL string) *Backend {
+	scheme, target, ok := strings.Cut(rawURL, "://")
+	if !ok {
+		log.Printf("WARNING: backend %q has no scheme, skipping", rawURL)
+		return nil
+	}
+	scheme = strings.ToLower(scheme)
+	log.Printf("backend %q → prefix=%q scheme=%q target=%q", rawURL, prefix, scheme, target)
+	return &Backend{
+		Prefix: prefix,
+		Scheme: scheme,
+		Target: target,
+		RawURL: rawURL,
 	}
 }
 
@@ -112,89 +230,17 @@ func main() {
 	var serviceCmd *exec.Cmd
 	if cfg.ServiceCmd != "" {
 		serviceCmd = startBackend(cfg.ServiceCmd)
-		defer killProcessGroup(serviceCmd)
 	}
 
-	// Forward signals to the backend process.
-	sigCh := make(chan os.Signal, 1)
-	signal.Notify(sigCh, syscall.SIGINT, syscall.SIGTERM)
-	go func() {
-		<-sigCh
-		if serviceCmd != nil {
-			killProcessGroup(serviceCmd)
-			// If the backend is a Unix socket, remove the socket file on exit.
-			if strings.HasPrefix(cfg.BackendURL, "unix://") {
-				os.Remove(cfg.BackendURL[len("unix://"):])
-			}
-		}
-		os.Exit(0)
-	}()
-
-	var err error
-	tmplLogin, err = template.ParseFS(templateFS, "login.html")
-	if err != nil {
-		log.Fatalf("parse login.html: %v", err)
+	// Build handlers for each backend.
+	type backendHandler struct {
+		prefix  string
+		handler http.Handler
 	}
-	tmplLogout, err = template.ParseFS(templateFS, "logout.html")
-	if err != nil {
-		log.Fatalf("parse logout.html: %v", err)
-	}
-
-	backendURL, err := url.Parse(cfg.BackendURL)
-	if err != nil {
-		log.Fatalf("invalid BACKEND_URL: %v", err)
-	}
-
-	var proxy *httputil.ReverseProxy
-
-	if backendURL.Scheme == "unix" {
-		// Unix socket backend: unix:///var/run/vscode.sock
-		socketPath := backendURL.Path
-		if socketPath == "" {
-			// unix:///var/run/vscode.sock → Path = "/var/run/vscode.sock"
-			socketPath = backendURL.Host
-		}
-		log.Printf("using unix socket: %s", socketPath)
-
-		proxy = &httputil.ReverseProxy{
-			Director: func(req *http.Request) {
-				req.URL.Scheme = "http"
-				req.URL.Host = "unix"
-				applyProxyHeaders(req, cfg.ProxyHeaders)
-			},
-			Transport: &http.Transport{
-				DialContext: func(ctx context.Context, _, _ string) (net.Conn, error) {
-					var d net.Dialer
-					return d.DialContext(ctx, "unix", socketPath)
-				},
-			},
-		}
-	} else {
-		proxy = httputil.NewSingleHostReverseProxy(backendURL)
-		origDirector := proxy.Director
-		proxy.Director = func(req *http.Request) {
-			origDirector(req)
-			applyProxyHeaders(req, cfg.ProxyHeaders)
-		}
-	}
-
-	// Pre-render login page for ModifyResponse (can't stream template there).
-	loginHTML := renderLoginHTML()
-
-	// Custom error handler: intercept 401/403 and show login page.
-	proxy.ModifyResponse = func(r *http.Response) error {
-		if r.StatusCode == http.StatusUnauthorized || r.StatusCode == http.StatusForbidden {
-			if r.Body != nil {
-				r.Body.Close()
-			}
-			r.StatusCode = http.StatusOK
-			r.Header = make(http.Header)
-			r.Header.Set("Content-Type", "text/html; charset=utf-8")
-			r.Body = io.NopCloser(bytes.NewReader(loginHTML))
-			r.ContentLength = int64(len(loginHTML))
-			return nil
-		}
-		return nil
+	var handlers []backendHandler
+	for _, b := range cfg.Backends {
+		h := createBackendHandler(b, cfg.ProxyHeaders)
+		handlers = append(handlers, backendHandler{prefix: b.Prefix, handler: h})
 	}
 
 	mux := http.NewServeMux()
@@ -203,10 +249,13 @@ func main() {
 	mux.HandleFunc("/__login", func(w http.ResponseWriter, r *http.Request) {
 		switch r.Method {
 		case http.MethodPost:
-			r.ParseForm()
+			if err := r.ParseForm(); err != nil {
+				http.Error(w, "invalid form", http.StatusBadRequest)
+				return
+			}
 			tkn := strings.TrimSpace(r.PostFormValue("token"))
 			if tkn == "" {
-				serveLoginHTML(w)
+				serveStaticAsset(w, "login.html")
 				return
 			}
 			http.SetCookie(w, &http.Cookie{
@@ -216,15 +265,11 @@ func main() {
 				HttpOnly: true,
 				SameSite: http.SameSiteLaxMode,
 			})
-			// Reload the page that triggered the login.
-			back := r.Referer()
-			if back == "" {
-				back = "/"
-			}
+			back := safeReferer(r.Referer())
 			log.Printf("login ok, cookie %s=%s, reloading: %s", cfg.TokenCookie, tkn, back)
 			http.Redirect(w, r, back, http.StatusSeeOther)
 		default:
-			serveLoginHTML(w)
+			serveStaticAsset(w, "login.html")
 		}
 	})
 
@@ -238,8 +283,7 @@ func main() {
 			HttpOnly: true,
 		})
 		log.Printf("logout: cleared cookie %s", cfg.TokenCookie)
-		w.Header().Set("Content-Type", "text/html; charset=utf-8")
-		tmplLogout.Execute(w, nil)
+		serveStaticAsset(w, "logout.html")
 	})
 
 	// /__vscode/ – VS Code update API proxy with local cache.
@@ -248,54 +292,136 @@ func main() {
 	// /__proxy/ – generic external proxy: /__proxy/{scheme}:{host}/path → {scheme}://{host}/path
 	mux.HandleFunc("/__proxy/", handleExternalProxy)
 
-	// All other requests go through the reverse proxy.
-	mux.HandleFunc("/", func(w http.ResponseWriter, r *http.Request) {
-		proxy.ServeHTTP(w, r)
+	// /__logout.vsc.js – VS Code logout-button script injected into proxied HTML.
+	// Named .vsc because it targets the VS Code activity-bar toolbar; other apps
+	// can get their own script (e.g. /__logout.xxx.js) later.
+	mux.HandleFunc("/__logout.vsc.js", func(w http.ResponseWriter, r *http.Request) {
+		w.Header().Set("Content-Type", "application/javascript; charset=utf-8")
+		w.Header().Set("Cache-Control", "public, max-age=86400")
+		_, _ = w.Write(mustAsset("logout.vsc.js"))
 	})
 
-	addr := ":" + cfg.ProxyPort
-	log.Printf("proxy starting on %s → %s", addr, cfg.BackendURL)
+	// All other requests: dispatch to backends in config order.
+	mux.HandleFunc("/", func(w http.ResponseWriter, r *http.Request) {
+		for _, bh := range handlers {
+			if strings.HasPrefix(r.URL.Path, bh.prefix) {
+				bh.handler.ServeHTTP(w, r)
+				return
+			}
+		}
+		http.Error(w, "no backend matched", http.StatusBadGateway)
+	})
+
+	servers := buildServers(cfg.ProxyPort, cfg.ProxyUseSSL, mux)
+
+	// Graceful shutdown on SIGINT/SIGTERM: stop accepting new connections,
+	// wait for active ones, then signal the backend subprocess to exit.
+	sigCh := make(chan os.Signal, 1)
+	signal.Notify(sigCh, syscall.SIGINT, syscall.SIGTERM)
+
+	for _, srv := range servers {
+		go func(s *http.Server, isTLS bool) {
+			var e error
+			if isTLS {
+				e = s.ListenAndServeTLS("", "")
+			} else {
+				e = s.ListenAndServe()
+			}
+			if e != nil && e != http.ErrServerClosed {
+				log.Fatalf("server on %s: %v", s.Addr, e)
+			}
+		}(srv.server, srv.tls)
+	}
+
+	log.Printf("proxy starting: %s", strings.Join(serverAddrs(servers), ", "))
 	log.Printf("token cookie: %s", cfg.TokenCookie)
+	log.Printf("backends: %d", len(cfg.Backends))
 	if len(cfg.ProxyHeaders) > 0 {
 		log.Printf("proxy headers: %v", cfg.ProxyHeaders)
 	}
 
-	if cfg.ProxyUseSSL {
-		// HTTP on ProxyPort, HTTPS on ProxyPort+1
-		portNum, err := strconv.Atoi(cfg.ProxyPort)
-		if err != nil {
-			log.Fatalf("invalid VSC_PORT %q: %v", cfg.ProxyPort, err)
-		}
-		httpsAddr := fmt.Sprintf(":%d", portNum+1)
-
-		cert, err := generateSelfSignedCert()
-		if err != nil {
-			log.Fatalf("generate self-signed cert: %v", err)
-		}
-		tlsCfg := &tls.Config{Certificates: []tls.Certificate{cert}}
-
-		// Start HTTP server in background.
-		go func() {
-			log.Printf("HTTP1 listening on %s", addr)
-			if err := http.ListenAndServe(addr, mux); err != nil {
-				log.Fatalf("HTTP server: %v", err)
+	<-sigCh
+	log.Printf("shutdown signal received, draining…")
+	shutdownCtx, cancel := context.WithTimeout(context.Background(), 15*time.Second)
+	defer cancel()
+	for _, srv := range servers {
+		_ = srv.server.Shutdown(shutdownCtx)
+	}
+	if serviceCmd != nil {
+		killProcessGroup(serviceCmd)
+		for _, b := range cfg.Backends {
+			if b.Scheme == "unix" {
+				_ = os.Remove(b.Target)
 			}
-		}()
-
-		log.Printf("HTTPS listening on %s (self-signed certificate)", httpsAddr)
-		srv := &http.Server{
-			Addr:      httpsAddr,
-			Handler:   mux,
-			TLSConfig: tlsCfg,
-		}
-		if err := srv.ListenAndServeTLS("", ""); err != nil {
-			log.Fatal(err)
-		}
-	} else {
-		if err := http.ListenAndServe(addr, mux); err != nil {
-			log.Fatal(err)
 		}
 	}
+}
+
+// serverInstance binds an *http.Server with its TLS flag.
+type serverInstance struct {
+	server *http.Server
+	tls    bool
+}
+
+// buildServers constructs one (plain HTTP) or two (HTTP + HTTPS) servers with
+// sensible timeouts and the self-signed cert when SSL is enabled.
+func buildServers(port string, useSSL bool, mux http.Handler) []serverInstance {
+	base := &http.Server{
+		Addr:              ":" + port,
+		Handler:           mux,
+		ReadHeaderTimeout: 10 * time.Second,
+		ReadTimeout:       60 * time.Second,
+		WriteTimeout:      0, // streaming downloads may take long
+		IdleTimeout:       120 * time.Second,
+	}
+	if !useSSL {
+		return []serverInstance{{server: base, tls: false}}
+	}
+	portNum, err := strconv.Atoi(port)
+	if err != nil {
+		log.Fatalf("invalid VSC_PORT %q: %v", port, err)
+	}
+	cert, err := generateSelfSignedCert()
+	if err != nil {
+		log.Fatalf("generate self-signed cert: %v", err)
+	}
+	httpsSrv := &http.Server{
+		Addr:              fmt.Sprintf(":%d", portNum+1),
+		Handler:           mux,
+		TLSConfig:         &tls.Config{Certificates: []tls.Certificate{cert}, MinVersion: tls.VersionTLS12},
+		ReadHeaderTimeout: 10 * time.Second,
+		ReadTimeout:       60 * time.Second,
+		IdleTimeout:       120 * time.Second,
+	}
+	return []serverInstance{
+		{server: base, tls: false},
+		{server: httpsSrv, tls: true},
+	}
+}
+
+func serverAddrs(servers []serverInstance) []string {
+	out := make([]string, 0, len(servers))
+	for _, s := range servers {
+		scheme := "http"
+		if s.tls {
+			scheme = "https"
+		}
+		out = append(out, scheme+"://"+s.server.Addr)
+	}
+	return out
+}
+
+// safeReferer returns a same-origin redirect target, falling back to "/".
+func safeReferer(ref string) string {
+	if ref == "" {
+		return "/"
+	}
+	u, err := url.Parse(ref)
+	if err != nil || u.Host != "" {
+		// Only allow relative refs to avoid open redirect.
+		return "/"
+	}
+	return ref
 }
 
 // applyProxyHeaders rewrites request headers according to PROXY_HEADER_* env vars.
@@ -316,6 +442,17 @@ func applyProxyHeaders(req *http.Request, hdrs map[string]string) {
 // =============================================================================
 // External Proxy — handles /__proxy/ endpoints
 // =============================================================================
+
+// allowedExtProxySchemes restricts the external proxy to web schemes to mitigate SSRF.
+var allowedExtProxySchemes = map[string]bool{"http": true, "https": true}
+
+// extProxyTransport is a shared transport for the external proxy with a response
+// header timeout so a slow/hung upstream cannot hold connections indefinitely.
+var extProxyTransport = &http.Transport{
+	Proxy:                 http.ProxyFromEnvironment,
+	ResponseHeaderTimeout: 30 * time.Second,
+	IdleConnTimeout:       90 * time.Second,
+}
 
 // handleExternalProxy proxies /__proxy/{scheme}:{host}/path → {scheme}://{host}/path
 // If no scheme is given, defaults to https.
@@ -342,7 +479,7 @@ func handleExternalProxy(w http.ResponseWriter, r *http.Request) {
 	}
 
 	if idx := strings.Index(p, ":"); idx >= 0 {
-		scheme = p[:idx]
+		scheme = strings.ToLower(p[:idx])
 		host = p[idx+1:]
 	} else {
 		scheme = "https"
@@ -351,6 +488,10 @@ func handleExternalProxy(w http.ResponseWriter, r *http.Request) {
 
 	if host == "" {
 		http.Error(w, "missing host", http.StatusBadRequest)
+		return
+	}
+	if !allowedExtProxySchemes[scheme] {
+		http.Error(w, "unsupported scheme", http.StatusBadRequest)
 		return
 	}
 
@@ -368,14 +509,16 @@ func handleExternalProxy(w http.ResponseWriter, r *http.Request) {
 	}
 
 	rp := httputil.NewSingleHostReverseProxy(target)
+	rp.Transport = extProxyTransport
 	rp.Director = func(req *http.Request) {
 		req.URL.Scheme = target.Scheme
 		req.URL.Host = target.Host
 		req.URL.Path = target.Path
 		req.URL.RawQuery = target.RawQuery
 		req.Host = target.Host
-		// Strip /__proxy/... prefix headers.
-		req.Header.Set("X-Forwarded-For", r.RemoteAddr)
+		// Reset hop-by-hop / spoofable forwarding headers.
+		req.Header.Del("X-Forwarded-For")
+		req.Header.Set("X-Forwarded-For", req.RemoteAddr)
 	}
 	rp.ErrorHandler = func(w http.ResponseWriter, r *http.Request, err error) {
 		log.Printf("[ext-proxy] error proxying %s: %v", targetURL, err)
@@ -398,6 +541,8 @@ type vscodeUpdateHandler struct {
 	cacheDir string
 	upstream string
 	client   *http.Client
+	// redirectClient follows redirects and records the final URL; reused across requests.
+	redirectClient *http.Client
 }
 
 func newVscodeUpdateHandler() *vscodeUpdateHandler {
@@ -409,8 +554,15 @@ func newVscodeUpdateHandler() *vscodeUpdateHandler {
 	return &vscodeUpdateHandler{
 		cacheDir: dir,
 		upstream: "https://update.code.visualstudio.com",
-		client: &http.Client{
+		client:   &http.Client{Timeout: 10 * time.Minute},
+		redirectClient: &http.Client{
 			Timeout: 10 * time.Minute,
+			CheckRedirect: func(req *http.Request, via []*http.Request) error {
+				if len(via) >= 10 {
+					return fmt.Errorf("too many redirects")
+				}
+				return nil
+			},
 		},
 	}
 }
@@ -476,7 +628,7 @@ func (h *vscodeUpdateHandler) handleLatest(w http.ResponseWriter, r *http.Reques
 		log.Printf("[vscode-update] latest HIT  %s/%s ← %s (%d bytes)", platform, quality, cachePath, len(data))
 		w.Header().Set("Content-Type", "application/json")
 		w.Header().Set("X-Cache", "HIT")
-		w.Write(data)
+		_, _ = w.Write(data)
 		return
 	}
 
@@ -505,15 +657,14 @@ func (h *vscodeUpdateHandler) handleLatest(w http.ResponseWriter, r *http.Reques
 		return
 	}
 
-	var js json.RawMessage
-	if err := json.Unmarshal(body, &js); err != nil {
-		log.Printf("[vscode-update] latest invalid JSON from upstream: %v", err)
+	if !json.Valid(body) {
+		log.Printf("[vscode-update] latest invalid JSON from upstream")
 		http.Error(w, "invalid upstream response", http.StatusBadGateway)
 		return
 	}
 
-	_ = os.MkdirAll(filepath.Dir(cachePath), 0755)
-	if err := os.WriteFile(cachePath, body, 0644); err != nil {
+	_ = os.MkdirAll(filepath.Dir(cachePath), 0o755)
+	if err := atomicWriteFile(cachePath, body, 0o644); err != nil {
 		log.Printf("[vscode-update] latest write cache FAIL: %s → %v", cachePath, err)
 	} else {
 		log.Printf("[vscode-update] latest CACHED %s/%s → %s (%d bytes)", platform, quality, cachePath, len(body))
@@ -521,16 +672,16 @@ func (h *vscodeUpdateHandler) handleLatest(w http.ResponseWriter, r *http.Reques
 
 	w.Header().Set("Content-Type", "application/json")
 	w.Header().Set("X-Cache", "MISS")
-	w.Write(body)
+	_, _ = w.Write(body)
 }
 
 func (h *vscodeUpdateHandler) handleCommit(w http.ResponseWriter, r *http.Request, commit, platform, quality string) {
 	cacheDir := filepath.Join(h.cacheDir, platform, quality)
 
 	// 1. 查找缓存（扩展名未知，按 commit 前缀匹配）
-	if cachedPath, ok := findCachedFile(cacheDir, commit); ok {
+	if cachedPath, ok := findCachedFile(cacheDir, commit, ""); ok {
 		fi, _ := os.Stat(cachedPath)
-		log.Printf("[vscode-update] commit HIT  %s/%s/%s ← %s (%d bytes)", platform, quality, commit, cachedPath, fi.Size())
+		log.Printf("[vscode-update] commit HIT  %s/%s/%s ← %s (%d bytes)", platform, quality, commit, cachedPath, fileSize(fi))
 		ext := extractExtFromPath(cachedPath)
 		redirectDownload(w, r, quality, commit, platform, ext)
 		return
@@ -542,19 +693,7 @@ func (h *vscodeUpdateHandler) handleCommit(w http.ResponseWriter, r *http.Reques
 	upstreamURL := fmt.Sprintf("%s/commit:%s/%s/%s", h.upstream, commit, platform, quality)
 	log.Printf("[vscode-update] commit fetch: %s", upstreamURL)
 
-	var finalURL string
-	client := &http.Client{
-		Timeout: 10 * time.Minute,
-		CheckRedirect: func(req *http.Request, via []*http.Request) error {
-			finalURL = req.URL.String()
-			if len(via) >= 10 {
-				return fmt.Errorf("too many redirects")
-			}
-			return nil
-		},
-	}
-
-	resp, err := client.Get(upstreamURL)
+	resp, err := h.redirectClient.Get(upstreamURL)
 	if err != nil {
 		log.Printf("[vscode-update] commit fetch error: %v", err)
 		http.Error(w, "upstream fetch failed", http.StatusBadGateway)
@@ -568,10 +707,7 @@ func (h *vscodeUpdateHandler) handleCommit(w http.ResponseWriter, r *http.Reques
 		return
 	}
 
-	// 如果 CheckRedirect 没触发（无重定向），用最终 resp 的 URL
-	if finalURL == "" {
-		finalURL = resp.Request.URL.String()
-	}
+	finalURL := resp.Request.URL.String()
 	log.Printf("[vscode-update] commit redirect → %s", finalURL)
 
 	// 3. 确定扩展名：优先从最终 URL 提取，其次 Content-Type
@@ -584,21 +720,21 @@ func (h *vscodeUpdateHandler) handleCommit(w http.ResponseWriter, r *http.Reques
 	}
 	cachePath := filepath.Join(cacheDir, commit+ext)
 
-	body, err := io.ReadAll(resp.Body)
-	if err != nil {
-		log.Printf("[vscode-update] commit read body error: %v", err)
-		http.Error(w, "read upstream body failed", http.StatusBadGateway)
+	// 4. 流式落盘，避免将大文件（数百 MB）读入内存。
+	if err := os.MkdirAll(cacheDir, 0o755); err != nil {
+		log.Printf("[vscode-update] commit mkdir FAIL: %v", err)
+		http.Error(w, "cache write failed", http.StatusBadGateway)
 		return
 	}
-
-	_ = os.MkdirAll(cacheDir, 0755)
-	if err := os.WriteFile(cachePath, body, 0644); err != nil {
+	n, err := streamToAtomicFile(cachePath, resp.Body)
+	if err != nil {
 		log.Printf("[vscode-update] commit write cache FAIL: %s → %v", cachePath, err)
-	} else {
-		log.Printf("[vscode-update] commit CACHED %s/%s/%s → %s (%d bytes)", platform, quality, commit, cachePath, len(body))
+		http.Error(w, "cache write failed", http.StatusBadGateway)
+		return
 	}
+	log.Printf("[vscode-update] commit CACHED %s/%s/%s → %s (%d bytes)", platform, quality, commit, cachePath, n)
 
-	// 4. 缓存完成后重定向到 download 接口，由它用正确文件名提供下载
+	// 5. 缓存完成后重定向到 download 接口，由它用正确文件名提供下载
 	redirectDownload(w, r, quality, commit, platform, ext)
 }
 
@@ -606,7 +742,9 @@ func (h *vscodeUpdateHandler) handleCommit(w http.ResponseWriter, r *http.Reques
 func (h *vscodeUpdateHandler) handleDownload(w http.ResponseWriter, r *http.Request, commit, quality, platform, ext string) {
 	cacheDir := filepath.Join(h.cacheDir, platform, quality)
 
-	cachedPath, ok := findCachedFile(cacheDir, commit)
+	// Prefer the exact expected path so a stale file with a different ext
+	// cannot be served under the wrong filename.
+	cachedPath, ok := findCachedFile(cacheDir, commit, ext)
 	if !ok {
 		log.Printf("[vscode-update] download MISS: %s/%s/%s not found in %s", platform, quality, commit, cacheDir)
 		http.Error(w, "file not found in cache", http.StatusNotFound)
@@ -614,11 +752,11 @@ func (h *vscodeUpdateHandler) handleDownload(w http.ResponseWriter, r *http.Requ
 	}
 
 	fi, _ := os.Stat(cachedPath)
-	log.Printf("[vscode-update] download SERVE %s/%s/%s ← %s (%d bytes)", platform, quality, commit, cachedPath, fi.Size())
+	log.Printf("[vscode-update] download SERVE %s/%s/%s ← %s (%d bytes)", platform, quality, commit, cachedPath, fileSize(fi))
 
 	downloadName := fmt.Sprintf("vscode-%s%s", platform, ext)
-	w.Header().Set("Content-Type", "application/octet-stream")
 	w.Header().Set("Content-Disposition", fmt.Sprintf(`attachment; filename="%s"`, downloadName))
+	// Let http.ServeFile set Content-Type (application/octet-stream) and handle ranges.
 	http.ServeFile(w, r, cachedPath)
 }
 
@@ -643,10 +781,17 @@ func parseDownloadFilename(name string) (platform, ext string) {
 	return rest[:dotIdx], rest[dotIdx:]
 }
 
-// ---- helpers ----
-// (serveCommitFile is removed; handleDownload replaces it)
-
-func findCachedFile(dir, commit string) (string, bool) {
+// findCachedFile returns a cached file for the given commit.
+// If extHint is non-empty it first tries the exact "{commit}{extHint}" path;
+// otherwise (or on miss) it scans the directory for any "{commit}.*" match.
+// This avoids false matches when one commit is a prefix of another.
+func findCachedFile(dir, commit, extHint string) (string, bool) {
+	if extHint != "" {
+		p := filepath.Join(dir, commit+extHint)
+		if fi, err := os.Stat(p); err == nil && !fi.IsDir() {
+			return p, true
+		}
+	}
 	entries, err := os.ReadDir(dir)
 	if err != nil {
 		return "", false
@@ -655,30 +800,31 @@ func findCachedFile(dir, commit string) (string, bool) {
 		if e.IsDir() {
 			continue
 		}
-		if strings.HasPrefix(e.Name(), commit) {
-			return filepath.Join(dir, e.Name()), true
+		name := e.Name()
+		if strings.HasPrefix(name, commit+".") || name == commit {
+			return filepath.Join(dir, name), true
 		}
 	}
 	return "", false
 }
 
 func extractExtFromURL(rawURL string) string {
-	if idx := strings.Index(rawURL, "?"); idx >= 0 {
-		rawURL = rawURL[:idx]
+	// Strip query and fragment before taking the basename.
+	for _, sep := range []string{"?", "#"} {
+		if idx := strings.Index(rawURL, sep); idx >= 0 {
+			rawURL = rawURL[:idx]
+		}
 	}
-	base := path.Base(rawURL)
-	if base == "" || base == "." || base == "/" {
-		return ""
-	}
-	dotIdx := strings.Index(base, ".")
-	if dotIdx < 0 {
-		return ""
-	}
-	return base[dotIdx:]
+	return extractExt(path.Base(rawURL))
 }
 
 func extractExtFromPath(filePath string) string {
-	base := filepath.Base(filePath)
+	return extractExt(filepath.Base(filePath))
+}
+
+// extractExt returns the extension portion (including the leading ".") of a
+// basename, e.g. "x.tar.gz" → ".tar.gz". Returns "" if there is no ".".
+func extractExt(base string) string {
 	dotIdx := strings.Index(base, ".")
 	if dotIdx < 0 {
 		return ""
@@ -703,14 +849,242 @@ func inferExtFromContentType(ct string) string {
 	return ""
 }
 
+// fileSize safely reports a file's size for logging.
+func fileSize(fi os.FileInfo) int64 {
+	if fi == nil {
+		return -1
+	}
+	return fi.Size()
+}
+
+// atomicWriteFile writes data to path via a temp file + rename for crash safety.
+func atomicWriteFile(path string, data []byte, perm os.FileMode) error {
+	dir := filepath.Dir(path)
+	if err := os.MkdirAll(dir, 0o755); err != nil {
+		return err
+	}
+	tmp, err := os.CreateTemp(dir, ".tmp-*")
+	if err != nil {
+		return err
+	}
+	tmpName := tmp.Name()
+	cleanup := func() { _ = os.Remove(tmpName) }
+	if _, err := tmp.Write(data); err != nil {
+		tmp.Close()
+		cleanup()
+		return err
+	}
+	if err := tmp.Close(); err != nil {
+		cleanup()
+		return err
+	}
+	if err := os.Chmod(tmpName, perm); err != nil {
+		cleanup()
+		return err
+	}
+	return os.Rename(tmpName, path)
+}
+
+// streamToAtomicFile streams r into path via a temp file + rename, returning bytes written.
+func streamToAtomicFile(path string, r io.Reader) (int64, error) {
+	dir := filepath.Dir(path)
+	tmp, err := os.CreateTemp(dir, ".tmp-*")
+	if err != nil {
+		return 0, err
+	}
+	tmpName := tmp.Name()
+	n, err := io.Copy(tmp, r)
+	if cerr := tmp.Close(); err == nil {
+		err = cerr
+	}
+	if err != nil {
+		_ = os.Remove(tmpName)
+		return n, err
+	}
+	if err := os.Chmod(tmpName, 0o644); err != nil {
+		_ = os.Remove(tmpName)
+		return n, err
+	}
+	return n, os.Rename(tmpName, path)
+}
+
 // =============================================================================
 
-func renderLoginHTML() []byte {
-	var buf bytes.Buffer
-	if err := tmplLogin.Execute(&buf, nil); err != nil {
-		panic("render login: " + err.Error())
+// =============================================================================
+// Backend Handlers — createBackendHandler dispatches to the right handler type.
+// =============================================================================
+
+// createBackendHandler builds an http.Handler for the given backend.
+// Supported schemes: http, https, unix (reverse proxy), file (directory), text (literal).
+func createBackendHandler(b Backend, proxyHeaders map[string]string) http.Handler {
+	switch b.Scheme {
+	case "http", "https":
+		targetURL, err := url.Parse(b.RawURL)
+		if err != nil {
+			log.Fatalf("invalid backend URL %q: %v", b.RawURL, err)
+		}
+		rp := httputil.NewSingleHostReverseProxy(targetURL)
+		origDirector := rp.Director
+		rp.Director = func(req *http.Request) {
+			origDirector(req)
+			applyProxyHeaders(req, proxyHeaders)
+		}
+		rp.ModifyResponse = chainModifiers(authRedirectModifier(), injectLogoutButton)
+		return rp
+
+	case "unix":
+		socketPath := b.Target
+		log.Printf("backend unix socket: %s", socketPath)
+		rp := &httputil.ReverseProxy{
+			Director: func(req *http.Request) {
+				req.URL.Scheme = "http"
+				req.URL.Host = "unix"
+				applyProxyHeaders(req, proxyHeaders)
+			},
+			Transport: &http.Transport{
+				DialContext: func(ctx context.Context, _, _ string) (net.Conn, error) {
+					var d net.Dialer
+					return d.DialContext(ctx, "unix", socketPath)
+				},
+			},
+		}
+		rp.ModifyResponse = chainModifiers(authRedirectModifier(), injectLogoutButton)
+		return rp
+
+	case "file":
+		dir := b.Target
+		log.Printf("backend file server: %s", dir)
+		return http.StripPrefix(b.Prefix, http.FileServer(http.Dir(dir)))
+
+	case "text":
+		content := b.Target
+		log.Printf("backend text: %d bytes", len(content))
+		return http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+			w.Header().Set("Content-Type", "text/plain; charset=utf-8")
+			_, _ = w.Write([]byte(content))
+		})
+
+	default:
+		log.Fatalf("unknown backend scheme %q in %q", b.Scheme, b.RawURL)
+		return nil
 	}
-	return buf.Bytes()
+}
+
+// authRedirectModifier returns a ModifyResponse that replaces 401/403 from the
+// upstream with the pre-rendered login page, so the browser shows login instead
+// of an error. Shared by http/https and unix reverse proxies.
+func authRedirectModifier() func(*http.Response) error {
+	return func(r *http.Response) error {
+		if r.StatusCode != http.StatusUnauthorized && r.StatusCode != http.StatusForbidden {
+			return nil
+		}
+		if r.Body != nil {
+			r.Body.Close()
+		}
+		loginHTML := mustAsset("login.html")
+		r.StatusCode = http.StatusOK
+		r.Header = make(http.Header)
+		r.Header.Set("Content-Type", "text/html; charset=utf-8")
+		r.Body = io.NopCloser(bytes.NewReader(loginHTML))
+		r.ContentLength = int64(len(loginHTML))
+		return nil
+	}
+}
+
+// chainModifiers runs the given response modifiers in order, stopping at the
+// first error. This lets us compose auth-redirect and logout-button injection.
+func chainModifiers(mods ...func(*http.Response) error) func(*http.Response) error {
+	return func(r *http.Response) error {
+		for _, m := range mods {
+			if m == nil {
+				continue
+			}
+			if err := m(r); err != nil {
+				return err
+			}
+		}
+		return nil
+	}
+}
+
+// appDetector describes how to recognise a proxied app and which logout script
+// to inject into its HTML.
+type appDetector struct {
+	fingerprint []byte // substring searched for in the response body
+	scriptTag   []byte // <script src="..."> appended when the fingerprint matches
+}
+
+// appDetector pairs a body-content fingerprint with the logout-script tag to
+// inject when the fingerprint is found. Adding support for a new proxied app is
+// just a matter of appending an entry here (plus the script + its route).
+var appDetectors = []appDetector{
+	{
+		// VS Code / code-server workbench boot page.
+		fingerprint: []byte(`<meta id="vscode-workbench-auth-session"`),
+		scriptTag:   []byte(`<script src="/__logout.vsc.js"></script>`),
+	},
+}
+
+// injectLogoutButton inspects proxied HTML document responses and, when the body
+// matches a known app fingerprint, appends that app's logout-button script tag.
+// Unrecognised pages pass through untouched, so non-VS-Code backends are not
+// polluted with a useless script.
+//
+// Only top-level HTML documents (Content-Type: text/html, GET) are inspected,
+// so static assets, API calls and Server-Sent-Events are unaffected.
+func injectLogoutButton(r *http.Response) error {
+	if r.Request == nil || r.Request.Method != http.MethodGet {
+		return nil
+	}
+	// Only inspect top-level navigations; skip iframes / fetches.
+	if dest := r.Request.Header.Get("Sec-Fetch-Dest"); dest != "" && dest != "document" {
+		return nil
+	}
+	ct := r.Header.Get("Content-Type")
+	if !strings.HasPrefix(ct, "text/html") {
+		return nil
+	}
+
+	body, err := io.ReadAll(r.Body)
+	if err != nil {
+		return err
+	}
+	if r.Body != nil {
+		r.Body.Close()
+	}
+
+	// Detect the app by fingerprint; inject only on a match.
+	tag := matchAppScript(body)
+	if tag == nil {
+		// Unknown app — restore the original body unchanged.
+		r.Body = io.NopCloser(bytes.NewReader(body))
+		r.ContentLength = int64(len(body))
+		r.Header.Set("Content-Length", strconv.Itoa(len(body)))
+		r.Header.Del("Transfer-Encoding")
+		r.Uncompressed = false
+		return nil
+	}
+
+	injected := append(body, tag...)
+	r.Body = io.NopCloser(bytes.NewReader(injected))
+	r.ContentLength = int64(len(injected))
+	r.Header.Set("Content-Length", strconv.Itoa(len(injected)))
+	// We read the full body and now serve a fixed-length one; drop any chunked
+	// encoding from the upstream so the client sees a consistent response.
+	r.Header.Del("Transfer-Encoding")
+	r.Uncompressed = false
+	return nil
+}
+
+// matchAppScript returns the logout-script tag for the first app whose
+// fingerprint is found in body, or nil if no app matches.
+func matchAppScript(body []byte) []byte {
+	for _, d := range appDetectors {
+		if bytes.Contains(body, d.fingerprint) {
+			return d.scriptTag
+		}
+	}
+	return nil
 }
 
 // generateSelfSignedCert creates a self-signed TLS certificate valid for 10 years.
@@ -725,6 +1099,8 @@ func generateSelfSignedCert() (tls.Certificate, error) {
 		return tls.Certificate{}, err
 	}
 
+	// Allow a small clock-skew window so the cert is valid immediately.
+	notBefore := time.Now().Add(-time.Hour)
 	tmpl := &x509.Certificate{
 		SerialNumber: serial,
 		Subject: pkix.Name{
@@ -732,8 +1108,8 @@ func generateSelfSignedCert() (tls.Certificate, error) {
 			Organization: []string{"Self-Signed CodeAuth"},
 		},
 		DNSNames:              []string{"self.ca"},
-		NotBefore:             time.Now(),
-		NotAfter:              time.Now().Add(10 * 365 * 24 * time.Hour),
+		NotBefore:             notBefore,
+		NotAfter:              notBefore.Add(10 * 365 * 24 * time.Hour),
 		KeyUsage:              x509.KeyUsageKeyEncipherment | x509.KeyUsageDigitalSignature,
 		ExtKeyUsage:           []x509.ExtKeyUsage{x509.ExtKeyUsageServerAuth},
 		BasicConstraintsValid: true,
@@ -755,6 +1131,7 @@ func generateSelfSignedCert() (tls.Certificate, error) {
 }
 
 // startBackend runs a command directly as a subprocess in its own process group.
+// Note: command is split with strings.Fields, so arguments cannot contain spaces.
 func startBackend(cmdStr string) *exec.Cmd {
 	parts := strings.Fields(cmdStr)
 	if len(parts) == 0 {
@@ -788,7 +1165,8 @@ func killProcessGroup(cmd *exec.Cmd) {
 	}
 }
 
-func serveLoginHTML(w http.ResponseWriter) {
+// serveStaticAsset writes an embedded asset with the given content type.
+func serveStaticAsset(w http.ResponseWriter, name string) {
 	w.Header().Set("Content-Type", "text/html; charset=utf-8")
-	tmplLogin.Execute(w, nil)
+	_, _ = w.Write(mustAsset(name))
 }
