@@ -36,6 +36,8 @@ if [[ -z "${PASSWORD}" ]]; then
     # exec 结束后会直接替换当前进程，所以后续的代码不会执行
 fi
 
+export VSC_CORS_IDX=cache+https://www.vscode-unpkg.net
+export VSC_CORS_SUF_browser_workbench_workbench_js=https://main.vscode-cdn.net,https://www.vscode-unpkg.net
 # codea 是一个用于授权的工具，它会在启动 vscode server 前进行授权验证，确保只有通过验证的用户才能访问 vscode server
 echo 'start vscode server with unix socket with password.'
 exec codea --backend unix://${VSC_SOCK:-/var/run/vscode.sock} --service "\

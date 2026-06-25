@@ -33,21 +33,33 @@ https://github.com/linuxserver/docker-baseimage-ubuntu
 
 
 ```sh
+# 命令简单测试
+BACKEND_URL=http://127.0.0.1:6802 ./codea
+
+# 分开启动, HTTP后端
 code-server --host 0.0.0.0 --port 6802 --connection-token 77885566
 BACKEND_URL=http://127.0.0.1:6802 ./codea
 
+# 分开启动，UNIX后端
 rm /var/run/vscode.sock && code-server --socket-path /var/run/vscode.sock --connection-token 77885566
 BACKEND_URL=unix:///var/run/vscode.sock PROXY_USE_SSL=1 PROXY_PORT=7080 ./codea
 
+# 命令行启动
 ./codea --ssl --backend "/test/=text://test;/=unix:///var/run/vscode.sock" --service "code-server --socket-path /var/run/vscode.sock --connection-token 77885566"
 
-BACKEND_URL=http://127.0.0.1:6802 ./codea
 
+# 测试文件下载
 curl http://127.0.0.1:7080/__vscode/api/latest/server-linux-x64-web/stable
 wget --trust-server-names http://127.0.0.1:7080/__vscode/commit:7e7950df89d055b5a378379db9ee14290772148a/server-linux-x64-web/stable
 
+# 测试纯文本代理
 BACKEND_URL="text://hello world" ./codea
 curl http://127.0.0.1:7080
+
+# 测试 /__proxy/
+VSC_CORS_IDX="https://www.vscode-unpkg.net->/__proxy/https:www.vscode-unpkg.net" \
+VSC_CORS_SUF_browser_workbench_workbench_js="https://main.vscode-cdn.net->/__proxy/https:main.vscode-cdn.net,https://www.vscode-unpkg.net->/__proxy/https:www.vscode-unpkg.net" \
+./codea --ssl --backend "/test/=text://test;/=unix:///var/run/vscode.sock" --service "code-server --socket-path /var/run/vscode.sock --connection-token 77885566"
 ```
 
 ```sh
