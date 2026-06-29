@@ -36,7 +36,7 @@
   }
 
   function sync() {
-    var tb = document.querySelector('ul[role="toolbar"][aria-label="Manage"]');
+    var tb = document.querySelector('.activitybar ul.actions-container[role="toolbar"]');
     if (!tb) return;
     if (tb.querySelector('#' + BTN_ID)) return;
     // Insert as the first item of the toolbar, matching native action-item style.

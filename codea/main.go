@@ -28,6 +28,7 @@ import (
 	"path/filepath"
 	"strconv"
 	"strings"
+	"sync"
 	"syscall"
 	"time"
 )
@@ -36,6 +37,7 @@ import (
 var staticFS embed.FS
 
 // mustAsset reads an embedded asset by name, failing fast at startup if missing.
+// embed.FS is already a read-only memory map, so repeated reads are cheap.
 func mustAsset(name string) []byte {
 	b, err := staticFS.ReadFile(name)
 	if err != nil {
@@ -173,17 +175,17 @@ func parseMultiBackends(segments []string) []Backend {
 // splitBackendSegments splits a multi-backend string on ";" outside of the URL portion.
 // Format: /a/=http://x;/b/=https://y
 func splitBackendSegments(raw string) []string {
-	// ";/" is the natural delimiter: semicolon followed by a new prefix starting with "/"
-	parts := strings.Split(raw, ";/")
-	result := make([]string, 0, len(parts))
-	for i, p := range parts {
-		if i == 0 {
-			result = append(result, p)
+	var result []string
+	for {
+		before, after, found := strings.Cut(raw, ";/")
+		if found {
+			result = append(result, before)
+			raw = "/" + after
 		} else {
-			result = append(result, "/"+p)
+			result = append(result, raw)
+			return result
 		}
 	}
-	return result
 }
 
 // newBackend creates a Backend by parsing scheme:// from rawURL.
@@ -205,7 +207,7 @@ func newBackend(prefix, rawURL string) *Backend {
 
 // parseProxyHeaders reads PROXY_HEADER_* env vars.
 // PROXY_HEADER_Xxx=Val → set/override header Xxx to Val.
-// PROXY_HEADER_Xxx=     → delete header Xxx.
+// PROXY_HEADER_Xxx=    → delete header Xxx.
 func parseProxyHeaders() map[string]string {
 	hdrs := make(map[string]string)
 	const prefix = "PROXY_HEADER_"
@@ -225,7 +227,6 @@ func parseProxyHeaders() map[string]string {
 
 func main() {
 	cfg := loadInitConfig()
-	loadCorsConfig() // parse VSC_CORS_* env vars (no-op when none set)
 
 	// Start backend subprocess if SERVICE_CMD is configured.
 	var serviceCmd *exec.Cmd
@@ -298,7 +299,7 @@ func main() {
 	// can get their own script (e.g. /__logout.xxx.js) later.
 	mux.HandleFunc("/__logout.vsc.js", func(w http.ResponseWriter, r *http.Request) {
 		w.Header().Set("Content-Type", "application/javascript; charset=utf-8")
-		w.Header().Set("Cache-Control", "public, max-age=86400")
+		w.Header().Set("Cache-Control", "no-cache")
 		_, _ = w.Write(mustAsset("logout.vsc.js"))
 	})
 
@@ -454,14 +455,20 @@ var extProxyTransport = &http.Transport{
 	DialContext:           (&net.Dialer{Timeout: 10 * time.Second, KeepAlive: 30 * time.Second}).DialContext,
 	ResponseHeaderTimeout: 30 * time.Second,
 	IdleConnTimeout:       90 * time.Second,
+	MaxIdleConns:          100,
+	MaxIdleConnsPerHost:   10,
 }
 
 // =============================================================================
 // External Proxy Cache
 // =============================================================================
 
-// proxyCacheRoot is the filesystem root for external proxy caches.
-var proxyCacheRoot string
+// --- proxy cache init (sync.Once, disk-only cache) ---
+
+var (
+	proxyCacheOnce sync.Once
+	proxyCacheRoot string
+)
 
 func initProxyCache() {
 	dir := os.Getenv("VSC_CACHE")
@@ -506,7 +513,7 @@ type proxyCacheMeta struct {
 // Cache layout mirrors the URL structure:
 //
 //	{VSC_CACHE}/proxy/{scheme}:{host}/path/to/file.js       → body
-//	{VSC_CACHE}/proxy/{scheme}:{host}/path/to/file.js.meta  → metadata
+//	{VSC_CACHE}/proxy/{scheme}:{host}/path/to/file.js_.json  → metadata
 //
 // The rest path is cleaned and stripped of leading "/" to stay within
 // the cache root.  Requests for the root path use "__index" as filename.
@@ -518,10 +525,10 @@ func proxyCachePaths(scheme, host, rest string) (bodyPath, metaPath string) {
 		p = "__index"
 	}
 	base := filepath.Join(proxyCacheRoot, scheme+":"+host, p)
-	return base, base + ".meta"
+	return base, base + "_.json"
 }
 
-// readProxyMeta reads and parses a cache metadata file.
+// readProxyMeta reads and parses a cache metadata file from disk.
 func readProxyMeta(path string) (*proxyCacheMeta, error) {
 	data, err := os.ReadFile(path)
 	if err != nil {
@@ -549,22 +556,13 @@ func writeProxyMeta(path string, m *proxyCacheMeta) error {
 
 // handleExternalProxy proxies /__proxy/[...] → target URL.
 //
-// Format:  /__proxy/[cc+]{scheme}:{host}[/path][?query]
+// Format:  /__proxy/[cc~]{scheme}:{host}[/path][?query]
 //
-//	cc+              — optional cache marker: check cache, write on MISS
+//	cc~              — optional cache marker: check cache, write on MISS
 //	{scheme}:        — optional scheme (http, https); defaults to https
 //	{host}           — upstream host[:port]
-//
-// Examples:
-//
-//	/__proxy/cc+https:cdn.example.com/lib.js → cache+proxy https://cdn.example.com/lib.js
-//	/__proxy/cc+cdn.example.com/lib.js       → cache+proxy (https default)
-//	/__proxy/https:cdn.example.com/lib.js    → proxy only, check cache first
-//	/__proxy/cdn.example.com/lib.js           → proxy only (https default)
 func handleExternalProxy(w http.ResponseWriter, r *http.Request) {
-	if proxyCacheRoot == "" {
-		initProxyCache()
-	}
+	proxyCacheOnce.Do(initProxyCache)
 
 	p := strings.TrimPrefix(r.URL.Path, "/__proxy/")
 	if p == "" || p == "/" {
@@ -572,19 +570,44 @@ func handleExternalProxy(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
-	// 1. Detect cc+ cache prefix.
-	cacheable := strings.HasPrefix(p, "cc+")
+	// 1. Detect cc~ cache prefix.
+	cacheable := strings.HasPrefix(p, "cc~")
 	if cacheable {
 		p = p[3:]
 	}
-	// Only GET requests qualify for cache write.
 	if r.Method != "GET" {
 		cacheable = false
 	}
 
-	// 2. Parse scheme:host from the first segment.
-	//    Format: scheme:host/rest or host/rest
-	var scheme, host, rest string
+	// 2. Parse scheme:host/rest from the path.
+	scheme, host, rest, err := parseProxyPath(p)
+	if err != nil {
+		http.Error(w, err.Error(), http.StatusBadRequest)
+		return
+	}
+
+	// 3. Build target URL with strings.Builder.
+	targetURL := buildTargetURL(scheme, host, rest, r.URL.RawQuery)
+
+	log.Printf("[ext-proxy] %s %s → %s (cacheable=%v)", r.Method, r.URL.Path, targetURL, cacheable)
+
+	// 4. Try cache lookup.
+	bodyPath, metaPath := proxyCachePaths(scheme, host, rest)
+	if serveFromProxyCache(w, bodyPath, metaPath, targetURL) {
+		return
+	}
+
+	// 5. Cache MISS — branch by cacheable.
+	if cacheable {
+		handleCachedProxy(w, r, targetURL, bodyPath, metaPath)
+	} else {
+		handlePassThroughProxy(w, r, targetURL)
+	}
+}
+
+// parseProxyPath extracts scheme, host and rest from the proxy path segment.
+// Format: scheme:host/rest or host/rest.  Returns an error string for bad input.
+func parseProxyPath(p string) (scheme, host, rest string, err error) {
 	slashIdx := strings.Index(p, "/")
 	if slashIdx >= 0 {
 		rest = p[slashIdx:]
@@ -602,60 +625,64 @@ func handleExternalProxy(w http.ResponseWriter, r *http.Request) {
 	}
 
 	if host == "" {
-		http.Error(w, "missing host", http.StatusBadRequest)
-		return
+		return "", "", "", fmt.Errorf("missing host")
 	}
 	if !allowedExtProxySchemes[scheme] {
-		http.Error(w, "unsupported scheme", http.StatusBadRequest)
-		return
+		return "", "", "", fmt.Errorf("unsupported scheme")
 	}
+	return scheme, host, rest, nil
+}
 
-	// 3. Build full target URL for cache key and upstream fetch.
-	targetURL := fmt.Sprintf("%s://%s%s", scheme, host, rest)
-	if r.URL.RawQuery != "" {
-		targetURL += "?" + r.URL.RawQuery
+// buildTargetURL constructs the full upstream URL with a strings.Builder.
+func buildTargetURL(scheme, host, rest, rawQuery string) string {
+	var b strings.Builder
+	b.Grow(len(scheme) + 3 + len(host) + len(rest) + len(rawQuery) + 1)
+	b.WriteString(scheme)
+	b.WriteString("://")
+	b.WriteString(host)
+	b.WriteString(rest)
+	if rawQuery != "" {
+		b.WriteByte('?')
+		b.WriteString(rawQuery)
 	}
+	return b.String()
+}
 
-	log.Printf("[ext-proxy] %s %s → %s (cacheable=%v)", r.Method, r.URL.Path, targetURL, cacheable)
-
-	// 4. Try cache lookup (both cacheable and non-cacheable paths).
-	bodyPath, metaPath := proxyCachePaths(scheme, host, rest)
-
-	if meta, err := readProxyMeta(metaPath); err == nil {
-		body, err := os.ReadFile(bodyPath)
-		if err == nil {
-			log.Printf("[ext-proxy] cache HIT  %s ← %s (%d bytes)", targetURL, bodyPath, len(body))
-			w.Header().Set("X-Cache", "HIT")
-			for k, vs := range meta.Headers {
-				for _, v := range vs {
-					w.Header().Add(k, v)
-				}
-			}
-			w.WriteHeader(meta.Status)
-			_, _ = w.Write(body)
-			return
+// serveFromProxyCache tries to serve a response from cache. Returns true on HIT.
+func serveFromProxyCache(w http.ResponseWriter, bodyPath, metaPath, targetURL string) bool {
+	meta, err := readProxyMeta(metaPath)
+	if err != nil {
+		return false
+	}
+	body, err := os.ReadFile(bodyPath)
+	if err != nil {
+		return false
+	}
+	log.Printf("[ext-proxy] cache HIT  %s ← %s (%d bytes)", targetURL, bodyPath, len(body))
+	w.Header().Set("X-Cache", "HIT")
+	for k, vs := range meta.Headers {
+		for _, v := range vs {
+			w.Header().Add(k, v)
 		}
 	}
-
-	// 5. Cache MISS — branch by cacheable.
-	if cacheable {
-		handleCachedProxy(w, r, targetURL, scheme, host, bodyPath, metaPath)
-	} else {
-		handlePassThroughProxy(w, r, targetURL)
-	}
+	w.WriteHeader(meta.Status)
+	_, _ = w.Write(body)
+	return true
 }
 
 // handleCachedProxy fetches the upstream, streams the response to both the
 // client and a cache file, and writes cache metadata on success.
-func handleCachedProxy(w http.ResponseWriter, r *http.Request, targetURL, scheme, host, bodyPath, metaPath string) {
+func handleCachedProxy(w http.ResponseWriter, r *http.Request, targetURL, bodyPath, metaPath string) {
 	log.Printf("[ext-proxy] cache MISS (will cache) %s", targetURL)
 
-	req, err := http.NewRequestWithContext(r.Context(), "GET", targetURL, nil)
+	ctx, cancel := context.WithTimeout(r.Context(), 5*time.Minute)
+	defer cancel()
+
+	req, err := http.NewRequestWithContext(ctx, "GET", targetURL, nil)
 	if err != nil {
 		http.Error(w, "bad target URL", http.StatusBadRequest)
 		return
 	}
-	// Forward a safe subset of request headers.
 	for k, vs := range r.Header {
 		switch strings.ToLower(k) {
 		case "accept", "accept-encoding", "accept-language", "user-agent":
@@ -673,7 +700,7 @@ func handleCachedProxy(w http.ResponseWriter, r *http.Request, targetURL, scheme
 	}
 	defer resp.Body.Close()
 
-	// Only cache successful (2xx) responses.
+	// Non-2xx: stream through without caching.
 	if resp.StatusCode < 200 || resp.StatusCode >= 300 {
 		log.Printf("[ext-proxy] upstream returned %d, not caching", resp.StatusCode)
 		for k, vs := range resp.Header {
@@ -747,39 +774,34 @@ func handleCachedProxy(w http.ResponseWriter, r *http.Request, targetURL, scheme
 	}
 }
 
-// handlePassThroughProxy proxies the request directly to the upstream without
-// caching. It checks the cache first (done by the caller), and only reaches
-// here on a cache MISS for non-cacheable paths.
+// handlePassThroughProxy proxies the request to the upstream without caching.
 func handlePassThroughProxy(w http.ResponseWriter, r *http.Request, targetURL string) {
 	log.Printf("[ext-proxy] passthrough %s", targetURL)
 
-	target, err := url.Parse(targetURL)
+	req, err := http.NewRequestWithContext(r.Context(), r.Method, targetURL, r.Body)
 	if err != nil {
-		http.Error(w, "invalid target URL", http.StatusBadRequest)
+		http.Error(w, "bad target URL", http.StatusBadRequest)
 		return
 	}
+	// Forward original headers; net/http strips hop-by-hop on the wire.
+	req.Header = r.Header.Clone()
 
-	rp := httputil.NewSingleHostReverseProxy(target)
-	rp.Transport = extProxyTransport
-	rp.Director = func(req *http.Request) {
-		req.URL.Scheme = target.Scheme
-		req.URL.Host = target.Host
-		req.URL.Path = target.Path
-		req.URL.RawQuery = target.RawQuery
-		req.Host = target.Host
-		req.Header.Del("X-Forwarded-For")
-		req.Header.Set("X-Forwarded-For", req.RemoteAddr)
+	resp, err := proxyCacheClient.Do(req)
+	if err != nil {
+		log.Printf("[ext-proxy] fetch error: %v", err)
+		http.Error(w, "upstream fetch failed", http.StatusBadGateway)
+		return
 	}
-	rp.ErrorHandler = func(w http.ResponseWriter, r *http.Request, err error) {
-		log.Printf("[ext-proxy] error proxying %s: %v", targetURL, err)
-		http.Error(w, "proxy error", http.StatusBadGateway)
-	}
-	rp.ModifyResponse = func(resp *http.Response) error {
-		resp.Header.Set("X-Cache", "MISS")
-		return nil
-	}
+	defer resp.Body.Close()
 
-	rp.ServeHTTP(w, r)
+	for k, vs := range resp.Header {
+		for _, v := range vs {
+			w.Header().Add(k, v)
+		}
+	}
+	w.Header().Set("X-Cache", "MISS")
+	w.WriteHeader(resp.StatusCode)
+	_, _ = io.Copy(w, resp.Body)
 }
 
 // =============================================================================
@@ -988,7 +1010,16 @@ func (h *vscodeUpdateHandler) handleCommit(w http.ResponseWriter, r *http.Reques
 	}
 	log.Printf("[vscode-update] commit CACHED %s/%s/%s → %s (%d bytes)", platform, quality, commit, cachePath, n)
 
-	// 5. 缓存完成后重定向到 download 接口，由它用正确文件名提供下载
+	// 5. 写 .log 文件记录原始地址和重定向地址
+	logPath := filepath.Join(cacheDir, commit+".log")
+	logContent := upstreamURL + "\n" + finalURL + "\n"
+	if err := atomicWriteFile(logPath, []byte(logContent), 0o644); err != nil {
+		log.Printf("[vscode-update] write log FAIL: %s → %v", logPath, err)
+	} else {
+		log.Printf("[vscode-update] log written: %s", logPath)
+	}
+
+	// 6. 缓存完成后重定向到 download 接口，由它用正确文件名提供下载
 	redirectDownload(w, r, quality, commit, platform, ext)
 }
 
@@ -1055,6 +1086,9 @@ func findCachedFile(dir, commit, extHint string) (string, bool) {
 			continue
 		}
 		name := e.Name()
+		if strings.HasSuffix(name, ".log") {
+			continue
+		}
 		if strings.HasPrefix(name, commit+".") || name == commit {
 			return filepath.Join(dir, name), true
 		}
@@ -1189,7 +1223,7 @@ func createBackendHandler(b Backend, proxyHeaders map[string]string) http.Handle
 			origDirector(req)
 			applyProxyHeaders(req, proxyHeaders)
 		}
-		rp.ModifyResponse = chainModifiers(authRedirectModifier(), corsModifier(), injectLogoutButton)
+		rp.ModifyResponse = chainModifiers(authRedirectModifier(), injectLogoutButton)
 		return rp
 
 	case "unix":
@@ -1208,7 +1242,7 @@ func createBackendHandler(b Backend, proxyHeaders map[string]string) http.Handle
 				},
 			},
 		}
-		rp.ModifyResponse = chainModifiers(authRedirectModifier(), corsModifier(), injectLogoutButton)
+		rp.ModifyResponse = chainModifiers(authRedirectModifier(), injectLogoutButton)
 		return rp
 
 	case "file":
@@ -1241,10 +1275,10 @@ func authRedirectModifier() func(*http.Response) error {
 		if r.Body != nil {
 			r.Body.Close()
 		}
-		loginHTML := mustAsset("login.html")
 		r.StatusCode = http.StatusOK
 		r.Header = make(http.Header)
 		r.Header.Set("Content-Type", "text/html; charset=utf-8")
+		loginHTML := mustAsset("login.html")
 		r.Body = io.NopCloser(bytes.NewReader(loginHTML))
 		r.ContentLength = int64(len(loginHTML))
 		return nil
@@ -1314,15 +1348,28 @@ func injectLogoutButton(r *http.Response) error {
 	}
 
 	// Detect the app by fingerprint; inject only on a match.
-	tag := matchAppScript(body)
-	if tag == nil {
-		// Unknown app — restore the original body unchanged.
-		setResponseBody(r, body)
+	if tag := matchAppScript(body); tag != nil {
+		setResponseBody(r, injectScript(body, tag))
 		return nil
 	}
-
-	setResponseBody(r, append(body, tag...))
+	// No match — restore body as-is.
+	r.Body = io.NopCloser(bytes.NewReader(body))
 	return nil
+}
+
+// injectScript inserts tag into body before </body> (or appends if no </body>).
+func injectScript(body, tag []byte) []byte {
+	const closeBody = "</body>"
+	idx := bytes.LastIndex(body, []byte(closeBody))
+	if idx < 0 {
+		return append(body, tag...)
+	}
+	var b bytes.Buffer
+	b.Grow(len(body) + len(tag))
+	b.Write(body[:idx])
+	b.Write(tag)
+	b.Write(body[idx:])
+	return b.Bytes()
 }
 
 // matchAppScript returns the logout-script tag for the first app whose
@@ -1337,13 +1384,17 @@ func matchAppScript(body []byte) []byte {
 }
 
 // setResponseBody replaces the response body with b, fixing Content-Length and
-// clearing Transfer-Encoding / Uncompressed so clients see a consistent payload.
+// clearing Transfer-Encoding so clients see a consistent payload.
 func setResponseBody(r *http.Response, b []byte) {
 	r.Body = io.NopCloser(bytes.NewReader(b))
 	r.ContentLength = int64(len(b))
 	r.Header.Set("Content-Length", strconv.Itoa(len(b)))
 	r.Header.Del("Transfer-Encoding")
-	r.Uncompressed = false
+	// If the transport already decompressed, drop Content-Encoding so the
+	// client doesn't try to decompress an already-decompressed body.
+	if r.Uncompressed {
+		r.Header.Del("Content-Encoding")
+	}
 }
 
 // generateSelfSignedCert creates a self-signed TLS certificate valid for 10 years.
@@ -1422,182 +1473,6 @@ func killProcessGroup(cmd *exec.Cmd) {
 	} else {
 		log.Printf("sent SIGTERM to backend process group %d", pgid)
 	}
-}
-
-// =============================================================================
-// CORS Body Rewriting — vscode private-deployment URL rewriting
-// =============================================================================
-//
-// Controlled by VSC_CORS_* env vars:
-//
-//	VSC_CORS_IDX   = from->to,from->to             index page only
-//	VSC_CORS_SUF_* = from->to,...                   suffix match on normalized path
-//	VSC_CORS_PRE_* = from->to,...                   prefix match on normalized path
-//
-// Path normalization: replace . - / with _, then lowercase.
-// Only .js / .html / .json responses are rewritten (index page is treated as .html).
-
-// corsCfg is set by loadCorsConfig. nil means no rules → corsModifier returns nil.
-var corsCfg *corsConfig
-
-type corsConfig struct {
-	idxRules  []corsPair     // VSC_CORS_IDX
-	pathRules []corsPathRule // VSC_CORS_SUF_* / VSC_CORS_PRE_*
-}
-
-type corsPathRule struct {
-	pattern string // normalized path substring
-	suffix  bool   // true=suffix match, false=prefix match
-	pairs   []corsPair
-}
-
-type corsPair struct {
-	from string
-	to   string
-}
-
-func (c *corsConfig) isEmpty() bool {
-	return c == nil || (len(c.idxRules) == 0 && len(c.pathRules) == 0)
-}
-
-// loadCorsConfig reads VSC_CORS_* env vars. Call once at startup.
-func loadCorsConfig() {
-	cfg := &corsConfig{}
-	const prefix = "VSC_CORS_"
-	for _, e := range os.Environ() {
-		k, v, _ := strings.Cut(e, "=")
-		if !strings.HasPrefix(k, prefix) {
-			continue
-		}
-		rest := k[len(prefix):]
-		if rest == "IDX" {
-			cfg.idxRules = parseCorsPairs(v)
-			continue
-		}
-		if after, ok := strings.CutPrefix(rest, "SUF_"); ok && after != "" {
-			if pairs := parseCorsPairs(v); len(pairs) > 0 {
-				cfg.pathRules = append(cfg.pathRules, corsPathRule{pattern: after, suffix: true, pairs: pairs})
-			}
-			continue
-		}
-		if after, ok := strings.CutPrefix(rest, "PRE_"); ok && after != "" {
-			if pairs := parseCorsPairs(v); len(pairs) > 0 {
-				cfg.pathRules = append(cfg.pathRules, corsPathRule{pattern: after, suffix: false, pairs: pairs})
-			}
-			continue
-		}
-	}
-	if !cfg.isEmpty() {
-		corsCfg = cfg
-	}
-}
-
-// parseCorsPairs parses "from->to,from->to" into a []corsPair.
-func parseCorsPairs(raw string) []corsPair {
-	var pairs []corsPair
-	for _, seg := range strings.Split(raw, ",") {
-		seg = strings.TrimSpace(seg)
-		if seg == "" {
-			continue
-		}
-		f, t, ok := strings.Cut(seg, "->")
-		if !ok {
-			continue
-		}
-		f, t = strings.TrimSpace(f), strings.TrimSpace(t)
-		if f == "" || t == "" {
-			continue
-		}
-		pairs = append(pairs, corsPair{from: f, to: t})
-	}
-	return pairs
-}
-
-// corsModifier returns a ModifyResponse that rewrites response bodies according
-// to the loaded VSC_CORS_* rules. Returns nil when no rules are configured.
-func corsModifier() func(*http.Response) error {
-	if corsCfg.isEmpty() {
-		return nil
-	}
-	return func(r *http.Response) error {
-		reqPath := r.Request.URL.Path
-		ext := strings.ToLower(path.Ext(reqPath))
-
-		// Only rewrite .js / .html / .json; index page is treated as .html.
-		var pairs []corsPair
-		switch {
-		case isIndexRequest(r):
-			pairs = corsCfg.idxRules
-		case ext == ".js" || ext == ".html" || ext == ".json":
-			pairs = matchCorsPath(reqPath, corsCfg.pathRules)
-		default:
-			return nil
-		}
-		if len(pairs) == 0 {
-			return nil
-		}
-
-		body, err := io.ReadAll(r.Body)
-		if err != nil {
-			return err
-		}
-		if r.Body != nil {
-			r.Body.Close()
-		}
-
-		for _, p := range pairs {
-			body = bytes.ReplaceAll(body, []byte(p.from), []byte(p.to))
-		}
-		setResponseBody(r, body)
-		return nil
-	}
-}
-
-// isIndexRequest returns true for a top-level navigation to the root path
-// (the page that bootstraps the SPA — treated as .html by CORS rules).
-func isIndexRequest(r *http.Response) bool {
-	if r.Request == nil || r.Request.Method != http.MethodGet {
-		return false
-	}
-	// Only top-level navigations, not fetches inside the SPA.
-	if d := r.Request.Header.Get("Sec-Fetch-Dest"); d != "" && d != "document" {
-		return false
-	}
-	p := r.Request.URL.Path
-	return p == "/" || p == "" || strings.HasSuffix(p, "/index.html")
-}
-
-// matchCorsPath normalises the request path (. - / → _, lowercase) and walks
-// pathRules in order; the first SUF/PRE rule to match returns its pairs.
-func matchCorsPath(reqPath string, rules []corsPathRule) []corsPair {
-	norm := corsNormalizePath(reqPath)
-	for _, r := range rules {
-		if r.suffix && strings.HasSuffix(norm, r.pattern) {
-			return r.pairs
-		}
-		if !r.suffix && strings.HasPrefix(norm, r.pattern) {
-			return r.pairs
-		}
-	}
-	return nil
-}
-
-// corsNormalizePath replaces . - / with _ and lowercases.
-func corsNormalizePath(p string) string {
-	b := make([]byte, 0, len(p))
-	for i := 0; i < len(p); i++ {
-		c := p[i]
-		switch c {
-		case '.', '-', '/':
-			b = append(b, '_')
-		default:
-			if c >= 'A' && c <= 'Z' {
-				c += 'a' - 'A'
-			}
-			b = append(b, c)
-		}
-	}
-	return string(b)
 }
 
 // serveStaticAsset writes an embedded asset with the given content type.

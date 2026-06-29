@@ -29,61 +29,7 @@ https://github.com/linuxserver/docker-webtop
 https://github.com/linuxserver/docker-baseimage-kasmvnc  
 https://github.com/linuxserver/docker-baseimage-ubuntu  
 
-## codea
-
-
-```sh
-# 命令简单测试
-BACKEND_URL=http://127.0.0.1:6802 ./codea
-
-# 分开启动, HTTP后端
-code-server --host 0.0.0.0 --port 6802 --connection-token 77885566
-BACKEND_URL=http://127.0.0.1:6802 ./codea
-
-# 分开启动，UNIX后端
-rm /var/run/vscode.sock && code-server --socket-path /var/run/vscode.sock --connection-token 77885566
-BACKEND_URL=unix:///var/run/vscode.sock PROXY_USE_SSL=1 PROXY_PORT=7080 ./codea
-
-# 命令行启动
-./codea --ssl --backend "/test/=text://test;/=unix:///var/run/vscode.sock" --service "code-server --socket-path /var/run/vscode.sock --connection-token 77885566"
-
-
-# 测试文件下载
-curl http://127.0.0.1:7080/__vscode/api/latest/server-linux-x64-web/stable
-wget --trust-server-names http://127.0.0.1:7080/__vscode/commit:7e7950df89d055b5a378379db9ee14290772148a/server-linux-x64-web/stable
-
-# 测试纯文本代理
-BACKEND_URL="text://hello world" ./codea
-curl http://127.0.0.1:7080
-
-# 测试 /__proxy/
-VSC_CORS_IDX="https://www.vscode-unpkg.net->/__proxy/https:www.vscode-unpkg.net" \
-VSC_CORS_SUF_browser_workbench_workbench_js="https://main.vscode-cdn.net->/__proxy/https:main.vscode-cdn.net,https://www.vscode-unpkg.net->/__proxy/https:www.vscode-unpkg.net" \
-./codea --ssl --backend "/test/=text://test;/=unix:///var/run/vscode.sock" --service "code-server --socket-path /var/run/vscode.sock --connection-token 77885566"
-```
-
-```sh
-VSCODE_CLI_UPDATE_URL=http://127.0.0.1:7080/__vscode
-
-# **最新版本检查 API**
-GET {update_endpoint}/__vscode/api/latest/{platform}/{quality}
-
-# **下载指定 commit**
-GET {update_endpoint}/__vscode/commit:{commit}/{platform}/{quality}
-
-# **下载指定 commit**
-GET {update_endpoint}/__vscode/download/{quality}/{commit}/vscode-{platform}.{ext}
-
-
-# **最新版本检查 API**
-# https://update.code.visualstudio.com/api/latest/server-linux-x64-web/stable
-# {"name":"1.126.0","version":"7e7950df89d055b5a378379db9ee14290772148a","productVersion":"1.126.0","timestamp":1782207609516}
-
-# **下载指定 commit** 会重定向执行下载
-# https://update.code.visualstudio.com/commit:7e7950df89d055b5a378379db9ee14290772148a/server-linux-x64-web/stable
-# https://vscode.download.prss.microsoft.com/dbazure/download/stable/7e7950df89d055b5a378379db9ee14290772148a/vscode-server-linux-x64-web.tar.gz
-
-```
+## Code Image
 
 ```sh
 

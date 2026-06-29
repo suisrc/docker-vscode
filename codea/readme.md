@@ -41,9 +41,6 @@ make clean    # → 清理产物
 | `TOKEN_COOKIE` / `-cookie` | `vscode-tkn` | Token 认证 Cookie 名 |
 | `PROXY_USE_SSL` / `-ssl` | `false` | 启用 HTTPS（自签名证书，10 年有效） |
 | `VSC_CACHE` | `/app/.vscode` | 缓存根目录 |
-| `VSC_CORS_IDX` | 空 | 索引页 CORS 正文替换规则，见 §8 |
-| `VSC_CORS_SUF_*` | 空 | 按路径后缀匹配的 CORS 替换规则 |
-| `VSC_CORS_PRE_*` | 空 | 按路径前缀匹配的 CORS 替换规则 |
 | `PROXY_HEADER_*` | 空 | 代理请求头改写，见 §6 |
 
 ---
@@ -126,30 +123,7 @@ PROXY_HEADER_X-Unwanted-Header=
 
 ---
 
-## 8. CORS 正文重写 (`VSC_CORS_*`)
-
-用于 VS Code 私有部署场景，将响应正文中的外部 URL 替换为内网地址。
-
-### 规则类型
-
-```bash
-# 索引页（/ 或 /index.html）替换
-VSC_CORS_IDX=https://vscode.example.com->https://internal.local,old->new
-
-# 按路径后缀匹配（. - / 统一替换为 _，小写）
-VSC_CORS_SUF_workbench_js=https://cdn->https://internal-cdn
-
-# 按路径前缀匹配
-VSC_CORS_PRE_extensions=https://marketplace->https://private-marketplace
-```
-
-- 只对 `.js`、`.html`、`.json` 及索引页生效。
-- 支持多对 `from->to`，逗号分隔。
-- 路径规范化：`.` `-` `/` → `_`，全部小写。
-
----
-
-## 9. 外部代理 (`/__proxy/`)
+## 8. 外部代理 (`/__proxy/`)
 
 通用 HTTP/HTTPS 外部资源代理，支持可选缓存。
 
@@ -171,10 +145,10 @@ VSC_CORS_PRE_extensions=https://marketplace->https://private-marketplace
 - 缓存目录结构直接映射 URL 路径：
   ```
   {VSC_CACHE}/proxy/{scheme}:{host}/path/to/file.js       → 正文
-  {VSC_CACHE}/proxy/{scheme}:{host}/path/to/file.js.meta  → 元数据
+  {VSC_CACHE}/proxy/{scheme}:{host}/path/to/file.js_.json  → 元数据
   ```
 - 根路径 `/` 映射为 `__index`（即 `{root}/https:example.com/__index`）
-- `.meta` 文件：JSON 格式，保存状态码和精选响应头
+- `_.json` 文件：JSON 格式，保存状态码和精选响应头
 - 正文文件：流式写入，无扩展名改名
 - `X-Cache: HIT` / `X-Cache: MISS` 响应头标识命中状态
 - 只缓存 2xx 响应；非 GET 请求不写缓存
@@ -182,7 +156,7 @@ VSC_CORS_PRE_extensions=https://marketplace->https://private-marketplace
 
 ---
 
-## 10. VS Code 退出按钮注入
+## 9. VS Code 退出按钮注入
 
 当代理的 HTML 响应包含 VS Code workbench 指纹 (`<meta id="vscode-workbench-web-configuration"`) 时，自动在 `</body>` 前注入：
 
@@ -196,7 +170,7 @@ VSC_CORS_PRE_extensions=https://marketplace->https://private-marketplace
 
 ---
 
-## 11. HTTPS / TLS
+## 10. HTTPS / TLS
 
 启用 `PROXY_USE_SSL=1` 时：
 
@@ -207,7 +181,7 @@ VSC_CORS_PRE_extensions=https://marketplace->https://private-marketplace
 
 ---
 
-## 12. 后端子进程管理 (`SERVICE_CMD`)
+## 11. 后端子进程管理 (`SERVICE_CMD`)
 
 设置 `SERVICE_CMD` 后，Codea 在启动时以子进程方式启动后端命令：
 
@@ -225,7 +199,7 @@ SERVICE_CMD="code-server --bind-addr 0.0.0.0:8080"
 
 ---
 
-## 13. 静态资源 (embed)
+## 12. 静态资源 (embed)
 
 编译时嵌入以下文件：
 
@@ -237,7 +211,7 @@ SERVICE_CMD="code-server --bind-addr 0.0.0.0:8080"
 
 ---
 
-## 14. 安全设计要点
+## 13. 安全设计要点
 
 - Token Cookie 设置 `HttpOnly` + `SameSite=Lax`
 - 登录重定向仅允许相对路径（`safeReferer`）
@@ -247,7 +221,7 @@ SERVICE_CMD="code-server --bind-addr 0.0.0.0:8080"
 
 ---
 
-## 15. 典型使用场景
+## 14. 典型使用场景
 
 ### Docker / K8s Sidecar
 
@@ -264,7 +238,6 @@ CMD ["codea"]
 ```bash
 export BACKEND_URL=http://127.0.0.1:8080
 export SERVICE_CMD="code-server --bind-addr 127.0.0.1:8080 --auth none"
-export VSC_CORS_IDX=https://update.code.visualstudio.com->/__vscode
 ./codea
 ```
 
@@ -273,4 +246,87 @@ export VSC_CORS_IDX=https://update.code.visualstudio.com->/__vscode
 ```bash
 export BACKEND_URL="/vscode/=http://code-server:8080;/files/=file:///srv/data"
 ./codea
+```
+
+## 开发说明
+
+
+
+```sh
+# 命令简单测试
+BACKEND_URL=http://127.0.0.1:6802 ./codea
+
+# 分开启动, HTTP后端
+code-server --host 0.0.0.0 --port 6802 --connection-token 77885566
+BACKEND_URL=http://127.0.0.1:6802 ./codea
+
+# 分开启动，UNIX后端
+rm /var/run/vscode.sock && code-server --socket-path /var/run/vscode.sock --connection-token 77885566
+BACKEND_URL=unix:///var/run/vscode.sock PROXY_USE_SSL=1 PROXY_PORT=7080 ./codea
+
+# 命令行启动
+./codea --ssl --backend "/test/=text://test;/=unix:///var/run/vscode.sock" --service "code-server --socket-path /var/run/vscode.sock --connection-token 77885566"
+
+
+# 测试文件下载
+curl http://127.0.0.1:7080/__vscode/api/latest/server-linux-x64-web/stable
+wget --trust-server-names http://127.0.0.1:7080/__vscode/commit:7e7950df89d055b5a378379db9ee14290772148a/server-linux-x64-web/stable
+
+# 测试纯文本代理
+BACKEND_URL="text://hello world" ./codea
+curl http://127.0.0.1:7080
+
+
+# 本地测试
+# codea 是一个用于授权的工具，它会在启动 vscode server 前进行授权验证，确保只有通过验证的用户才能访问 vscode server
+export PROXY_HEADER_x-forwarded-port=443
+export VSCODE_CLI_UPDATE_URL=http://127.0.0.1:7080/__vscode
+export VSC_CACHE="/wsc/go/github/ws01/docker-vscode/temp/"
+./codea --backend unix:///var/run/vscode.sock --service "\
+codez serve-web --accept-server-license-terms \
+    --socket-path /var/run/vscode.sock \
+    --cli-data-dir    ${VSC_CACHE}/code \
+    --server-data-dir ${VSC_CACHE}/code \
+    --default-folder  ${VSC_CACHE}/data \
+    --connection-token 7788"
+
+export PROXY_HEADER_x-forwarded-port=443
+
+export SERVICE_DIR="/wsc/go/github/ws01/docker-vscode/temp/"
+
+export VSCODE_HASH="7e7950df89d055b5a378379db9ee14290772148a"
+export SERVICE_URL="https://update.code.visualstudio.com/commit:${VSCODE_HASH}/server-linux-x64-web/stable"
+
+export VSCODE_PATH=${SERVICE_DIR}/vserve/${VSCODE_HASH}
+export SERVICE_FIX="sed -i 's|https://www.vscode-unpkg.net/nls/|/__proxy/www.vscode-unpkg.net/nls/|g' ${VSCODE_PATH}/product.json"
+
+export SERVICE_CMD="${VSCODE_PATH}/bin/code-server --accept-server-license-terms \
+    --socket-path /var/run/vscode.sock \
+    --server-data-dir ${SERVICE_DIR}/vscode \
+    --server-base-path  ${SERVICE_DIR} \
+    --connection-token 7788"
+./codea --backend unix:///var/run/vscode.sock
+```
+
+```sh
+VSCODE_CLI_UPDATE_URL=http://127.0.0.1:7080/__vscode
+
+# **最新版本检查 API**
+GET {update_endpoint}/__vscode/api/latest/{platform}/{quality}
+
+# **下载指定 commit**
+GET {update_endpoint}/__vscode/commit:{commit}/{platform}/{quality}
+
+# **下载指定 commit**
+GET {update_endpoint}/__vscode/download/{quality}/{commit}/vscode-{platform}.{ext}
+
+
+# **最新版本检查 API**
+# https://update.code.visualstudio.com/api/latest/server-linux-x64-web/stable
+# {"name":"1.126.0","version":"7e7950df89d055b5a378379db9ee14290772148a","productVersion":"1.126.0","timestamp":1782207609516}
+
+# **下载指定 commit** 会重定向执行下载
+# https://update.code.visualstudio.com/commit:7e7950df89d055b5a378379db9ee14290772148a/server-linux-x64-web/stable
+# https://vscode.download.prss.microsoft.com/dbazure/download/stable/7e7950df89d055b5a378379db9ee14290772148a/vscode-server-linux-x64-web.tar.gz
+
 ```
