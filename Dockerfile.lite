@@ -46,7 +46,7 @@ COPY others/vscode-run.sh /entrypoint.sh
 # VSCODE_INIT 支持指定脚本: file:///wsc/.vsinit.sh
 ENV VSCODE_WSC="/wsc" \
     VSCODE_HASH="vscode:latest" \
-    VSCODE_INIT='sed -i "s|https://www.vscode-unpkg.net/nls/|/__proxy/cc~http:127.0.0.1:1/nls/|g" ${SERVICE_DIR}/product.json' \
+    VSCODE_INIT='sed -i "s|https://www.vscode-unpkg.net/nls/|https:127.0.0.1:1/nls/|g" ${SERVICE_DIR}/product.json' \
     PROXY_HEADER_x-forwarded-port="443" \
     PASSWORD=""
 
