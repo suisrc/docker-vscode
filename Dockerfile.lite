@@ -8,45 +8,73 @@ FROM debian:trixie-slim
 
 COPY --from=builder  /build/codea  /usr/local/bin/codea
 
+# set environment variables
+ENV LANGUAGE="zh_CN.UTF-8" \
+    LANG="zh_CN.UTF-8" \
+    USER="webtop" \
+    HOME="/home/webtop" \
+    ZSH_CUSTOM="/home/webtop/.oh-my-zsh/plugins"
+
+# update linux
 RUN apt update && DEBIAN_FRONTEND=noninteractive \
     apt install --no-install-recommends -y \
+    dpkg \
+    sudo \
     bash \
+    zsh \
     curl \
     wget \
+    ca-certificates \
+    jq \
+    git \
+    unzip \
+    7zip \
+    xz-utils \
     nano \
     procps \
+    iproute2 \
     net-tools \
     netcat-openbsd \
-    tzdata \
     ntpsec-ntpdate \
     iputils-ping \
     locales \
-    openssl \
+    libpcre2-8-0 \
     inotify-tools \
-    ca-certificates \
+    tzdata \
+    util-linux \
+    ssl-cert \
+    openssl \
     openssh-client \
-    zsh \
-    jq \
-    git \
-    xz-utils &&\
+    openssh-server \
+    python3 \
+    fontconfig \
+    fonts-noto-core \
+    fonts-noto-cjk \
+    fonts-noto-color-emoji && \
+    fc-cache -f -v && \
+    locale-gen zh_CN.UTF-8 && \
     apt-get autoremove && apt-get clean && \
     rm -rf /tmp/* /var/tmp/* /var/lib/apt/lists/*
 
-ENV HOME="/root" \
-    ZSH_CUSTOM="/root/.oh-my-zsh/plugins"
-
-RUN sh -c "$(curl -fsSL https://raw.githubusercontent.com/ohmyzsh/ohmyzsh/master/tools/install.sh)" && \
-    git clone --depth 1 "https://github.com/zsh-users/zsh-autosuggestions" "${ZSH_CUSTOM}/zsh-autosuggestions" && \
-    echo "source ${ZSH_CUSTOM}/zsh-autosuggestions/zsh-autosuggestions.zsh" >> ~/.zshrc && \
-    sed -i "1iZSH_DISABLE_COMPFIX=true" ~/.zshrc
+# creating the user and usergroup
+RUN mkdir -p $HOME /app /wsc && \
+    groupadd --gid 1000 $USER && \
+    useradd  --uid 1000 --gid $USER -d $HOME -m -s /bin/bash $USER && \
+    echo $USER ALL=\(root\) NOPASSWD:ALL > /etc/sudoers.d/$USER && \
+    chmod 0440 /etc/sudoers.d/$USER && chmod g+rw /home && \
+    sh -c "$(curl -fsSL https://raw.githubusercontent.com/ohmyzsh/ohmyzsh/master/tools/install.sh)" &&\
+    git clone --depth 1 "https://github.com/zsh-users/zsh-autosuggestions" "${ZSH_CUSTOM}/zsh-autosuggestions" &&\
+    echo "source ${ZSH_CUSTOM}/zsh-autosuggestions/zsh-autosuggestions.zsh" >> ~/.zshrc &&\
+    sed -i "1iZSH_DISABLE_COMPFIX=true" ~/.zshrc && sed -i -e "1iHOME=${HOME}" -e "2isource /etc/profile" /root/.bashrc &&\
+    sed -i "3iexport \$(sudo cat /proc/1/environ |tr '\\\\0' '\\\\n' | xargs)" /etc/profile
+# /etc/profile: ssh 连接会导致环境变量消失, 在docker中,可以通过进程ID=1上的环境变量还原, 通过profile文件还原
 
 COPY others/vscode-run.sh /entrypoint.sh
 
 # set environment variables
 # VSCODE_INIT 支持指定脚本: file:///wsc/.vsinit.sh
 ENV VSCODE_WSC="/wsc" \
-    VSCODE_HASH="vscode:latest" \
-    VSCODE_INIT='sed -i "s|https://www.vscode-unpkg.net/nls/|https:127.0.0.1:1/nls/|g" ${SERVICE_DIR}/product.json' \
+    PROXY_PORT="7080" \
     PROXY_HEADER_x-forwarded-port="443" \
     PASSWORD=""
 

@@ -212,10 +212,10 @@ BACKEND_URL=unix:///var/run/vscode.sock PROXY_USE_SSL=1 PROXY_PORT=7080 ./codea
 export PROXY_HEADER_x-forwarded-port='443'
 # export VSCODE_HASH="7e7950df89d055b5a378379db9ee14290772148a"
 export VSCODE_HASH="vscode:latest"
-export SERVICE_FIX='sed -i "s|https://www.vscode-unpkg.net/nls/|/__proxy/cc~http:127.0.0.1/nls/|g" ${SERVICE_DIR}/product.json'
+
 export SERVICE_CMD='${SERVICE_DIR}/bin/code-server --accept-server-license-terms \
     --socket-path /var/run/vscode.sock \
-    --server-data-dir ${SERVICE_WSC}/.vscode \
+    --server-data-dir ${SERVICE_WSC}/.vsc \
     --connection-token 7788'
 SERVICE_WSC=/wsc/go/github/ws01/docker-vscode/temp ./codea --use-ssl --backend "/test/=text://test;^/=unix:///var/run/vscode.sock"
 

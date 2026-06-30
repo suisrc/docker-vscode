@@ -37,7 +37,7 @@ RUN mkdir /var/run/openresty &&\
     jq \
     git \
     unzip \
-    p7zip \
+    7zip \
     xz-utils \
     nano \
     procps \
@@ -46,7 +46,7 @@ RUN mkdir /var/run/openresty &&\
     ntpdate \
     iputils-ping \
     locales \
-    libpcre3 \
+    libpcre2-8-0 \
     inotify-tools \
     tzdata \
     util-linux \
