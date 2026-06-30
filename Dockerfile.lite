@@ -56,8 +56,17 @@ RUN apt update && DEBIAN_FRONTEND=noninteractive \
     apt-get autoremove && apt-get clean && \
     rm -rf /tmp/* /var/tmp/* /var/lib/apt/lists/*
 
+# set environment variables
+# VSCODE_INIT 支持指定脚本: file:///wsc/.vsinit.sh
+ENV VSCODE_WSC="/wsc" \
+    PROXY_PORT="7080" \
+    PROXY_HEADER_x-forwarded-port="443" \
+    PASSWORD=""
+
+COPY others/vscode-run.sh /usr/vscode.sh
+
 # creating the user and usergroup
-RUN mkdir -p $HOME /app /wsc && \
+RUN mkdir -p $HOME /app /wsc && sed -i '1i#!/bin/bash' /usr/vscode.sh && \
     groupadd --gid 1000 $USER && \
     useradd  --uid 1000 --gid $USER -d $HOME -m -s /bin/bash $USER && \
     echo $USER ALL=\(root\) NOPASSWD:ALL > /etc/sudoers.d/$USER && \
@@ -69,16 +78,6 @@ RUN mkdir -p $HOME /app /wsc && \
     sed -i "3iexport \$(sudo cat /proc/1/environ |tr '\\\\0' '\\\\n' | xargs)" /etc/profile
 # /etc/profile: ssh 连接会导致环境变量消失, 在docker中,可以通过进程ID=1上的环境变量还原, 通过profile文件还原
 
-COPY others/vscode-run.sh /entrypoint.sh
+ENTRYPOINT ["/usr/vscode.sh"]
 
-# set environment variables
-# VSCODE_INIT 支持指定脚本: file:///wsc/.vsinit.sh
-ENV VSCODE_WSC="/wsc" \
-    PROXY_PORT="7080" \
-    PROXY_HEADER_x-forwarded-port="443" \
-    PASSWORD=""
-
-RUN mkdir /app && sed -i '1i#!/bin/bash' /entrypoint.sh
-
-ENTRYPOINT ["/entrypoint.sh"]
-
+# EXPOSE 7080
