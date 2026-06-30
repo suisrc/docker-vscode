@@ -822,6 +822,12 @@ func main() {
 					go func() {
 						err := prepareService(cfg, srvState)
 						if err == nil && cfg.ServiceCmd != "" {
+							// Clean up stale unix socket files left by a previous crash.
+							for _, b := range cfg.Backends {
+								if b.IsService && b.Scheme == "unix" {
+									_ = os.Remove(b.Target)
+								}
+							}
 							// Start the backend subprocess after a successful prepare.
 							if c := startBackend(cfg.ServiceCmd); c != nil {
 								serviceCmd = c
@@ -909,7 +915,7 @@ func main() {
 	if serviceCmd != nil {
 		killProcessGroup(serviceCmd)
 		for _, b := range cfg.Backends {
-			if b.Scheme == "unix" {
+			if b.IsService && b.Scheme == "unix" {
 				_ = os.Remove(b.Target)
 			}
 		}

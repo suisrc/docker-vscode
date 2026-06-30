@@ -41,5 +41,5 @@ echo 'start vscode server. wss need set env: PROXY_HEADER_x-forwarded-port=443'
 codea --use-ssl  \
     --svc-wsc "${VSCODE_WSC:-/wsc}" \
     --svc-pre "${VSCODE_INIT}" \
-    --backend "/__healthz=text://ok,{now};^/=unix://@vscode.sock" \
-    --svc-cmd '${SERVICE_DIR}/bin/code-server --accept-server-license-terms --socket-path @vscode.sock --server-data-dir ${SERVICE_WSC}/.vscode --connection-token ${PASSWORD}'
+    --backend "/__healthz=text://ok,{now};^/=unix:///var/run/vscode.sock" \
+    --svc-cmd '${SERVICE_DIR}/bin/code-server --accept-server-license-terms --socket-path /var/run/vscode.sock --server-data-dir ${SERVICE_WSC}/.vscode --connection-token ${PASSWORD}'
