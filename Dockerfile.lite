@@ -47,10 +47,10 @@ COPY others/vscode-run.sh /entrypoint.sh
 ENV VSCODE_WSC="/wsc" \
     VSCODE_HASH="vscode:latest" \
     VSCODE_INIT='sed -i "s|https://www.vscode-unpkg.net/nls/|/__proxy/cc~http:127.0.0.1:1/nls/|g" ${SERVICE_DIR}/product.json' \
-    DEFAULT_FOLDER="/app" \
+    PROXY_HEADER_x-forwarded-port="443" \
     PASSWORD=""
 
-RUN sed -i '1i#!/bin/bash' /entrypoint.sh
+RUN mkdir /app && sed -i '1i#!/bin/bash' /entrypoint.sh
 
 ENTRYPOINT ["/entrypoint.sh"]
 

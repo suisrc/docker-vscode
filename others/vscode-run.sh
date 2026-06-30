@@ -42,4 +42,4 @@ codea --use-ssl  \
     --svc-wsc "${VSCODE_WSC:-/wsc}" \
     --svc-pre "${VSCODE_INIT}" \
     --backend "/__healthz=text://ok,{now};^/=unix:///wsc/.vscode.sock" \
-    --svc-cmd '${SERVICE_DIR}/bin/code-server --accept-server-license-terms --socket-path /wsc/.vscode.sock --server-base-path ${DEFAULT_FOLDER} --server-data-dir ${SERVICE_WSC}/.vscode --connection-token ${PASSWORD}'
+    --svc-cmd '${SERVICE_DIR}/bin/code-server --accept-server-license-terms --socket-path /wsc/.vscode.sock --server-data-dir ${SERVICE_WSC}/.vscode --connection-token ${PASSWORD}'
