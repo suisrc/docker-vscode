@@ -1,7 +1,9 @@
 package main
 
 import (
+	"archive/tar"
 	"bytes"
+	"compress/gzip"
 	"context"
 	"crypto/ecdsa"
 	"crypto/elliptic"
@@ -24,7 +26,6 @@ import (
 	"os"
 	"os/exec"
 	"os/signal"
-	"path"
 	"path/filepath"
 	"strconv"
 	"strings"
@@ -33,11 +34,12 @@ import (
 	"time"
 )
 
-//go:embed login.html logout.html logout.vsc.js
+//go:embed favicon.ico loading.html login.html logout.html logout.vsc.js
 var staticFS embed.FS
 
 // mustAsset reads an embedded asset by name, failing fast at startup if missing.
-// embed.FS is already a read-only memory map, so repeated reads are cheap.
+// embed.FS is an in-memory read-only map; ReadFile just returns a slice over it,
+// so there is no I/O and no benefit to pre-caching assets into package vars.
 func mustAsset(name string) []byte {
 	b, err := staticFS.ReadFile(name)
 	if err != nil {
@@ -49,7 +51,13 @@ func mustAsset(name string) []byte {
 // Config holds proxy configuration.
 type Config struct {
 	Backends     []Backend
-	ServiceCmd   string // optional shell command to run as the backend
+	ServiceWsc   string // SERVICE_WSC — working directory for the service
+	ServiceUrl   string // SERVICE_URL — download URL for the backend service
+	ServiceVer   string // SERVICE_VER — download cache file path ({ext} resolved at runtime)
+	ServicePxy   string // SERVICE_PXY — proxy cache root directory
+	ServiceDir   string // SERVICE_DIR — install/extract directory
+	ServicePre   string // SERVICE_PRE — shell command or file:// script run before start
+	ServiceCmd   string // SERVICE_CMD — optional shell command to run as the backend
 	ProxyPort    string
 	TokenCookie  string            // cookie name, default "vscode-tkn"
 	ProxyUseSSL  bool              // enable HTTPS with a self-signed cert
@@ -58,32 +66,112 @@ type Config struct {
 
 // Backend describes a single proxy target with its routing prefix.
 type Backend struct {
-	Prefix string // routing prefix, "/" for root
-	Scheme string // http, https, unix, file, text
-	Target string // host:port, socket path, dir path, or literal text
-	RawURL string // original URL for logging
+	Prefix    string // routing prefix, "/" for root
+	Scheme    string // http, https, unix, file, text
+	Target    string // host:port, socket path, dir path, or literal text
+	RawURL    string // original URL for logging
+	IsService bool   // this backend is the one managed by Codea (auto-deploy, etc.)
+}
+
+// GetEnvDef returns the value of env key, falling back to def when unset or
+// empty. The result is then expanded with os.ExpandEnv so values may reference
+// other env vars (e.g. "${SERVICE_WSC}/.vserve"). The expanded value is written
+// back to the environment so child processes see the resolved form.
+func GetEnvDef(key, val_def string) string {
+	val_old := os.Getenv(key)
+	val_new := val_old
+	if val_new == "" {
+		val_new = val_def
+	}
+	val_new = os.ExpandEnv(val_new)
+	if val_new != val_old {
+		log.Printf("SetEnv: %s=%s", key, val_new)
+		_ = os.Setenv(key, val_new)
+	}
+	return val_new
+}
+
+// resolveVscodeHash resolves VSCODE_HASH when it is set to the magic value
+// "vscode:latest": it fetches the VS Code update API for the latest stable
+// server-linux-x64-web release and writes the returned commit version (the
+// "version" field, e.g. "7e7950df...") into VSCODE_HASH. When VSCODE_HASH is
+// unset or any other value, it is left untouched.
+func resolveVscodeHash() {
+	const magic = "vscode:latest"
+	if os.Getenv("VSCODE_HASH") != magic {
+		return
+	}
+	const apiURL = "https://update.code.visualstudio.com/api/latest/server-linux-x64-web/stable"
+	client := &http.Client{Timeout: 30 * time.Second}
+	resp, err := client.Get(apiURL)
+	if err != nil {
+		log.Fatalf("resolve VSCODE_HASH: fetch %s: %v", apiURL, err)
+	}
+	defer resp.Body.Close()
+	if resp.StatusCode != http.StatusOK {
+		log.Fatalf("resolve VSCODE_HASH: %s returned HTTP %d", apiURL, resp.StatusCode)
+	}
+	var info struct {
+		Name    string `json:"name"`
+		Version string `json:"version"` // commit hash, e.g. 7e7950df89d055b5a378379db9ee14290772148a
+	}
+	if err := json.NewDecoder(resp.Body).Decode(&info); err != nil {
+		log.Fatalf("resolve VSCODE_HASH: decode response: %v", err)
+	}
+	if info.Version == "" {
+		log.Fatalf("resolve VSCODE_HASH: empty version in response")
+	}
+	_ = os.Setenv("VSCODE_HASH", info.Version)
+	log.Printf("check vscode latest version: VSCODE_HASH=%s VERSION=%s", info.Version, info.Name)
 }
 
 func loadInitConfig() Config {
-	backendURL := os.Getenv("BACKEND_URL")
-	serviceCmd := os.Getenv("SERVICE_CMD")
-	proxyPort := os.Getenv("VSC_PORT")
-	if proxyPort == "" {
-		proxyPort = "7080"
-	}
-	cookie := os.Getenv("TOKEN_COOKIE")
-	if cookie == "" {
-		cookie = "vscode-tkn"
-	}
-	useSSL := os.Getenv("PROXY_USE_SSL")
-	useSSLFlag := useSSL == "1" || strings.ToLower(useSSL) == "true"
+	resolveVscodeHash()
+
+	// Flags provide defaults; environment variables take precedence over flags.
+	// Bind flags with hard-coded defaults first, parse, then let env vars override.
+	backendURL := ""
+	serviceWsc := "/wsc"
+	serviceUrl := "https://update.code.visualstudio.com/commit:${VSCODE_HASH}/server-linux-x64-web/stable"
+	serviceVer := "${SERVICE_WSC}/.vcache/version/${VSCODE_HASH}.{ext}"
+	servicePxy := "${SERVICE_WSC}/.vcache/proxies/"
+	serviceDir := "${SERVICE_WSC}/.vserve/${VSCODE_HASH}/"
+	servicePre := ""
+	serviceCmd := ""
+	proxyPort := "7080"
+	cookie := "vscode-tkn"
+	useSSLFlag := false
 
 	flag.StringVar(&backendURL, "backend", backendURL, "Backend service URL(s)")
-	flag.StringVar(&serviceCmd, "service", serviceCmd, "Backend service Cmd")
+	flag.StringVar(&serviceWsc, "svc-wsc", serviceWsc, "Service working directory")
+	flag.StringVar(&serviceUrl, "svc-url", serviceUrl, "Backend service download URL")
+	flag.StringVar(&serviceVer, "svc-ver", serviceVer, "Download cache file path")
+	flag.StringVar(&servicePxy, "svc-pxy", servicePxy, "Proxy cache root directory")
+	flag.StringVar(&serviceDir, "svc-dir", serviceDir, "Install/extract directory")
+	flag.StringVar(&servicePre, "svc-pre", servicePre, "Pre-start script (file:// or shell)")
+	flag.StringVar(&serviceCmd, "svc-cmd", serviceCmd, "Backend service command")
 	flag.StringVar(&proxyPort, "port", proxyPort, "Proxy listen port")
 	flag.StringVar(&cookie, "cookie", cookie, "Token cookie name")
-	flag.BoolVar(&useSSLFlag, "ssl", useSSLFlag, "Enable HTTPS with self-signed cert")
+	flag.BoolVar(&useSSLFlag, "use-ssl", useSSLFlag, "Enable HTTPS with self-signed cert")
 	flag.Parse()
+
+	// Environment variables override flag values (env-first precedence).
+	backendURL = GetEnvDef("BACKEND_URL", backendURL)
+	serviceWsc = GetEnvDef("SERVICE_WSC", serviceWsc)
+	serviceUrl = GetEnvDef("SERVICE_URL", serviceUrl)
+	serviceVer = GetEnvDef("SERVICE_VER", serviceVer)
+	servicePxy = GetEnvDef("SERVICE_PXY", servicePxy)
+	serviceDir = GetEnvDef("SERVICE_DIR", serviceDir)
+	servicePre = GetEnvDef("SERVICE_PRE", servicePre)
+	serviceCmd = GetEnvDef("SERVICE_CMD", serviceCmd)
+	proxyPort = GetEnvDef("VSCODE_PORT", proxyPort) // VSCODE_PORT 兼容
+	proxyPort = GetEnvDef("PROXY_PORT", proxyPort)  // PROXY_PORT 最优先
+
+	cookie = GetEnvDef("TOKEN_COOKIE", cookie)
+	useSSLEnv := GetEnvDef("PROXY_USE_SSL", "")
+	if useSSLEnv != "" {
+		useSSLFlag = useSSLEnv == "1" || strings.EqualFold(useSSLEnv, "true")
+	}
 
 	if backendURL == "" {
 		log.Fatal("BACKEND_URL is required (set via env or -backend flag)")
@@ -96,6 +184,12 @@ func loadInitConfig() Config {
 
 	return Config{
 		Backends:     backends,
+		ServiceWsc:   serviceWsc,
+		ServiceUrl:   serviceUrl,
+		ServiceVer:   serviceVer,
+		ServicePxy:   servicePxy,
+		ServiceDir:   serviceDir,
+		ServicePre:   servicePre,
 		ServiceCmd:   serviceCmd,
 		ProxyPort:    proxyPort,
 		TokenCookie:  cookie,
@@ -124,16 +218,18 @@ func parseBackends(raw string) []Backend {
 		}
 	}
 
-	// Single backend: root prefix "/".
+	// Single backend: root prefix "/".  When there's only one backend it is
+	// implicitly the service backend managed by Codea.
 	if b := newBackend("/", raw); b != nil {
+		b.IsService = true
 		return []Backend{*b}
 	}
 	return nil
 }
 
 // isMultiBackend reports whether raw uses the "/prefix=scheme://..." form.
-// It returns true when an "=" appears before the first "://" (i.e. there is a
-// routing prefix in front of the backend URL). This correctly classifies both
+// It returns true only when an "=" appears before the first "://", i.e. there
+// is a routing prefix in front of a real scheme. This classifies both
 // "/=unix:///path" (single multi-backend segment) and
 // "/a/=http://x;/b/=https://y" (multiple segments), while rejecting plain
 // single-backend URLs like "http://h?a=b" where "=" is only in the query.
@@ -143,11 +239,12 @@ func isMultiBackend(raw string) bool {
 		return false
 	}
 	schemeIdx := strings.Index(raw, "://")
-	// "=" must come before the scheme separator (and a scheme must exist).
-	return schemeIdx > eqIdx
+	return schemeIdx > 0 && schemeIdx > eqIdx
 }
 
 // parseMultiBackends parses already-split segments into backends.
+// A prefix starting with "^" marks the backend as the service backend managed by
+// Codea (auto-deploy, fixup, etc.). The "^" is stripped for routing purposes.
 func parseMultiBackends(segments []string) []Backend {
 	var backends []Backend
 	for _, seg := range segments {
@@ -162,30 +259,39 @@ func parseMultiBackends(segments []string) []Backend {
 			log.Printf("WARNING: empty prefix or url in segment: %q", seg)
 			continue
 		}
+
+		// Detect service marker ("^" prefix) and strip it for routing.
+		isService := strings.HasPrefix(prefix, "^")
+		if isService {
+			prefix = strings.TrimPrefix(prefix, "^")
+		}
 		if !strings.HasPrefix(prefix, "/") {
 			prefix = "/" + prefix
 		}
+
 		if b := newBackend(prefix, urlStr); b != nil {
+			b.IsService = isService
 			backends = append(backends, *b)
 		}
 	}
 	return backends
 }
 
-// splitBackendSegments splits a multi-backend string on ";" outside of the URL portion.
-// Format: /a/=http://x;/b/=https://y
+// splitBackendSegments splits a multi-backend string on ";", then keeps each
+// segment. A segment may start with an optional "^" service marker followed by
+// a "/prefix=...". Splitting on ";" alone is safe because the URL body never
+// contains a ";" in our supported schemes (http/https/unix/file/text).
+// Format: /a/=http://x;/b/=https://y  or  ^/a/=http://x;/b/=https://y
 func splitBackendSegments(raw string) []string {
-	var result []string
-	for {
-		before, after, found := strings.Cut(raw, ";/")
-		if found {
-			result = append(result, before)
-			raw = "/" + after
-		} else {
-			result = append(result, raw)
-			return result
+	parts := strings.Split(raw, ";")
+	segs := make([]string, 0, len(parts))
+	for _, p := range parts {
+		p = strings.TrimSpace(p)
+		if p != "" {
+			segs = append(segs, p)
 		}
 	}
+	return segs
 }
 
 // newBackend creates a Backend by parsing scheme:// from rawURL.
@@ -225,74 +331,471 @@ func parseProxyHeaders() map[string]string {
 	return hdrs
 }
 
+// =============================================================================
+// Service Preparation — download, extract, fixup before starting SERVICE_CMD
+// =============================================================================
+
+// serviceState tracks lazy preparation of the service backend. Preparation is
+// triggered on the first request to the service prefix (not at startup).
+// `preparing` covers the whole lifecycle (from trigger to finish) so requests
+// never proxy to the backend before it is fully ready (avoids 502).
+type serviceState struct {
+	once      sync.Once
+	mu        sync.RWMutex
+	preparing bool   // true from first trigger until finish() — gates proxying
+	status    string // current status message while preparing; "" when idle
+	done      bool   // preparation finished (successfully or not)
+	err       error  // preparation error; nil on success
+}
+
+// begin marks preparation as in progress (called once at trigger time).
+func (s *serviceState) begin() {
+	s.mu.Lock()
+	s.preparing = true
+	s.mu.Unlock()
+}
+
+// setPreparing updates the human-readable status while preparing.
+func (s *serviceState) setPreparing(status string) {
+	s.mu.Lock()
+	s.status = status
+	s.mu.Unlock()
+}
+
+// finish marks preparation done, storing err (nil on success).
+func (s *serviceState) finish(err error) {
+	s.mu.Lock()
+	s.preparing = false
+	s.status = ""
+	s.done = true
+	s.err = err
+	s.mu.Unlock()
+}
+
+// active reports whether preparation is in progress.
+func (s *serviceState) active() bool {
+	s.mu.RLock()
+	defer s.mu.RUnlock()
+	return s.preparing
+}
+
+// getStatus returns the current status message (empty when idle).
+func (s *serviceState) getStatus() string {
+	s.mu.RLock()
+	defer s.mu.RUnlock()
+	return s.status
+}
+
+// result returns (done, err) — whether preparation finished and any error.
+func (s *serviceState) result() (bool, error) {
+	s.mu.RLock()
+	defer s.mu.RUnlock()
+	return s.done, s.err
+}
+
+// serveLoadingPage writes the preparation loading page (loading.html), injecting
+// the current status into the __STATUS__ placeholder.
+func serveLoadingPage(w http.ResponseWriter, status string) {
+	w.Header().Set("Content-Type", "text/html; charset=utf-8")
+	w.Header().Set("Cache-Control", "no-cache")
+	w.WriteHeader(http.StatusServiceUnavailable)
+	msg := status
+	if msg == "" {
+		msg = "Preparing Application"
+	}
+	html := strings.Replace(string(mustAsset("loading.html")), "__STATUS__", msg, 1)
+	_, _ = w.Write([]byte(html))
+}
+
+// prepareService downloads (if needed), extracts, and runs fixups for the backend
+// service. It blocks until preparation is complete. srvState tracks status for the
+// loading page.
+func prepareService(cfg Config, srvState *serviceState) error {
+	if cfg.ServiceUrl == "" {
+		return nil // nothing to download
+	}
+	if cfg.ServiceDir == "" {
+		return fmt.Errorf("SERVICE_DIR is required when SERVICE_URL is set")
+	}
+	if cfg.ServiceVer == "" {
+		return fmt.Errorf("SERVICE_VER is required when SERVICE_URL is set")
+	}
+
+	// Already installed? A non-empty SERVICE_DIR means a previous extraction
+	// succeeded; skip preparation. An empty/missing dir triggers re-extract.
+	if installed, reason := isServiceInstalled(cfg.ServiceDir); installed {
+		log.Printf("[prepare] SERVICE_DIR exists and looks valid: %s", cfg.ServiceDir)
+		return nil
+	} else if reason != "" {
+		log.Printf("[prepare] %s, will re-extract: %s", reason, cfg.ServiceDir)
+	}
+
+	// Resolve {ext} placeholder in SERVICE_VER.
+	verPath, err := resolveVerPath(cfg.ServiceVer, cfg.ServiceUrl)
+	if err != nil {
+		return err
+	}
+
+	// Download if not cached.
+	if _, err := os.Stat(verPath); err != nil {
+		srvState.setPreparing("Downloading Application: " + cfg.ServiceUrl)
+		log.Printf("[prepare] downloading: %s → %s", cfg.ServiceUrl, verPath)
+		if err := downloadFile(cfg.ServiceUrl, verPath); err != nil {
+			return fmt.Errorf("download SERVICE_URL: %w", err)
+		}
+		log.Printf("[prepare] download complete: %s", verPath)
+	} else {
+		log.Printf("[prepare] download cached: %s", verPath)
+	}
+
+	// Extract.
+	srvState.setPreparing("Extracting Application: " + cfg.ServiceDir)
+	log.Printf("[prepare] extracting: %s → %s", verPath, cfg.ServiceDir)
+	if err := extractTarball(verPath, cfg.ServiceDir); err != nil {
+		return fmt.Errorf("extract: %w", err)
+	}
+	log.Printf("[prepare] extract complete: %s", cfg.ServiceDir)
+
+	// Run SERVICE_PRE if set.
+	if cfg.ServicePre != "" {
+		srvState.setPreparing("Running pre-start script: " + cfg.ServicePre)
+		log.Printf("[prepare] running pre-start script: %s", cfg.ServicePre)
+		if err := runServicePreScript(cfg.ServicePre); err != nil {
+			return fmt.Errorf("SERVICE_PRE: %w", err)
+		}
+		log.Printf("[prepare] pre-start script complete")
+	}
+
+	return nil
+}
+
+// isServiceInstalled reports whether dir looks like a valid service install —
+// i.e. it exists, is a directory, and is non-empty. The returned reason is
+// non-empty when the directory exists but is empty (incomplete extraction).
+// This is application-agnostic: codea does not assume any specific binary name.
+func isServiceInstalled(dir string) (ok bool, reason string) {
+	fi, err := os.Stat(dir)
+	if err != nil || !fi.IsDir() {
+		return false, ""
+	}
+	entries, err := os.ReadDir(dir)
+	if err != nil {
+		return false, "SERVICE_DIR exists but is not readable"
+	}
+	if len(entries) == 0 {
+		return false, "SERVICE_DIR exists but is empty"
+	}
+	return true, ""
+}
+
+// resolveVerPath resolves the {ext} placeholder in verPattern using the file
+// extension inferred from urlStr's final (redirected) URL.
+func resolveVerPath(verPattern, urlStr string) (string, error) {
+	if !strings.Contains(verPattern, "{ext}") {
+		return verPattern, nil
+	}
+	ext, err := resolveExtFromURL(urlStr)
+	if err != nil {
+		return "", fmt.Errorf("resolve extension from SERVICE_URL: %w", err)
+	}
+	verPath := strings.Replace(verPattern, "{ext}", ext, 1)
+	log.Printf("[prepare] SERVICE_VER resolved: %s", verPath)
+	return verPath, nil
+}
+
+// resolveExtFromURL follows redirects on urlStr and extracts the file extension
+// from the final URL's basename (e.g. ".tar.gz"). Only the final URL is needed,
+// so a HEAD request suffices; a non-2xx status is logged but not fatal.
+func resolveExtFromURL(urlStr string) (string, error) {
+	client := &http.Client{
+		Timeout:       30 * time.Second,
+		CheckRedirect: redirectLimit(10),
+	}
+	resp, err := client.Head(urlStr)
+	if err != nil {
+		return "", err
+	}
+	resp.Body.Close()
+	if resp.StatusCode != http.StatusOK {
+		log.Printf("[prepare] HEAD %s returned %d (using final URL for extension)", urlStr, resp.StatusCode)
+	}
+	finalURL := ""
+	if resp.Request != nil {
+		finalURL = resp.Request.URL.String()
+	}
+	return extractExt(finalURL), nil
+}
+
+// extractExt returns the extension portion of a basename without the leading
+// dot, e.g. "x.tar.gz" → "tar.gz". The leading dot is intentionally omitted so
+// callers control it in the template (e.g. "${HASH}.{ext}" → "hash.tar.gz").
+func extractExt(base string) string {
+	base = filepath.Base(base)
+	// Strip query/fragment.
+	if i := strings.IndexAny(base, "?#"); i >= 0 {
+		base = base[:i]
+	}
+	dotIdx := strings.Index(base, ".")
+	if dotIdx < 0 {
+		log.Printf("[prepare] no extension found in %q, defaulting to tar.gz", base)
+		return "tar.gz" // sensible default for compressed tarballs
+	}
+	return base[dotIdx+1:]
+}
+
+// downloadClient is used for SERVICE_URL downloads with a generous timeout so
+// large tarballs don't hang forever, but slow mirrors still work.
+var downloadClient = &http.Client{Timeout: 30 * time.Minute}
+
+// downloadFile downloads urlStr to destPath using an atomic temp+rename strategy.
+func downloadFile(urlStr, destPath string) error {
+	resp, err := downloadClient.Get(urlStr)
+	if err != nil {
+		return err
+	}
+	defer resp.Body.Close()
+
+	if resp.StatusCode != http.StatusOK {
+		return fmt.Errorf("HTTP %d", resp.StatusCode)
+	}
+
+	if err := os.MkdirAll(filepath.Dir(destPath), 0o755); err != nil {
+		return err
+	}
+
+	tmp, err := os.CreateTemp(filepath.Dir(destPath), ".tmp-*")
+	if err != nil {
+		return err
+	}
+	tmpName := tmp.Name()
+	success := false
+	defer func() {
+		if !success {
+			_ = os.Remove(tmpName)
+		}
+	}()
+
+	written, err := io.Copy(tmp, resp.Body)
+	if err != nil {
+		tmp.Close()
+		return err
+	}
+	if err := tmp.Close(); err != nil {
+		return err
+	}
+
+	// Verify downloaded size against Content-Length (when provided).
+	if resp.ContentLength > 0 && written != resp.ContentLength {
+		return fmt.Errorf("download truncated: got %d bytes, expected %d", written, resp.ContentLength)
+	}
+
+	if err := os.Rename(tmpName, destPath); err != nil {
+		return err
+	}
+	success = true
+	return nil
+}
+
+// extractTarball extracts a .tar.gz (or .tgz) archive into destDir, creating
+// destDir if needed. It strips the top-level directory from archive entries
+// so the contents land directly in destDir.
+func extractTarball(tarPath, destDir string) error {
+	f, err := os.Open(tarPath)
+	if err != nil {
+		return err
+	}
+	defer f.Close()
+
+	gz, err := gzip.NewReader(f)
+	if err != nil {
+		return fmt.Errorf("gzip: %w", err)
+	}
+	defer gz.Close()
+
+	if err := os.MkdirAll(destDir, 0o755); err != nil {
+		return err
+	}
+
+	tr := tar.NewReader(gz)
+	var stripPrefix string
+	for {
+		hdr, err := tr.Next()
+		if err == io.EOF {
+			break
+		}
+		if err != nil {
+			return fmt.Errorf("tar: %w", err)
+		}
+
+		// Determine common prefix to strip from the first entry.
+		// When the first entry has no '/' (rare: bare file), stripPrefix stays
+		// empty and no stripping occurs — all names are used as-is.
+		if stripPrefix == "" {
+			if idx := strings.Index(hdr.Name, "/"); idx >= 0 {
+				stripPrefix = hdr.Name[:idx+1]
+			}
+		}
+
+		rel := strings.TrimPrefix(hdr.Name, stripPrefix)
+		if rel == "" || rel == "." {
+			continue
+		}
+		// Skip macOS metadata.
+		if strings.HasPrefix(filepath.Base(rel), "._") {
+			continue
+		}
+
+		target := filepath.Join(destDir, rel)
+		// Safety: ensure target stays within destDir (reject path traversal).
+		if !isPathWithin(target, destDir) {
+			log.Printf("[prepare] WARNING: skipping path traversal attempt: %s", hdr.Name)
+			continue
+		}
+
+		switch hdr.Typeflag {
+		case tar.TypeDir:
+			if err := os.MkdirAll(target, os.FileMode(hdr.Mode)); err != nil {
+				return err
+			}
+		case tar.TypeReg:
+			if err := os.MkdirAll(filepath.Dir(target), 0o755); err != nil {
+				return err
+			}
+			out, err := os.OpenFile(target, os.O_CREATE|os.O_WRONLY|os.O_TRUNC, os.FileMode(hdr.Mode))
+			if err != nil {
+				return err
+			}
+			if _, err := io.Copy(out, io.LimitReader(tr, hdr.Size)); err != nil {
+				out.Close()
+				return err
+			}
+			if err := out.Close(); err != nil {
+				return err
+			}
+		case tar.TypeSymlink:
+			// Create symlink if supported; skip on error.
+			if err := os.Symlink(hdr.Linkname, target); err != nil {
+				log.Printf("[prepare] symlink skipped: %s → %s (%v)", target, hdr.Linkname, err)
+			}
+		}
+	}
+	return nil
+}
+
+// isPathWithin reports whether target is destDir itself or nested inside it,
+// guarding against path traversal in extracted archives.
+func isPathWithin(target, destDir string) bool {
+	cleanDest := filepath.Clean(destDir)
+	cleanTarget := filepath.Clean(target)
+	return cleanTarget == cleanDest ||
+		strings.HasPrefix(cleanTarget, cleanDest+string(os.PathSeparator))
+}
+
+// runServicePreScript executes SERVICE_PRE. If it starts with "file://", the referenced file
+// is made executable and run directly (the kernel reads its #! shebang). Otherwise,
+// the string is run via sh -c.
+func runServicePreScript(cmd string) error {
+	var c *exec.Cmd
+	if filePath, ok := strings.CutPrefix(cmd, "file://"); ok {
+		if err := os.Chmod(filePath, 0o755); err != nil {
+			return fmt.Errorf("chmod pre-start script file: %w", err)
+		}
+		c = exec.Command(filePath)
+	} else {
+		c = exec.Command("sh", "-c", cmd)
+	}
+	c.Stdout = os.Stdout
+	c.Stderr = os.Stderr
+	return c.Run()
+}
+
 func main() {
 	cfg := loadInitConfig()
 
-	// Start backend subprocess if SERVICE_CMD is configured.
-	var serviceCmd *exec.Cmd
-	if cfg.ServiceCmd != "" {
-		serviceCmd = startBackend(cfg.ServiceCmd)
+	// Apply SERVICE_PXY as the external proxy cache root.
+	if cfg.ServicePxy != "" {
+		proxyCacheOverride = cfg.ServicePxy
 	}
 
-	// Build handlers for each backend.
-	type backendHandler struct {
-		prefix  string
-		handler http.Handler
+	// Service preparation state (for showing loading page during download/extract).
+	srvState := &serviceState{}
+
+	// Build (prefix → handler) routes for each backend. The service backend's
+	// prefix is recorded separately so the loading page is only shown for it
+	// during preparation (non-service backends stay reachable).
+	type route struct {
+		prefix    string
+		handler   http.Handler
+		isService bool
 	}
-	var handlers []backendHandler
-	for _, b := range cfg.Backends {
-		h := createBackendHandler(b, cfg.ProxyHeaders)
-		handlers = append(handlers, backendHandler{prefix: b.Prefix, handler: h})
+	routes := make([]route, len(cfg.Backends))
+	servicePrefix := "" // prefix of the Codea-managed service backend, "" if none
+	for i, b := range cfg.Backends {
+		routes[i] = route{prefix: b.Prefix, handler: createBackendHandler(b, cfg.ProxyHeaders), isService: b.IsService}
+		if b.IsService {
+			servicePrefix = b.Prefix
+		}
+	}
+
+	// serviceCmd holds the backend subprocess; started either eagerly (no
+	// service backend) or lazily after preparation completes (service backend).
+	var serviceCmd *exec.Cmd
+
+	// Cookie helpers shared by the login/logout handlers.
+	setTokenCookie := func(w http.ResponseWriter, value string, maxAge int) {
+		http.SetCookie(w, &http.Cookie{
+			Name:     cfg.TokenCookie,
+			Value:    value,
+			Path:     "/",
+			MaxAge:   maxAge,
+			HttpOnly: true,
+			SameSite: http.SameSiteLaxMode,
+		})
 	}
 
 	mux := http.NewServeMux()
 
 	// /__login – serves login page (GET) or processes form (POST).
 	mux.HandleFunc("/__login", func(w http.ResponseWriter, r *http.Request) {
-		switch r.Method {
-		case http.MethodPost:
-			if err := r.ParseForm(); err != nil {
-				http.Error(w, "invalid form", http.StatusBadRequest)
-				return
-			}
-			tkn := strings.TrimSpace(r.PostFormValue("token"))
-			if tkn == "" {
-				serveStaticAsset(w, "login.html")
-				return
-			}
-			http.SetCookie(w, &http.Cookie{
-				Name:     cfg.TokenCookie,
-				Value:    tkn,
-				Path:     "/",
-				HttpOnly: true,
-				SameSite: http.SameSiteLaxMode,
-			})
-			back := safeReferer(r.Referer())
-			log.Printf("login ok, cookie %s=%s, reloading: %s", cfg.TokenCookie, tkn, back)
-			http.Redirect(w, r, back, http.StatusSeeOther)
-		default:
+		if r.Method != http.MethodPost {
 			serveStaticAsset(w, "login.html")
+			return
 		}
+		if err := r.ParseForm(); err != nil {
+			http.Error(w, "invalid form", http.StatusBadRequest)
+			return
+		}
+		tkn := strings.TrimSpace(r.PostFormValue("token"))
+		if tkn == "" {
+			serveStaticAsset(w, "login.html")
+			return
+		}
+		setTokenCookie(w, tkn, 0)
+		back := safeReferer(r.Referer())
+		log.Printf("login ok, cookie %s=%s, reloading: %s", cfg.TokenCookie, tkn, back)
+		http.Redirect(w, r, back, http.StatusSeeOther)
 	})
 
 	// /__logout – clears the token cookie.
 	mux.HandleFunc("/__logout", func(w http.ResponseWriter, r *http.Request) {
-		http.SetCookie(w, &http.Cookie{
-			Name:     cfg.TokenCookie,
-			Value:    "",
-			Path:     "/",
-			MaxAge:   -1,
-			HttpOnly: true,
-		})
+		setTokenCookie(w, "", -1)
 		log.Printf("logout: cleared cookie %s", cfg.TokenCookie)
 		serveStaticAsset(w, "logout.html")
 	})
 
-	// /__vscode/ – VS Code update API proxy with local cache.
-	mux.Handle("/__vscode/", newVscodeUpdateHandler())
+	// /favicon.ico – a minimal inline SVG favicon (blue rounded square with "C")
+	// so browsers don't log 404s for it. Modern browsers accept image/svg+xml.
+	mux.HandleFunc("/favicon.ico", func(w http.ResponseWriter, r *http.Request) {
+		w.Header().Set("Content-Type", "image/svg+xml")
+		w.Header().Set("Cache-Control", "public, max-age=86400")
+		serveStaticAsset(w, "favicon.ico")
+	})
 
 	// /__proxy/ – generic external proxy: /__proxy/{scheme}:{host}/path → {scheme}://{host}/path
-	mux.HandleFunc("/__proxy/", handleExternalProxy)
+	// Only registered when SERVICE_PXY is configured (caching requires a root).
+	if cfg.ServicePxy != "" {
+		mux.HandleFunc("/__proxy/", handleExternalProxy)
+	}
 
 	// /__logout.vsc.js – VS Code logout-button script injected into proxied HTML.
 	// Named .vsc because it targets the VS Code activity-bar toolbar; other apps
@@ -303,34 +806,74 @@ func main() {
 		_, _ = w.Write(mustAsset("logout.vsc.js"))
 	})
 
-	// All other requests: dispatch to backends in config order.
+	// All other requests: dispatch to backends. The service backend is
+	// prepared lazily on first access: while preparing, its prefix returns the
+	// loading page; once done (success), it proxies normally; on error, 500.
+	// Non-service backends are always reachable.
 	mux.HandleFunc("/", func(w http.ResponseWriter, r *http.Request) {
-		for _, bh := range handlers {
-			if strings.HasPrefix(r.URL.Path, bh.prefix) {
-				bh.handler.ServeHTTP(w, r)
+		for _, rt := range routes {
+			if !strings.HasPrefix(r.URL.Path, rt.prefix) {
+				continue
+			}
+			if rt.isService {
+				// Trigger preparation on first hit (once, in a goroutine).
+				srvState.once.Do(func() {
+					srvState.begin() // mark preparing immediately, before the goroutine runs
+					go func() {
+						err := prepareService(cfg, srvState)
+						if err == nil && cfg.ServiceCmd != "" {
+							// Start the backend subprocess after a successful prepare.
+							if c := startBackend(cfg.ServiceCmd); c != nil {
+								serviceCmd = c
+							}
+						}
+						srvState.finish(err)
+						if err != nil {
+							log.Printf("[prepare] service preparation failed: %v", err)
+						}
+					}()
+				})
+				// Preparing? Show loading page.
+				if srvState.active() {
+					serveLoadingPage(w, srvState.getStatus())
+					return
+				}
+				// Finished: proxy on success, 500 on error.
+				if done, err := srvState.result(); done {
+					if err != nil {
+						http.Error(w, "service preparation failed: "+err.Error(), http.StatusInternalServerError)
+						return
+					}
+					rt.handler.ServeHTTP(w, r)
+					return
+				}
+				// not yet active (goroutine just scheduled) — loading page.
+				serveLoadingPage(w, srvState.getStatus())
 				return
 			}
+			rt.handler.ServeHTTP(w, r)
+			return
 		}
 		http.Error(w, "no backend matched", http.StatusBadGateway)
 	})
 
 	servers := buildServers(cfg.ProxyPort, cfg.ProxyUseSSL, mux)
 
-	// Graceful shutdown on SIGINT/SIGTERM: stop accepting new connections,
-	// wait for active ones, then signal the backend subprocess to exit.
+	// Graceful shutdown on SIGINT/SIGTERM.
 	sigCh := make(chan os.Signal, 1)
 	signal.Notify(sigCh, syscall.SIGINT, syscall.SIGTERM)
 
+	// Start HTTP servers first so the loading page is available during preparation.
 	for _, srv := range servers {
 		go func(s *http.Server, isTLS bool) {
-			var e error
+			var err error
 			if isTLS {
-				e = s.ListenAndServeTLS("", "")
+				err = s.ListenAndServeTLS("", "")
 			} else {
-				e = s.ListenAndServe()
+				err = s.ListenAndServe()
 			}
-			if e != nil && e != http.ErrServerClosed {
-				log.Fatalf("server on %s: %v", s.Addr, e)
+			if err != nil && err != http.ErrServerClosed {
+				log.Fatalf("server on %s: %v", s.Addr, err)
 			}
 		}(srv.server, srv.isTLS)
 	}
@@ -338,8 +881,22 @@ func main() {
 	log.Printf("proxy starting: %s", strings.Join(serverAddrs(servers), ", "))
 	log.Printf("token cookie: %s", cfg.TokenCookie)
 	log.Printf("backends: %d", len(cfg.Backends))
+	for i, b := range cfg.Backends {
+		marker := ""
+		if b.IsService {
+			marker = " (service)"
+		}
+		log.Printf("  route[%d] %s → %s://%s%s", i, b.Prefix, b.Scheme, b.Target, marker)
+	}
 	if len(cfg.ProxyHeaders) > 0 {
 		log.Printf("proxy headers: %v", cfg.ProxyHeaders)
+	}
+
+	// Start backend subprocess if SERVICE_CMD is configured. When a service
+	// backend exists, the subprocess is started lazily after preparation
+	// completes (see the service route handler above); otherwise it starts now.
+	if cfg.ServiceCmd != "" && servicePrefix == "" {
+		serviceCmd = startBackend(cfg.ServiceCmd)
 	}
 
 	<-sigCh
@@ -368,37 +925,43 @@ type serverInstance struct {
 // buildServers constructs one (plain HTTP) or two (HTTP + HTTPS) servers with
 // sensible timeouts and the self-signed cert when SSL is enabled.
 func buildServers(port string, useSSL bool, mux http.Handler) []serverInstance {
-	base := &http.Server{
-		Addr:              ":" + port,
-		Handler:           mux,
-		ReadHeaderTimeout: 10 * time.Second,
-		ReadTimeout:       60 * time.Second,
-		WriteTimeout:      0, // streaming downloads may take long
-		IdleTimeout:       120 * time.Second,
-	}
+	base := newProxyServer(":"+port, mux, nil)
 	if !useSSL {
 		return []serverInstance{{server: base, isTLS: false}}
 	}
 	portNum, err := strconv.Atoi(port)
 	if err != nil {
-		log.Fatalf("invalid VSC_PORT %q: %v", port, err)
+		log.Fatalf("invalid proxy port %q: %v", port, err)
 	}
 	cert, err := generateSelfSignedCert()
 	if err != nil {
 		log.Fatalf("generate self-signed cert: %v", err)
 	}
-	httpsSrv := &http.Server{
-		Addr:              fmt.Sprintf(":%d", portNum+1),
-		Handler:           mux,
-		TLSConfig:         &tls.Config{Certificates: []tls.Certificate{cert}, MinVersion: tls.VersionTLS12},
-		ReadHeaderTimeout: 10 * time.Second,
-		ReadTimeout:       60 * time.Second,
-		IdleTimeout:       120 * time.Second,
-	}
+	httpsSrv := newProxyServer(fmt.Sprintf(":%d", portNum+1), mux, &tls.Config{
+		Certificates: []tls.Certificate{cert},
+		MinVersion:   tls.VersionTLS12,
+	})
 	return []serverInstance{
 		{server: base, isTLS: false},
 		{server: httpsSrv, isTLS: true},
 	}
+}
+
+// newProxyServer returns an *http.Server with the proxy's standard timeouts.
+// A nil tlsCfg yields a plain HTTP server.
+func newProxyServer(addr string, mux http.Handler, tlsCfg *tls.Config) *http.Server {
+	srv := &http.Server{
+		Addr:              addr,
+		Handler:           mux,
+		ReadHeaderTimeout: 10 * time.Second,
+		ReadTimeout:       60 * time.Second,
+		WriteTimeout:      0, // streaming (proxying, downloads) may take long; bounded by IdleTimeout + client disconnect
+		IdleTimeout:       120 * time.Second,
+	}
+	if tlsCfg != nil {
+		srv.TLSConfig = tlsCfg
+	}
+	return srv
 }
 
 func serverAddrs(servers []serverInstance) []string {
@@ -414,13 +977,14 @@ func serverAddrs(servers []serverInstance) []string {
 }
 
 // safeReferer returns a same-origin redirect target, falling back to "/".
+// Only relative paths are allowed to prevent open redirect attacks.
+// url.Parse may fail on refs containing spaces; those safely fall back to "/".
 func safeReferer(ref string) string {
 	if ref == "" {
 		return "/"
 	}
 	u, err := url.Parse(ref)
 	if err != nil || u.Host != "" {
-		// Only allow relative refs to avoid open redirect.
 		return "/"
 	}
 	return ref
@@ -466,29 +1030,34 @@ var extProxyTransport = &http.Transport{
 // --- proxy cache init (sync.Once, disk-only cache) ---
 
 var (
-	proxyCacheOnce sync.Once
-	proxyCacheRoot string
+	proxyCacheOnce     sync.Once
+	proxyCacheRoot     string // resolved from SERVICE_PXY at first /__proxy/ request; route only registered when non-empty
+	proxyCacheOverride string // set from SERVICE_PXY in main()
 )
 
+// initProxyCache resolves the cache root from SERVICE_PXY. The /__proxy/ route
+// is only registered when SERVICE_PXY is set, so the root is always non-empty
+// here; this just stores it for the cache handlers.
 func initProxyCache() {
-	dir := os.Getenv("VSC_CACHE")
-	if dir == "" {
-		dir = "/app/.vscode"
+	proxyCacheRoot = proxyCacheOverride
+	log.Printf("[ext-proxy] cache root (SERVICE_PXY): %s", proxyCacheRoot)
+}
+
+// redirectLimit is a CheckRedirect policy shared by proxy and download clients.
+func redirectLimit(max int) func(*http.Request, []*http.Request) error {
+	return func(req *http.Request, via []*http.Request) error {
+		if len(via) >= max {
+			return fmt.Errorf("too many redirects")
+		}
+		return nil
 	}
-	proxyCacheRoot = filepath.Join(dir, "proxy")
-	log.Printf("[ext-proxy] cache root: %s", proxyCacheRoot)
 }
 
 // proxyCacheClient is used for manual upstream fetches when caching.
 var proxyCacheClient = &http.Client{
-	Transport: extProxyTransport,
-	Timeout:   5 * time.Minute,
-	CheckRedirect: func(req *http.Request, via []*http.Request) error {
-		if len(via) >= 10 {
-			return fmt.Errorf("too many redirects")
-		}
-		return nil
-	},
+	Transport:     extProxyTransport,
+	Timeout:       5 * time.Minute,
+	CheckRedirect: redirectLimit(10),
 }
 
 // proxyCacheHeaderWhitelist lists headers preserved in cache metadata.
@@ -512,15 +1081,14 @@ type proxyCacheMeta struct {
 //
 // Cache layout mirrors the URL structure:
 //
-//	{VSC_CACHE}/proxy/{scheme}:{host}/path/to/file.js       → body
-//	{VSC_CACHE}/proxy/{scheme}:{host}/path/to/file.js_.json  → metadata
+//	{SERVICE_PXY}/{scheme}:{host}/path/to/file.js       → body
+//	{SERVICE_PXY}/{scheme}:{host}/path/to/file.js_.json  → metadata
 //
 // The rest path is cleaned and stripped of leading "/" to stay within
 // the cache root.  Requests for the root path use "__index" as filename.
 func proxyCachePaths(scheme, host, rest string) (bodyPath, metaPath string) {
 	// Clean and make relative to prevent directory traversal.
-	p := filepath.Clean(rest)
-	p = strings.TrimPrefix(p, "/")
+	p := strings.TrimPrefix(filepath.Clean(rest), "/")
 	if p == "" || p == "." {
 		p = "__index"
 	}
@@ -570,39 +1138,39 @@ func handleExternalProxy(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
-	// 1. Detect cc~ cache prefix.
+	// Detect cc~ cache prefix.
 	cacheable := strings.HasPrefix(p, "cc~")
 	if cacheable {
 		p = p[3:]
 	}
-	if r.Method != "GET" {
+	// Only cache safe GET responses.
+	if r.Method != http.MethodGet {
 		cacheable = false
 	}
 
-	// 2. Parse scheme:host/rest from the path.
+	// Parse scheme:host/rest from the path.
 	scheme, host, rest, err := parseProxyPath(p)
 	if err != nil {
 		http.Error(w, err.Error(), http.StatusBadRequest)
 		return
 	}
 
-	// 3. Build target URL with strings.Builder.
 	targetURL := buildTargetURL(scheme, host, rest, r.URL.RawQuery)
 
 	log.Printf("[ext-proxy] %s %s → %s (cacheable=%v)", r.Method, r.URL.Path, targetURL, cacheable)
 
-	// 4. Try cache lookup.
+	if !cacheable {
+		// Plain passthrough — no cache.
+		handlePassThroughProxy(w, r, targetURL)
+		return
+	}
+
+	// Try cache lookup; on MISS fetch, stream and store.
 	bodyPath, metaPath := proxyCachePaths(scheme, host, rest)
 	if serveFromProxyCache(w, bodyPath, metaPath, targetURL) {
 		return
 	}
-
-	// 5. Cache MISS — branch by cacheable.
-	if cacheable {
-		handleCachedProxy(w, r, targetURL, bodyPath, metaPath)
-	} else {
-		handlePassThroughProxy(w, r, targetURL)
-	}
+	handleCachedProxy(w, r, targetURL, bodyPath, metaPath)
 }
 
 // parseProxyPath extracts scheme, host and rest from the proxy path segment.
@@ -675,10 +1243,9 @@ func serveFromProxyCache(w http.ResponseWriter, bodyPath, metaPath, targetURL st
 func handleCachedProxy(w http.ResponseWriter, r *http.Request, targetURL, bodyPath, metaPath string) {
 	log.Printf("[ext-proxy] cache MISS (will cache) %s", targetURL)
 
-	ctx, cancel := context.WithTimeout(r.Context(), 5*time.Minute)
-	defer cancel()
-
-	req, err := http.NewRequestWithContext(ctx, "GET", targetURL, nil)
+	// proxyCacheClient already enforces a 5m timeout; reuse the request context
+	// so client disconnects cancel the upstream fetch.
+	req, err := http.NewRequestWithContext(r.Context(), "GET", targetURL, nil)
 	if err != nil {
 		http.Error(w, "bad target URL", http.StatusBadRequest)
 		return
@@ -749,22 +1316,26 @@ func handleCachedProxy(w http.ResponseWriter, r *http.Request, targetURL, bodyPa
 		return
 	}
 	tmpName := tmp.Name()
+	committed := false
+	defer func() {
+		if !committed {
+			_ = os.Remove(tmpName)
+		}
+	}()
 
 	n, copyErr := io.Copy(io.MultiWriter(w, tmp), resp.Body)
 	_ = tmp.Close()
-
 	if copyErr != nil {
 		log.Printf("[ext-proxy] copy error: %v", copyErr)
-		_ = os.Remove(tmpName)
 		return
 	}
 
 	// Atomic rename temp → final body.
 	if err := os.Rename(tmpName, bodyPath); err != nil {
 		log.Printf("[ext-proxy] rename cache FAIL: %s → %v", bodyPath, err)
-		_ = os.Remove(tmpName)
 		return
 	}
+	committed = true
 
 	// Write metadata.
 	if err := writeProxyMeta(metaPath, meta); err != nil {
@@ -804,347 +1375,6 @@ func handlePassThroughProxy(w http.ResponseWriter, r *http.Request, targetURL st
 	_, _ = io.Copy(w, resp.Body)
 }
 
-// =============================================================================
-// VS Code Update Proxy — handles /__vscode/ endpoints
-// =============================================================================
-
-// vscodeUpdateHandler caches and proxies VS Code update API requests.
-// Two endpoints:
-//
-//	GET /__vscode/api/latest/{platform}/{quality}      → latest version JSON
-//	GET /__vscode/commit:{commit}/{platform}/{quality}  → download archive
-type vscodeUpdateHandler struct {
-	cacheDir string
-	upstream string
-	client   *http.Client
-	// redirectClient follows redirects and records the final URL; reused across requests.
-	redirectClient *http.Client
-}
-
-func newVscodeUpdateHandler() *vscodeUpdateHandler {
-	dir := os.Getenv("VSC_CACHE")
-	if dir == "" {
-		dir = "/app/.vscode"
-	}
-	log.Printf("[vscode-update] cache dir: %s", dir)
-	return &vscodeUpdateHandler{
-		cacheDir: dir,
-		upstream: "https://update.code.visualstudio.com",
-		client:   &http.Client{Timeout: 10 * time.Minute},
-		redirectClient: &http.Client{
-			Timeout: 10 * time.Minute,
-			CheckRedirect: func(req *http.Request, via []*http.Request) error {
-				if len(via) >= 10 {
-					return fmt.Errorf("too many redirects")
-				}
-				return nil
-			},
-		},
-	}
-}
-
-func (h *vscodeUpdateHandler) ServeHTTP(w http.ResponseWriter, r *http.Request) {
-	// Go ServeMux 不会自动剥离匹配前缀，r.URL.Path 仍是完整路径。
-	// 移除 /__vscode/ 前缀得到相对路径。
-	p := strings.TrimPrefix(r.URL.Path, "/__vscode/")
-
-	if strings.HasPrefix(p, "api/latest/") {
-		rest := strings.TrimPrefix(p, "api/latest/")
-		parts := strings.SplitN(rest, "/", 2)
-		if len(parts) != 2 || parts[0] == "" || parts[1] == "" {
-			http.Error(w, "bad route: api/latest/{platform}/{quality}", http.StatusBadRequest)
-			return
-		}
-		h.handleLatest(w, r, parts[0], parts[1])
-		return
-	}
-
-	if strings.HasPrefix(p, "commit:") {
-		idx := strings.Index(p, "/")
-		if idx < 0 {
-			http.Error(w, "bad route: commit:{commit}/{platform}/{quality}", http.StatusBadRequest)
-			return
-		}
-		commit := p[len("commit:"):idx]
-		rest := p[idx+1:]
-		parts := strings.SplitN(rest, "/", 2)
-		if len(parts) != 2 || parts[0] == "" || parts[1] == "" {
-			http.Error(w, "bad route: commit:{commit}/{platform}/{quality}", http.StatusBadRequest)
-			return
-		}
-		h.handleCommit(w, r, commit, parts[0], parts[1])
-		return
-	}
-
-	if strings.HasPrefix(p, "download/") {
-		// download/{quality}/{commit}/vscode-{platform}.{ext}
-		rest := strings.TrimPrefix(p, "download/")
-		parts := strings.SplitN(rest, "/", 3)
-		if len(parts) != 3 || parts[0] == "" || parts[1] == "" || parts[2] == "" {
-			http.Error(w, "bad route: download/{quality}/{commit}/vscode-{platform}.{ext}", http.StatusBadRequest)
-			return
-		}
-		quality, commit, filename := parts[0], parts[1], parts[2]
-		platform, ext := parseDownloadFilename(filename)
-		if platform == "" {
-			http.Error(w, "bad filename: want vscode-{platform}.{ext}", http.StatusBadRequest)
-			return
-		}
-		h.handleDownload(w, r, commit, quality, platform, ext)
-		return
-	}
-
-	http.NotFound(w, r)
-}
-
-func (h *vscodeUpdateHandler) handleLatest(w http.ResponseWriter, r *http.Request, platform, quality string) {
-	cachePath := filepath.Join(h.cacheDir, platform, quality, "latest.json")
-
-	if data, err := os.ReadFile(cachePath); err == nil {
-		log.Printf("[vscode-update] latest HIT  %s/%s ← %s (%d bytes)", platform, quality, cachePath, len(data))
-		w.Header().Set("Content-Type", "application/json")
-		w.Header().Set("X-Cache", "HIT")
-		_, _ = w.Write(data)
-		return
-	}
-
-	log.Printf("[vscode-update] latest MISS %s/%s (not found: %s)", platform, quality, cachePath)
-	upstreamURL := fmt.Sprintf("%s/api/latest/%s/%s", h.upstream, platform, quality)
-	log.Printf("[vscode-update] latest fetch: %s", upstreamURL)
-
-	resp, err := h.client.Get(upstreamURL)
-	if err != nil {
-		log.Printf("[vscode-update] latest fetch error: %v", err)
-		http.Error(w, "upstream fetch failed", http.StatusBadGateway)
-		return
-	}
-	defer resp.Body.Close()
-
-	if resp.StatusCode != http.StatusOK {
-		log.Printf("[vscode-update] latest upstream returned %d", resp.StatusCode)
-		http.Error(w, "upstream error", http.StatusBadGateway)
-		return
-	}
-
-	body, err := io.ReadAll(io.LimitReader(resp.Body, 1<<20))
-	if err != nil {
-		log.Printf("[vscode-update] latest read error: %v", err)
-		http.Error(w, "read upstream failed", http.StatusBadGateway)
-		return
-	}
-
-	if !json.Valid(body) {
-		log.Printf("[vscode-update] latest invalid JSON from upstream")
-		http.Error(w, "invalid upstream response", http.StatusBadGateway)
-		return
-	}
-
-	_ = os.MkdirAll(filepath.Dir(cachePath), 0o755)
-	if err := atomicWriteFile(cachePath, body, 0o644); err != nil {
-		log.Printf("[vscode-update] latest write cache FAIL: %s → %v", cachePath, err)
-	} else {
-		log.Printf("[vscode-update] latest CACHED %s/%s → %s (%d bytes)", platform, quality, cachePath, len(body))
-	}
-
-	w.Header().Set("Content-Type", "application/json")
-	w.Header().Set("X-Cache", "MISS")
-	_, _ = w.Write(body)
-}
-
-func (h *vscodeUpdateHandler) handleCommit(w http.ResponseWriter, r *http.Request, commit, platform, quality string) {
-	cacheDir := filepath.Join(h.cacheDir, platform, quality)
-
-	// 1. 查找缓存（扩展名未知，按 commit 前缀匹配）
-	if cachedPath, ok := findCachedFile(cacheDir, commit, ""); ok {
-		fi, _ := os.Stat(cachedPath)
-		log.Printf("[vscode-update] commit HIT  %s/%s/%s ← %s (%d bytes)", platform, quality, commit, cachedPath, fileSize(fi))
-		ext := extractExtFromPath(cachedPath)
-		redirectDownload(w, r, quality, commit, platform, ext)
-		return
-	}
-
-	log.Printf("[vscode-update] commit MISS %s/%s/%s (not found in: %s)", platform, quality, commit, cacheDir)
-
-	// 2. 从上游获取（跟随所有重定向，记录最终 URL）
-	upstreamURL := fmt.Sprintf("%s/commit:%s/%s/%s", h.upstream, commit, platform, quality)
-	log.Printf("[vscode-update] commit fetch: %s", upstreamURL)
-
-	resp, err := h.redirectClient.Get(upstreamURL)
-	if err != nil {
-		log.Printf("[vscode-update] commit fetch error: %v", err)
-		http.Error(w, "upstream fetch failed", http.StatusBadGateway)
-		return
-	}
-	defer resp.Body.Close()
-
-	if resp.StatusCode != http.StatusOK {
-		log.Printf("[vscode-update] commit upstream returned %d", resp.StatusCode)
-		http.Error(w, "upstream error", http.StatusBadGateway)
-		return
-	}
-
-	finalURL := resp.Request.URL.String()
-	log.Printf("[vscode-update] commit redirect → %s", finalURL)
-
-	// 3. 确定扩展名：优先从最终 URL 提取，其次 Content-Type
-	ext := extractExtFromURL(finalURL)
-	if ext == "" {
-		ext = inferExtFromContentType(resp.Header.Get("Content-Type"))
-	}
-	if ext == "" {
-		ext = ".tar.gz"
-	}
-	cachePath := filepath.Join(cacheDir, commit+ext)
-
-	// 4. 流式落盘，避免将大文件（数百 MB）读入内存。
-	if err := os.MkdirAll(cacheDir, 0o755); err != nil {
-		log.Printf("[vscode-update] commit mkdir FAIL: %v", err)
-		http.Error(w, "cache write failed", http.StatusBadGateway)
-		return
-	}
-	n, err := streamToAtomicFile(cachePath, resp.Body)
-	if err != nil {
-		log.Printf("[vscode-update] commit write cache FAIL: %s → %v", cachePath, err)
-		http.Error(w, "cache write failed", http.StatusBadGateway)
-		return
-	}
-	log.Printf("[vscode-update] commit CACHED %s/%s/%s → %s (%d bytes)", platform, quality, commit, cachePath, n)
-
-	// 5. 写 .log 文件记录原始地址和重定向地址
-	logPath := filepath.Join(cacheDir, commit+".log")
-	logContent := upstreamURL + "\n" + finalURL + "\n"
-	if err := atomicWriteFile(logPath, []byte(logContent), 0o644); err != nil {
-		log.Printf("[vscode-update] write log FAIL: %s → %v", logPath, err)
-	} else {
-		log.Printf("[vscode-update] log written: %s", logPath)
-	}
-
-	// 6. 缓存完成后重定向到 download 接口，由它用正确文件名提供下载
-	redirectDownload(w, r, quality, commit, platform, ext)
-}
-
-// handleDownload serves a cached commit file with the correct vscode-{platform}.{ext} filename.
-func (h *vscodeUpdateHandler) handleDownload(w http.ResponseWriter, r *http.Request, commit, quality, platform, ext string) {
-	cacheDir := filepath.Join(h.cacheDir, platform, quality)
-
-	// Prefer the exact expected path so a stale file with a different ext
-	// cannot be served under the wrong filename.
-	cachedPath, ok := findCachedFile(cacheDir, commit, ext)
-	if !ok {
-		log.Printf("[vscode-update] download MISS: %s/%s/%s not found in %s", platform, quality, commit, cacheDir)
-		http.Error(w, "file not found in cache", http.StatusNotFound)
-		return
-	}
-
-	fi, _ := os.Stat(cachedPath)
-	log.Printf("[vscode-update] download SERVE %s/%s/%s ← %s (%d bytes)", platform, quality, commit, cachedPath, fileSize(fi))
-
-	downloadName := fmt.Sprintf("vscode-%s%s", platform, ext)
-	w.Header().Set("Content-Disposition", fmt.Sprintf(`attachment; filename="%s"`, downloadName))
-	// Let http.ServeFile set Content-Type (application/octet-stream) and handle ranges.
-	http.ServeFile(w, r, cachedPath)
-}
-
-// redirectDownload sends a 302 to the download endpoint with the correct filename.
-func redirectDownload(w http.ResponseWriter, r *http.Request, quality, commit, platform, ext string) {
-	target := fmt.Sprintf("/__vscode/download/%s/%s/vscode-%s%s", quality, commit, platform, ext)
-	log.Printf("[vscode-update] redirect → %s", target)
-	http.Redirect(w, r, target, http.StatusFound)
-}
-
-// parseDownloadFilename extracts platform and extension from "vscode-{platform}.{ext}".
-func parseDownloadFilename(name string) (platform, ext string) {
-	// name like: vscode-server-linux-x64-web.tar.gz
-	if !strings.HasPrefix(name, "vscode-") {
-		return "", ""
-	}
-	rest := name[len("vscode-"):]
-	dotIdx := strings.Index(rest, ".")
-	if dotIdx < 0 {
-		return "", ""
-	}
-	return rest[:dotIdx], rest[dotIdx:]
-}
-
-// findCachedFile returns a cached file for the given commit.
-// If extHint is non-empty it first tries the exact "{commit}{extHint}" path;
-// otherwise (or on miss) it scans the directory for any "{commit}.*" match.
-// This avoids false matches when one commit is a prefix of another.
-func findCachedFile(dir, commit, extHint string) (string, bool) {
-	if extHint != "" {
-		p := filepath.Join(dir, commit+extHint)
-		if fi, err := os.Stat(p); err == nil && !fi.IsDir() {
-			return p, true
-		}
-	}
-	entries, err := os.ReadDir(dir)
-	if err != nil {
-		return "", false
-	}
-	for _, e := range entries {
-		if e.IsDir() {
-			continue
-		}
-		name := e.Name()
-		if strings.HasSuffix(name, ".log") {
-			continue
-		}
-		if strings.HasPrefix(name, commit+".") || name == commit {
-			return filepath.Join(dir, name), true
-		}
-	}
-	return "", false
-}
-
-func extractExtFromURL(rawURL string) string {
-	// Strip query and fragment before taking the basename.
-	for _, sep := range []string{"?", "#"} {
-		if idx := strings.Index(rawURL, sep); idx >= 0 {
-			rawURL = rawURL[:idx]
-		}
-	}
-	return extractExt(path.Base(rawURL))
-}
-
-func extractExtFromPath(filePath string) string {
-	return extractExt(filepath.Base(filePath))
-}
-
-// extractExt returns the extension portion (including the leading ".") of a
-// basename, e.g. "x.tar.gz" → ".tar.gz". Returns "" if there is no ".".
-func extractExt(base string) string {
-	dotIdx := strings.Index(base, ".")
-	if dotIdx < 0 {
-		return ""
-	}
-	return base[dotIdx:]
-}
-
-func inferExtFromContentType(ct string) string {
-	ct = strings.TrimSpace(strings.SplitN(ct, ";", 2)[0])
-	switch ct {
-	case "application/gzip", "application/x-gzip":
-		return ".tar.gz"
-	case "application/zip":
-		return ".zip"
-	case "application/x-xz":
-		return ".tar.xz"
-	case "application/x-bzip2":
-		return ".tar.bz2"
-	case "application/x-compressed-tar", "application/x-tar":
-		return ".tar"
-	}
-	return ""
-}
-
-// fileSize safely reports a file's size for logging.
-func fileSize(fi os.FileInfo) int64 {
-	if fi == nil {
-		return -1
-	}
-	return fi.Size()
-}
-
 // atomicWriteFile writes data to path via a temp file + rename for crash safety.
 func atomicWriteFile(path string, data []byte, perm os.FileMode) error {
 	dir := filepath.Dir(path)
@@ -1173,37 +1403,6 @@ func atomicWriteFile(path string, data []byte, perm os.FileMode) error {
 	return os.Rename(tmpName, path)
 }
 
-// streamToAtomicFile streams r into path via a temp file + rename, returning bytes written.
-func streamToAtomicFile(path string, r io.Reader) (int64, error) {
-	dir := filepath.Dir(path)
-	tmp, err := os.CreateTemp(dir, ".tmp-*")
-	if err != nil {
-		return 0, err
-	}
-	tmpName := tmp.Name()
-
-	n, copyErr := io.Copy(tmp, r)
-	closeErr := tmp.Close()
-
-	// Prefer the copy error; if copy succeeded, surface the close error.
-	if copyErr != nil {
-		_ = os.Remove(tmpName)
-		return n, copyErr
-	}
-	if closeErr != nil {
-		_ = os.Remove(tmpName)
-		return n, closeErr
-	}
-
-	if err := os.Chmod(tmpName, 0o644); err != nil {
-		_ = os.Remove(tmpName)
-		return n, err
-	}
-	return n, os.Rename(tmpName, path)
-}
-
-// =============================================================================
-
 // =============================================================================
 // Backend Handlers — createBackendHandler dispatches to the right handler type.
 // =============================================================================
@@ -1223,7 +1422,7 @@ func createBackendHandler(b Backend, proxyHeaders map[string]string) http.Handle
 			origDirector(req)
 			applyProxyHeaders(req, proxyHeaders)
 		}
-		rp.ModifyResponse = chainModifiers(authRedirectModifier(), injectLogoutButton)
+		rp.ModifyResponse = proxyResponseModifier()
 		return rp
 
 	case "unix":
@@ -1242,7 +1441,7 @@ func createBackendHandler(b Backend, proxyHeaders map[string]string) http.Handle
 				},
 			},
 		}
-		rp.ModifyResponse = chainModifiers(authRedirectModifier(), injectLogoutButton)
+		rp.ModifyResponse = proxyResponseModifier()
 		return rp
 
 	case "file":
@@ -1255,13 +1454,22 @@ func createBackendHandler(b Backend, proxyHeaders map[string]string) http.Handle
 		log.Printf("backend text: %d bytes", len(content))
 		return http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 			w.Header().Set("Content-Type", "text/plain; charset=utf-8")
-			_, _ = w.Write([]byte(content))
+			// {now} is replaced with the current time on every request.
+			body := strings.ReplaceAll(content, "{now}", time.Now().Format(time.RFC3339))
+			_, _ = w.Write([]byte(body))
 		})
 
 	default:
 		log.Fatalf("unknown backend scheme %q in %q", b.Scheme, b.RawURL)
 		return nil
 	}
+}
+
+// proxyResponseModifier returns the composed response modifier applied to all
+// reverse-proxy backends: replace 401/403 with the login page, then inject the
+// logout-button script into recognised HTML apps.
+func proxyResponseModifier() func(*http.Response) error {
+	return chainModifiers(authRedirectModifier(), injectLogoutButton)
 }
 
 // authRedirectModifier returns a ModifyResponse that replaces 401/403 from the
@@ -1278,15 +1486,21 @@ func authRedirectModifier() func(*http.Response) error {
 		r.StatusCode = http.StatusOK
 		r.Header = make(http.Header)
 		r.Header.Set("Content-Type", "text/html; charset=utf-8")
-		loginHTML := mustAsset("login.html")
-		r.Body = io.NopCloser(bytes.NewReader(loginHTML))
-		r.ContentLength = int64(len(loginHTML))
+		body := mustAsset("login.html")
+		r.Body = io.NopCloser(bytes.NewReader(body))
+		r.ContentLength = int64(len(body))
 		return nil
 	}
 }
 
 // chainModifiers runs the given response modifiers in order, stopping at the
 // first error. This lets us compose auth-redirect and logout-button injection.
+//
+// NOTE: authRedirectModifier must run before injectLogoutButton — when the
+// upstream returns 401/403, authRedirectModifier replaces the body with
+// login.html (which contains no app fingerprints), so injectLogoutButton is
+// a no-op. Running in the reverse order would inject into the error page before
+// it gets replaced.
 func chainModifiers(mods ...func(*http.Response) error) func(*http.Response) error {
 	return func(r *http.Response) error {
 		for _, m := range mods {
@@ -1302,15 +1516,13 @@ func chainModifiers(mods ...func(*http.Response) error) func(*http.Response) err
 }
 
 // appDetector describes how to recognise a proxied app and which logout script
-// to inject into its HTML.
+// to inject into its HTML. Adding support for a new proxied app is just a matter
+// of appending an entry here (plus the script + its route).
 type appDetector struct {
 	fingerprint []byte // substring searched for in the response body
 	scriptTag   []byte // <script src="..."> appended when the fingerprint matches
 }
 
-// appDetector pairs a body-content fingerprint with the logout-script tag to
-// inject when the fingerprint is found. Adding support for a new proxied app is
-// just a matter of appending an entry here (plus the script + its route).
 var appDetectors = []appDetector{
 	{
 		// VS Code / code-server workbench boot page.
@@ -1343,9 +1555,6 @@ func injectLogoutButton(r *http.Response) error {
 	if err != nil {
 		return err
 	}
-	if r.Body != nil {
-		r.Body.Close()
-	}
 
 	// Detect the app by fingerprint; inject only on a match.
 	if tag := matchAppScript(body); tag != nil {
@@ -1357,19 +1566,13 @@ func injectLogoutButton(r *http.Response) error {
 	return nil
 }
 
-// injectScript inserts tag into body before </body> (or appends if no </body>).
+// injectScript inserts tag into body before the last </body> (or appends if none).
 func injectScript(body, tag []byte) []byte {
 	const closeBody = "</body>"
-	idx := bytes.LastIndex(body, []byte(closeBody))
-	if idx < 0 {
-		return append(body, tag...)
+	if idx := bytes.LastIndex(body, []byte(closeBody)); idx >= 0 {
+		return bytes.Join([][]byte{body[:idx], tag, body[idx:]}, nil)
 	}
-	var b bytes.Buffer
-	b.Grow(len(body) + len(tag))
-	b.Write(body[:idx])
-	b.Write(tag)
-	b.Write(body[idx:])
-	return b.Bytes()
+	return append(body, tag...)
 }
 
 // matchAppScript returns the logout-script tag for the first app whose
@@ -1417,7 +1620,6 @@ func generateSelfSignedCert() (tls.Certificate, error) {
 			CommonName:   "CodeAuth",
 			Organization: []string{"Self-Signed CodeAuth"},
 		},
-		DNSNames:              []string{"self.ca"},
 		NotBefore:             notBefore,
 		NotAfter:              notBefore.Add(10 * 365 * 24 * time.Hour),
 		KeyUsage:              x509.KeyUsageKeyEncipherment | x509.KeyUsageDigitalSignature,
@@ -1454,7 +1656,7 @@ func startBackend(cmdStr string) *exec.Cmd {
 	if err := cmd.Start(); err != nil {
 		log.Fatalf("start backend command: %v", err)
 	}
-	log.Printf("backend command started (pid %d): %s", cmd.Process.Pid, cmdStr)
+	log.Printf("backend command started (pid %d)", cmd.Process.Pid)
 	return cmd
 }
 

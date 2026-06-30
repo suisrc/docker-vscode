@@ -23,29 +23,23 @@ if [ ! -f "$HOME/.vscode_init" ]; then
     fi
 fi
 
-# start vscode server
+# PASSWORD is empty, randomly generate a password
 if [[ -z "${PASSWORD}" ]]; then
-    echo 'start vscode server with http without password.'
-    exec codez serve-web --accept-server-license-terms \
-        --host ${VSC_HOST:-127.0.0.1} --port ${VSC_PORT:-7080} \
-        --cli-data-dir ${VSC_HOME:-/vsc} \
-        --server-data-dir ${VSC_HOME:-/vsc} \
-        --default-folder ${DEFAULT_FOLDER:-/app} \
-        --without-connection-token \
-        $VSC_ARGS
-    # exec 结束后会直接替换当前进程，所以后续的代码不会执行
+    export PASSWORD=$(openssl rand -hex 16)
+    echo "PASSWORD is empty, randomly generate a password: ${PASSWORD}"
 fi
 
-# codea 是一个用于授权的工具，它会在启动 vscode server 前进行授权验证，确保只有通过验证的用户才能访问 vscode server
-echo 'start vscode server with unix socket with password.'
-exec codea --backend unix://${VSC_SOCK:-/var/run/vscode.sock} --service "\
-codez serve-web --accept-server-license-terms \
-    --socket-path ${VSC_SOCK:-/var/run/vscode.sock} \
-    --cli-data-dir ${VSC_HOME:-/vsc} \
-    --server-data-dir ${VSC_HOME:-/vsc} \
-    --default-folder ${DEFAULT_FOLDER:-/app} \
-    --connection-token ${PASSWORD} \
-    $VSC_ARGS"
-
-# VSCODE_CLI_UPDATE_URL=http://127.0.0.1:7080/__vscode
 # PROXY_HEADER_x-forwarded-port=443
+# VSCODE_WSC="/wsc/go/github/ws01/docker-vscode/temp" \
+# VSCODE_HASH="vscode:latest" \
+# VSCODE_INIT='sed -i "s|https://www.vscode-unpkg.net/nls/|/__proxy/cc~http:127.0.0.1:0/nls/|g" ${SERVICE_DIR}/product.json' \
+# DEFAULT_FOLDER="/app" \
+# PASSWORD=""
+
+# codea 是一个用于授权的工具，它会在启动 vscode server 前进行授权验证，确保只有通过验证的用户才能访问 vscode server
+echo 'start vscode server. wss need set env: PROXY_HEADER_x-forwarded-port=443'
+codea --use-ssl  \
+    --svc-wsc "${VSCODE_WSC:-/wsc}" \
+    --svc-pre "${VSCODE_INIT}" \
+    --backend "/__healthz=text://ok,{now};^/=unix:///wsc/.vscode.sock" \
+    --svc-cmd '${SERVICE_DIR}/bin/code-server --accept-server-license-terms --socket-path /wsc/.vscode.sock --server-base-path ${DEFAULT_FOLDER} --server-data-dir ${SERVICE_WSC}/.vscode --connection-token ${PASSWORD}'

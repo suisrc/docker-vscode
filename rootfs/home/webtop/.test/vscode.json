@@ -1,4 +1,5 @@
 {
+    "chat.allowAnonymousAccess": true,
     "terminal.integrated.scrollback": 10000,
     "terminal.integrated.defaultProfile.linux": "zsh",
     "git.ignoreLegacyWarning": true,
@@ -7,9 +8,9 @@
     "editor.renderWhitespace": "all",
     "editor.suggestSelection": "first",
     "editor.fontSize": 16,
-    "editor.fontLigatures": true,
+    "editor.fontLigatures": false,
     "explorer.confirmDelete": false,
-    "extensions.autoUpdate": false,
+    "extensions.autoUpdate": "off",
     "extensions.autoCheckUpdates": false,
-    "workbench.colorTheme": "Default Dark+"
+    "workbench.colorTheme": "Dark+"
 }
