@@ -64,7 +64,7 @@ ENV VSCODE_WSC="/wsc" \
     PROXY_HEADER_x-forwarded-port="443" \
     PASSWORD=""
 
-COPY others/vscode-run.sh /usr/vscode.sh
+COPY kin/vscode.sh /usr/vscode.sh
 
 # creating the user and usergroup
 RUN mkdir -p $HOME /app /wsc && sed -i '1i#!/bin/bash' /usr/vscode.sh && \
