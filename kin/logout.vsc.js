@@ -1,8 +1,8 @@
 (function () {
-  if (window.__codeaLogoutBtn) return;
-  window.__codeaLogoutBtn = true;
+  if (window.__kinLogoutBtn) return;
+  window.__kinLogoutBtn = true;
 
-  var BTN_ID = '__codea_logout_action';
+  var BTN_ID = '__kin_logout_action';
 
   function createItem() {
     var li = document.createElement('li');
@@ -49,10 +49,10 @@
 
   function start() {
     sync();
-    if (window.__codeaLogoutObs) return;
+    if (window.__kinLogoutObs) return;
     var mo = new MutationObserver(function () { sync(); });
     mo.observe(document.documentElement, { childList: true, subtree: true });
-    window.__codeaLogoutObs = mo;
+    window.__kinLogoutObs = mo;
   }
 
   if (document.documentElement) {

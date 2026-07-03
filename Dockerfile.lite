@@ -1,12 +1,12 @@
 FROM golang:1.26-trixie as builder
 
 RUN apt-get update && apt-get install -y git
-COPY codea/ /build/
-RUN cd /build/ && CGO_ENABLED=0 go build -ldflags="-s -w" -o codea .
+COPY kin/ /build/
+RUN cd /build/ && CGO_ENABLED=0 go build -ldflags="-s -w" -o kin .
 
 FROM debian:trixie-slim
 
-COPY --from=builder  /build/codea  /usr/local/bin/codea
+COPY --from=builder  /build/kin  /usr/local/bin/kin
 
 # set environment variables
 ENV LANGUAGE="zh_CN.UTF-8" \

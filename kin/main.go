@@ -56,11 +56,12 @@ type Config struct {
 	ServiceVer   string // SERVICE_VER — download cache file path ({ext} resolved at runtime)
 	ServicePxy   string // SERVICE_PXY — proxy cache root directory
 	ServiceDir   string // SERVICE_DIR — install/extract directory
-	ServicePre   string // SERVICE_PRE — shell command or file:// script run before start
+	ServiceSet   string // SERVICE_SET — shell command or file:// script run before start
 	ServiceCmd   string // SERVICE_CMD — optional shell command to run as the backend
 	ProxyPort    string
 	TokenCookie  string            // cookie name, default "vscode-tkn"
 	ProxyUseSSL  bool              // enable HTTPS with a self-signed cert
+	ProxyAuthz   bool              // enable auth redirect + logout button injection
 	ProxyHeaders map[string]string // PROXY_HEADER_Xxx=Val → set/override; PROXY_HEADER_Xxx= → delete
 }
 
@@ -70,7 +71,7 @@ type Backend struct {
 	Scheme    string // http, https, unix, file, text
 	Target    string // host:port, socket path, dir path, or literal text
 	RawURL    string // original URL for logging
-	IsService bool   // this backend is the one managed by Codea (auto-deploy, etc.)
+	IsService bool   // this backend is the one managed by Kin (auto-deploy, etc.)
 }
 
 // GetEnvDef returns the value of env key, falling back to def when unset or
@@ -97,7 +98,7 @@ func GetEnvDef(key, val_def string) string {
 // "version" field, e.g. "7e7950df...") into VSCODE_HASH. When VSCODE_HASH is
 // unset or any other value, it is left untouched.
 func resolveVscodeHash() {
-	const magic = "vscode:latest"
+	const magic = "vscode:latest" // stable, insider
 	if os.Getenv("VSCODE_HASH") != magic {
 		return
 	}
@@ -136,11 +137,12 @@ func loadInitConfig() Config {
 	serviceVer := "${SERVICE_WSC}/.vsc/cache/version/${VSCODE_HASH}.{ext}"
 	servicePxy := "${SERVICE_WSC}/.vsc/cache/proxies/"
 	serviceDir := "${SERVICE_WSC}/.vsc/serve/${VSCODE_HASH}/"
-	servicePre := ""
+	serviceSet := ""
 	serviceCmd := ""
 	proxyPort := "7080"
 	cookie := "vscode-tkn"
 	useSSLFlag := false
+	authzFlag := false
 
 	flag.StringVar(&backendURL, "backend", backendURL, "Backend service URL(s)")
 	flag.StringVar(&serviceWsc, "svc-wsc", serviceWsc, "Service working directory")
@@ -148,11 +150,12 @@ func loadInitConfig() Config {
 	flag.StringVar(&serviceVer, "svc-ver", serviceVer, "Download cache file path")
 	flag.StringVar(&servicePxy, "svc-pxy", servicePxy, "Proxy cache root directory")
 	flag.StringVar(&serviceDir, "svc-dir", serviceDir, "Install/extract directory")
-	flag.StringVar(&servicePre, "svc-pre", servicePre, "Pre-start script (file:// or shell)")
+	flag.StringVar(&serviceSet, "svc-set", serviceSet, "Startup script (file:// or shell)")
 	flag.StringVar(&serviceCmd, "svc-cmd", serviceCmd, "Backend service command")
 	flag.StringVar(&proxyPort, "port", proxyPort, "Proxy listen port")
 	flag.StringVar(&cookie, "cookie", cookie, "Token cookie name")
 	flag.BoolVar(&useSSLFlag, "use-ssl", useSSLFlag, "Enable HTTPS with self-signed cert")
+	flag.BoolVar(&authzFlag, "authz", authzFlag, "Enable auth redirect + logout button injection")
 	flag.Parse()
 
 	// Environment variables override flag values (env-first precedence).
@@ -162,7 +165,7 @@ func loadInitConfig() Config {
 	serviceVer = GetEnvDef("SERVICE_VER", serviceVer)
 	servicePxy = GetEnvDef("SERVICE_PXY", servicePxy)
 	serviceDir = GetEnvDef("SERVICE_DIR", serviceDir)
-	servicePre = GetEnvDef("SERVICE_PRE", servicePre)
+	serviceSet = GetEnvDef("SERVICE_SET", serviceSet)
 	serviceCmd = GetEnvDef("SERVICE_CMD", serviceCmd)
 	proxyPort = GetEnvDef("VSCODE_PORT", proxyPort) // VSCODE_PORT 兼容
 	proxyPort = GetEnvDef("PROXY_PORT", proxyPort)  // PROXY_PORT 最优先
@@ -171,6 +174,10 @@ func loadInitConfig() Config {
 	useSSLEnv := GetEnvDef("PROXY_USE_SSL", "")
 	if useSSLEnv != "" {
 		useSSLFlag = useSSLEnv == "1" || strings.EqualFold(useSSLEnv, "true")
+	}
+	authzEnv := GetEnvDef("PROXY_AUTHZ", "")
+	if authzEnv != "" {
+		authzFlag = authzEnv == "1" || strings.EqualFold(authzEnv, "true")
 	}
 
 	if backendURL == "" {
@@ -189,11 +196,12 @@ func loadInitConfig() Config {
 		ServiceVer:   serviceVer,
 		ServicePxy:   servicePxy,
 		ServiceDir:   serviceDir,
-		ServicePre:   servicePre,
+		ServiceSet:   serviceSet,
 		ServiceCmd:   serviceCmd,
 		ProxyPort:    proxyPort,
 		TokenCookie:  cookie,
 		ProxyUseSSL:  useSSLFlag,
+		ProxyAuthz:   authzFlag,
 		ProxyHeaders: parseProxyHeaders(),
 	}
 }
@@ -219,7 +227,7 @@ func parseBackends(raw string) []Backend {
 	}
 
 	// Single backend: root prefix "/".  When there's only one backend it is
-	// implicitly the service backend managed by Codea.
+	// implicitly the service backend managed by Kin.
 	if b := newBackend("/", raw); b != nil {
 		b.IsService = true
 		return []Backend{*b}
@@ -244,7 +252,7 @@ func isMultiBackend(raw string) bool {
 
 // parseMultiBackends parses already-split segments into backends.
 // A prefix starting with "^" marks the backend as the service backend managed by
-// Codea (auto-deploy, fixup, etc.). The "^" is stripped for routing purposes.
+// Kin (auto-deploy, fixup, etc.). The "^" is stripped for routing purposes.
 func parseMultiBackends(segments []string) []Backend {
 	var backends []Backend
 	for _, seg := range segments {
@@ -456,14 +464,14 @@ func prepareService(cfg Config, srvState *serviceState) error {
 	}
 	log.Printf("[prepare] extract complete: %s", cfg.ServiceDir)
 
-	// Run SERVICE_PRE if set.
-	if cfg.ServicePre != "" {
-		srvState.setPreparing("Running pre-start script: " + cfg.ServicePre)
-		log.Printf("[prepare] running pre-start script: %s", cfg.ServicePre)
-		if err := runServicePreScript(cfg.ServicePre); err != nil {
-			return fmt.Errorf("SERVICE_PRE: %w", err)
+	// Run SERVICE_Set if set.
+	if cfg.ServiceSet != "" {
+		srvState.setPreparing("Running startup script: " + cfg.ServiceSet)
+		log.Printf("[prepare] running startup script: %s", cfg.ServiceSet)
+		if err := runServiceStartup(cfg.ServiceSet); err != nil {
+			return fmt.Errorf("SERVICE_SET: %w", err)
 		}
-		log.Printf("[prepare] pre-start script complete")
+		log.Printf("[prepare] startup script complete")
 	}
 
 	return nil
@@ -472,7 +480,7 @@ func prepareService(cfg Config, srvState *serviceState) error {
 // isServiceInstalled reports whether dir looks like a valid service install —
 // i.e. it exists, is a directory, and is non-empty. The returned reason is
 // non-empty when the directory exists but is empty (incomplete extraction).
-// This is application-agnostic: codea does not assume any specific binary name.
+// This is application-agnostic: kin does not assume any specific binary name.
 func isServiceInstalled(dir string) (ok bool, reason string) {
 	fi, err := os.Stat(dir)
 	if err != nil || !fi.IsDir() {
@@ -691,14 +699,14 @@ func isPathWithin(target, destDir string) bool {
 		strings.HasPrefix(cleanTarget, cleanDest+string(os.PathSeparator))
 }
 
-// runServicePreScript executes SERVICE_PRE. If it starts with "file://", the referenced file
+// runServiceStartup executes SERVICE_SET. If it starts with "file://", the referenced file
 // is made executable and run directly (the kernel reads its #! shebang). Otherwise,
 // the string is run via sh -c.
-func runServicePreScript(cmd string) error {
+func runServiceStartup(cmd string) error {
 	var c *exec.Cmd
 	if filePath, ok := strings.CutPrefix(cmd, "file://"); ok {
 		if err := os.Chmod(filePath, 0o755); err != nil {
-			return fmt.Errorf("chmod pre-start script file: %w", err)
+			return fmt.Errorf("chmod startup script file: %w", err)
 		}
 		c = exec.Command(filePath)
 	} else {
@@ -729,9 +737,9 @@ func main() {
 		isService bool
 	}
 	routes := make([]route, len(cfg.Backends))
-	servicePrefix := "" // prefix of the Codea-managed service backend, "" if none
+	servicePrefix := "" // prefix of the Kin-managed service backend, "" if none
 	for i, b := range cfg.Backends {
-		routes[i] = route{prefix: b.Prefix, handler: createBackendHandler(b, cfg.ProxyHeaders), isService: b.IsService}
+		routes[i] = route{prefix: b.Prefix, handler: createBackendHandler(b, cfg.ProxyHeaders, cfg.ProxyAuthz), isService: b.IsService}
 		if b.IsService {
 			servicePrefix = b.Prefix
 		}
@@ -1415,7 +1423,7 @@ func atomicWriteFile(path string, data []byte, perm os.FileMode) error {
 
 // createBackendHandler builds an http.Handler for the given backend.
 // Supported schemes: http, https, unix (reverse proxy), file (directory), text (literal).
-func createBackendHandler(b Backend, proxyHeaders map[string]string) http.Handler {
+func createBackendHandler(b Backend, proxyHeaders map[string]string, authz bool) http.Handler {
 	switch b.Scheme {
 	case "http", "https":
 		targetURL, err := url.Parse(b.RawURL)
@@ -1428,7 +1436,9 @@ func createBackendHandler(b Backend, proxyHeaders map[string]string) http.Handle
 			origDirector(req)
 			applyProxyHeaders(req, proxyHeaders)
 		}
-		rp.ModifyResponse = proxyResponseModifier()
+		if authz {
+			rp.ModifyResponse = proxyResponseModifier()
+		}
 		return rp
 
 	case "unix":
@@ -1447,7 +1457,9 @@ func createBackendHandler(b Backend, proxyHeaders map[string]string) http.Handle
 				},
 			},
 		}
-		rp.ModifyResponse = proxyResponseModifier()
+		if authz {
+			rp.ModifyResponse = proxyResponseModifier()
+		}
 		return rp
 
 	case "file":

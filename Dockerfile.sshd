@@ -32,6 +32,13 @@ COPY --from=rootfs-stage /rootfs/ /
 ENV S6_CMD_WAIT_FOR_SERVICES_MAXTIME="0" \
     S6_VERBOSITY=1      /etc/nginx
 
+COPY rootfs/usr/bin/* /usr/bin/
+# /bin/bash /usr/bin/init-entry 插入到 /init 第二行
+RUN sed -i '2i/bin/bash /usr/bin/init-entry' /init
+
+# s6 入口
+ENTRYPOINT ["/init"]
+
 # copy rootfs all file
 COPY rootfs/ /
 # ================================================================

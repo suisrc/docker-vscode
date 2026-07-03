@@ -69,11 +69,11 @@ if [[ -z "${VSCODE_HASH}" ]]; then
     export VSCODE_HASH="vscode:latest"
 fi
 
-# codea 是一个用于授权的工具，它会在启动 vscode server 前进行授权验证，确保只有通过验证的用户才能访问 vscode server
+# kin 是一个用于授权的工具，它会在启动 vscode server 前进行授权验证，确保只有通过验证的用户才能访问 vscode server
 echo 'start vscode server. wss need set env: PROXY_HEADER_x-forwarded-port=443'
-codea --use-ssl  \
+kin --use-ssl --authz \
     --svc-wsc "${VSCODE_WSC:-/wsc}" \
-    --svc-pre "${VSCODE_INIT}" \
+    --svc-set "${VSCODE_INIT}" \
     --backend "/__healthz=text://OK:{now};^/=unix:///var/run/vscode.sock" \
     --svc-cmd '${SERVICE_DIR}/bin/code-server --socket-path /var/run/vscode.sock \
         --accept-server-license-terms --server-data-dir ${SERVICE_WSC}/.vsc \
