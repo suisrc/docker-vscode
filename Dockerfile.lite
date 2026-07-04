@@ -1,18 +1,23 @@
 FROM golang:1.26-trixie as builder
 
 RUN apt-get update && apt-get install -y git
-COPY kin/ /build/
-RUN cd /build/ && CGO_ENABLED=0 go build -ldflags="-s -w" -o kin .
+COPY kin/ /kin/
+RUN cd /kin/ && CGO_ENABLED=0 go build -ldflags="-s -w" -o kin .
+COPY kas/ /kas/
+RUN cd /kas/ && CGO_ENABLED=0 go build -ldflags="-s -w" -o kas .
 
 FROM debian:trixie-slim
 
-COPY --from=builder  /build/kin  /usr/local/bin/kin
+COPY --from=builder  /kin/kin  /usr/bin/kin
+COPY --from=builder  /kas/kas  /usr/bin/kas
 
 # set environment variables
 ENV LANGUAGE="zh_CN.UTF-8" \
     LANG="zh_CN.UTF-8" \
     USER="webtop" \
     HOME="/home/webtop" \
+    KAS_SSHD="0" \
+    KAS_VSCODE="1" \
     ZSH_CUSTOM="/home/webtop/.oh-my-zsh/plugins"
 
 # update linux
@@ -47,6 +52,12 @@ RUN apt update && DEBIAN_FRONTEND=noninteractive \
     openssl \
     openssh-client \
     openssh-server \
+    apt-get autoremove && apt-get clean && \
+    rm -rf /tmp/* /var/tmp/* /var/lib/apt/lists/*
+
+# update linux, 避免单个镜像块过大问题
+RUN apt update && DEBIAN_FRONTEND=noninteractive \
+    apt install --no-install-recommends -y \
     python3 \
     fontconfig \
     fonts-noto-core \
@@ -65,10 +76,11 @@ ENV VSCODE_WSC="/wsc" \
     PROXY_HEADER_x-forwarded-port="443" \
     PASSWORD=""
 
-COPY kin/vscode.sh /usr/vscode.sh
+COPY script/vscode.kas.ini   /etc/kas.ini
+COPY script/init.sh script/vscode.sh  /usr/srv/
 
 # creating the user and usergroup
-RUN mkdir -p $HOME /app /wsc && sed -i '1i#!/bin/bash' /usr/vscode.sh && \
+RUN mkdir -p $HOME /app /wsc && \
     groupadd --gid 1000 $USER && \
     useradd  --uid 1000 --gid $USER -d $HOME -m -s /bin/bash $USER && \
     echo $USER ALL=\(root\) NOPASSWD:ALL > /etc/sudoers.d/$USER && \
@@ -80,7 +92,6 @@ RUN mkdir -p $HOME /app /wsc && sed -i '1i#!/bin/bash' /usr/vscode.sh && \
     sed -i "3iexport \$(sudo cat /proc/1/environ |tr '\\\\0' '\\\\n' | xargs)" /etc/profile
 # /etc/profile: ssh 连接会导致环境变量消失, 在docker中,可以通过进程ID=1上的环境变量还原, 通过profile文件还原
 
-ENTRYPOINT ["/usr/bin/tini", "--"]
-CMD ["/usr/vscode.sh"]
+ENTRYPOINT ["/usr/bin/kas"]
 
 # EXPOSE 7080

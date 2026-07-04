@@ -1,0 +1,65 @@
+; kas example configuration.
+;
+; Syntax uses [program:NAME] sections. "program:" is a fixed prefix; NAME is
+; the service name used in `depends=` and shown in logs, e.g. [program:init]
+; -> name is "init".
+;
+; kas extensions (beyond the common Supervisor fields):
+;
+;   type           = once | long    once = one-shot init task (run only on first
+;                                   load, never restarted); long = service (default)
+;   depends        = a,b,c          comma-separated service names that must start
+;                                   (and, for "once" deps, complete) first
+;   max_retries    = N              max auto-restart attempts after a crash
+;                                   (default 3; 0 = retry forever)
+;   restart_delay  = N              fixed seconds between restart attempts
+;                                   (default 0 = exponential backoff 0.5s->30s)
+;
+; Any field value supports ${VAR} expansion from the kas process environment,
+; e.g.  command=/app --port ${APP_PORT}
+;
+; `autostart` doubles as runtime control: editing it to false in the config
+; stops the running service; flipping back to true starts it again. Run
+; `kas reload` (or send SIGHUP) to apply the change.
+;
+; `user=NAME` runs the program as the given user (uid/gid resolved from
+; /etc/passwd, Linux only).
+
+; One-shot init task: runs once at startup, web below waits for it to finish.
+[program:init]
+command=/usr/local/bin/init-script
+autostart=true
+autorestart=false
+type=once
+priority=1
+stdout_logfile=/tmp/init.log
+
+[program:web]
+command=/usr/local/bin/myapp --port ${APP_PORT}
+autostart=true
+autorestart=true
+stopwaitsecs=10
+max_retries=5
+restart_delay=2
+priority=10
+type=long
+depends=init
+stdout_logfile=/tmp/web.log
+stderr_logfile=/tmp/web.err
+
+[program:worker]
+command=/usr/local/bin/worker
+autostart=true
+autorestart=true
+priority=20
+type=long
+user=nobody
+environment=LOG_LEVEL="debug",QUEUE="default"
+
+; A service that is configured but intentionally held stopped.
+; Flip autostart to true (and reload) to start it.
+[program:maintenance]
+command=/usr/local/bin/maint-task
+autostart=false
+autorestart=false
+type=long
