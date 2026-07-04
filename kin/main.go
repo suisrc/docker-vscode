@@ -160,28 +160,33 @@ func loadInitConfig() Config {
 	flag.BoolVar(&authzFlag, "authz", authzFlag, "Enable auth redirect + logout button injection")
 	flag.Parse()
 
-	// Environment variables override flag values (env-first precedence).
-	// Resolve SERVICE_CMD first (from env or flag) so we know whether a service
-	// will be deployed. Only then do we resolve VSCODE_HASH=vscode:latest and
-	// expand the fields that reference ${VSCODE_HASH} — this avoids a network
-	// fetch when Kin is used as a plain reverse proxy (no SERVICE_CMD).
 	backendURL = GetEnvDef("BACKEND_URL", backendURL)
-	serviceWsc = GetEnvDef("SERVICE_WSC", serviceWsc)
-	serviceSet = GetEnvDef("SERVICE_SET", serviceSet)
-	serviceCmd = GetEnvDef("SERVICE_CMD", serviceCmd)
-	servicePxy = GetEnvDef("SERVICE_PXY", servicePxy)
+	if backendURL == "" {
+		log.Fatal("BACKEND_URL is required (set via env or -backend flag)")
+	}
+	backends := parseBackends(backendURL)
+	if len(backends) == 0 {
+		log.Fatal("BACKEND_URL parsed to zero backends")
+	}
+
 	proxyPort = GetEnvDef("VSCODE_PORT", proxyPort) // VSCODE_PORT 兼容
 	proxyPort = GetEnvDef("PROXY_PORT", proxyPort)  // PROXY_PORT 最优先
 
-	// Resolve VSCODE_HASH=vscode:latest only when a service will actually be
-	// deployed (SERVICE_CMD non-empty, from env or flag). Must run before the
-	// SERVICE_URL/VER/DIR fields are expanded via os.ExpandEnv below.
-	if serviceCmd != "" {
+	// Peek whether SERVICE_CMD is provided (via env or flag) to decide if we
+	// need to resolve VSCODE_HASH=vscode:latest. We can't expand SERVICE_CMD
+	// yet (it may reference ${SERVICE_DIR}), so we check the raw sources.
+	if os.Getenv("SERVICE_CMD") != "" || serviceCmd != "" {
 		resolveVscodeHash()
 	}
+
+	// Expand fields in dependency order.
+	serviceWsc = GetEnvDef("SERVICE_WSC", serviceWsc)
 	serviceUrl = GetEnvDef("SERVICE_URL", serviceUrl)
 	serviceVer = GetEnvDef("SERVICE_VER", serviceVer)
+	servicePxy = GetEnvDef("SERVICE_PXY", servicePxy)
 	serviceDir = GetEnvDef("SERVICE_DIR", serviceDir)
+	serviceSet = GetEnvDef("SERVICE_SET", serviceSet)
+	serviceCmd = GetEnvDef("SERVICE_CMD", serviceCmd)
 
 	cookie = GetEnvDef("TOKEN_COOKIE", cookie)
 	useSSLEnv := GetEnvDef("PROXY_USE_SSL", "")
@@ -191,15 +196,6 @@ func loadInitConfig() Config {
 	authzEnv := GetEnvDef("PROXY_AUTHZ", "")
 	if authzEnv != "" {
 		authzFlag = authzEnv == "1" || strings.EqualFold(authzEnv, "true")
-	}
-
-	if backendURL == "" {
-		log.Fatal("BACKEND_URL is required (set via env or -backend flag)")
-	}
-
-	backends := parseBackends(backendURL)
-	if len(backends) == 0 {
-		log.Fatal("BACKEND_URL parsed to zero backends")
 	}
 
 	return Config{
