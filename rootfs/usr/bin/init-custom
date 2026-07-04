@@ -1,4 +1,0 @@
-#!/bin/bash
-
-## 优先运行自定义初始化脚本，用于启动时初始化
-echo "INFO[9999] run custom init script by $0"

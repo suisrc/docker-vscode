@@ -1,31 +1,71 @@
-## x. 最后安装 nodejs, java， golang 等开发环境, all in one, BASE_IMAGE_TAG = vscode / xfce
+## x. 最后安装 nodejs, java， golang 等开发环境, all in one
 # python 环境， 可以直接命令行安装，这边不作为基础环境
 ARG BASE_IMAGE_TAG
 
 FROM ghcr.io/suisrc/webtop:${BASE_IMAGE_TAG}
 # ================================================================
 
-RUN mkdir -p ${HOME}/.go/bin
-ENV GO_VERSION=1.25.5  \
-    GOPATH=${HOME}/.go \
-    PATH=/usr/local/golang/bin:${HOME}/.go/bin:$PATH
+# update linux
+RUN apt update && DEBIAN_FRONTEND=noninteractive \
+    apt install --no-install-recommends -y \
+    gcc \
+    binutils \
+    libxfont2 \
+    libdbus-glib-1-2 \
+    libatomic1 \
+    build-essential \
+    libz-dev \ 
+    zlib1g-dev & \
+    apt-get autoremove && apt-get clean && \
+    rm -rf /tmp/* /var/tmp/* /var/lib/apt/lists/*
 
-# ==============================================================================================================
+# ================================================================
+ENV UVX_VERSION=0.11.26 \
+    NVM_VERSION=0.40.5 \
+    XGO_VERSION=1.26.4 \
+    XAV_VERSION=0.0.1
+
+# vux python https://github.com/astral-sh/uv
+# nvm nodejs https://github.com/nvm-sh/nvm
+# sdk java.. https://sdkman.io/usage
+
+SHELL ["/bin/bash", "-c"]
+RUN apt update && DEBIAN_FRONTEND=noninteractive \
+    UVX_URL="https://github.com/astral-sh/uv/releases/download/${UVX_VERSION}/uv-x86_64-unknown-linux-gnu.tar.gz" && \
+    curl -fSL "${UVX_URL}" -o /tmp/uv.tar.gz && tar -xzf /tmp/uv.tar.gz -C /usr/bin/ --strip-components=1 && \
+    curl -o- "https://raw.githubusercontent.com/nvm-sh/nvm/v${NVM_VERSION}/install.sh" | bash && \
+    export NVM_DIR="$([ -z "${XDG_CONFIG_HOME-}" ] && printf %s "${HOME}/.nvm" || printf %s "${XDG_CONFIG_HOME}/nvm")" && \
+    [ -s "$NVM_DIR/nvm.sh" ] && \. "$NVM_DIR/nvm.sh" --no-use && \
+    curl -s  "https://get.sdkman.io" | bash && . "$HOME/.sdkman/bin/sdkman-init.sh" && \
+    rm -rf /tmp/* /var/tmp/* /var/lib/apt/lists/*
+
+# nvm list
+RUN nvm install 24 && nvm use 24 && \
+    npm install pnpm yarn -g &&
+    rm -rf ${HOME}/.nvm/.cache/* && \
+    rm -rf ${HOME}/.npm/_cacache && \
+    rm -rf ${HOME}/.npm/_locks && \
+    rm -rf ${HOME}/.npm/_logs
+
+# sdk list
 RUN . "$HOME/.sdkman/bin/sdkman-init.sh" &&\
-    sdk install java 8.0.472-sem &&\
-    sdk install java 25.0.1-sem &&\
-    sdk use java 25.0.1-sem &&\
-    sdk install maven 3.9.11 &&\
+    sdk install java 8.0.482.1-sem &&\
+    sdk install java 25.0.3-sem &&\
+    sdk use java 25.0.3-sem &&\
+    sdk install maven 3.9.16 &&\
     rm -rf ${HOME}/.sdkman/tmp/*
 
-# RUN export NVM_DIR="$([ -z "${XDG_CONFIG_HOME-}" ] && printf %s "${HOME}/.nvm" || printf %s "${XDG_CONFIG_HOME}/nvm")" &&\
-#     [ -s "$NVM_DIR/nvm.sh" ] && \. "$NVM_DIR/nvm.sh"  --no-use &&\
-#     nvm install 14 && nvm install 24
+# uv 是 python 环境变量
 
-# ==============================================================================================================
+# ================================================================
+
+RUN mkdir -p ${HOME}/.go/bin
+ENV GOPATH=${HOME}/.go \
+    PATH=/usr/local/golang/bin:${HOME}/.go/bin:$PATH
+
 # https://golang.google.cn/dl/
 RUN mkdir /usr/local/golang && \
-    curl -fSL --compressed "https://dl.google.com/go/go${GO_VERSION}.linux-amd64.tar.gz" | \
+    curl -fSL --compressed "https://dl.google.com/go/go${XGO_VERSION}.linux-amd64.tar.gz" | \
     tar -xz -C /usr/local/golang --strip-components=1 && go version
 
 # golang extension
@@ -39,8 +79,21 @@ RUN go install github.com/ramya-rao-a/go-outline@latest &&\
     go install golang.org/x/tools/gopls@latest &&\
     go install github.com/google/wire/cmd/wire@latest; exit 0
 
-# ==============================================================================================================
-# python extension
-# RUN pip3 install --upgrade pip &&\
-#     pip3 install --user pylint &&\
-#     pip3 install --user django
+# ================================================================
+
+# FRP_VERSION=0.69.1 \
+# T2S_VERSION=2.6.0
+
+# frps&frpc  https://github.com/fatedier/frp/releases
+# tun2socks  https://github.com/xjasonlyu/tun2socks/releases
+
+# FRP_URL="https://github.com/fatedier/frp/releases/download/v${FRP_VERSION}/frp_${FRP_VERSION}_linux_amd64.tar.gz" && \
+# curl -fSL "${FRP_URL}" -o /tmp/frp.tar.gz && mkdir /tmp/frp && tar -xzf /tmp/frp.tar.gz -C /tmp/frp/ --strip-components=1 && \
+# mv /tmp/frp/frpc /usr/local/bin/ && mv /tmp/frp/frps /usr/local/bin/ && \
+# T2S_URL="https://github.com/xjasonlyu/tun2socks/releases/download/v${T2S_VERSION}/tun2socks-linux-amd64.zip" && \
+# curl -fSL "${T2S_URL}" -o /tmp/tun2socks.zip  && cd /tmp && unzip tun2socks.zip && \
+# mv /tmp/tun2socks-linux-amd64 /usr/local/bin/tun2socks && chmod a+x /usr/local/bin/tun2socks && \
+
+# COPY ngx/etc-frp  /etc/frp
+# ================================================================
+

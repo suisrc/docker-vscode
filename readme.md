@@ -9,13 +9,10 @@ Dockerfile.ssh(proxyssh-3.0.0)(ssh代理)
 Dockerfile.ngx(ssh-3.0.0)(vsc代理)  
   
 开发环境  
-Dockerfile.lite -> vscode online 
-Dockerfile.s6   -> 只安装 s6, 并将/etc/s6-overlay/init-entry 注入到 /init 第二行  
-Dockerfile.sshd -> 只启动 sshd + nginx，构建一个可以简单的用于访问的 linux 微环境  
-Dockerfile.xfce -> 启动一个桌面环境，之所有桌面下放到这层，是因为桌面基本不太会进行变动  
-Dockerfile.xa   -> 在xfce基础上，增加 tun2socks 和 frp 软件支持， 支持全局代理和内网穿透  
-Dockerfile.vscode
-Dockerfile.dev     ->  golang + nodejs + java, 由于python安装简单，不在考虑范围内 
+Dockerfile.vsc -> vscode online 
+Dockerfile.xfc -> 启动一个桌面环境，之所有桌面下放到这层，是因为桌面基本不太会进行变动  
+Dockerfile.dev-vsc ->  nvm(nodejs) + nv(python) + sdk(java) + golang  
+Dockerfile.dev-xfc ->  golang + nodejs + java, 由于python安装简单，不在考虑范围内  
 Dockerfile.pwright ->  安装 playwirght 环境  
 
 
@@ -33,7 +30,9 @@ https://github.com/linuxserver/docker-baseimage-ubuntu
 
 ```sh
 
-docker pull hkccr.ccs.tencentyun.com/suisrc/webtop:lite-3.0.1.bate2
+docker pull ghcr.io/suisrc/webtop:vsc-3.0.0
+docker pull docker.io/suisrc/webtop:vsc-3.0.0
+docker pull hkccr.ccs.tencentyun.com/suisrc/webtop:vsc-3.0.0
 
 ```
 
@@ -53,7 +52,3 @@ docker pull hkccr.ccs.tencentyun.com/suisrc/webtop:lite-3.0.1.bate2
 | `Stable` | `stable` |
 | `Insiders` | `insider` |
 | `Exploration` | `exploration` |
-
-## 升级说明
-
-由于观测到vscode升级非常频繁，而且也带来了一些问题，比如插件兼容性问题。所以在20240805后的版本中，vscode, vsccdr, vscpod将只有基础版本，vsccli将提供高级功能，包括dev开发环境， xface UI页面等功能

@@ -26,7 +26,7 @@ chmod +x kubectl && cp kubectl /usr/local/bin/
 ## go
 
 ```sh
-go env -w GOPROXY=https://proxy.golang.com.cn,direct,direct &&
+go env -w GOPROXY=https://goproxy.io,direct &&
 go env -w GOSUMDB="sum.golang.google.cn"
 go env -w GOSUMDB="sum.golang.org"
 go env -w GOSUMDB=off
@@ -35,9 +35,7 @@ go env -w GOSUMDB=off
 ## js
 
 ```sh
-# npmjs镜像
-npm config set registry https://registry.npm.taobao.org --global
-npm config set disturl https://npm.taobao.org/dist --global
+npm config set registry https://registry.npmmirror.com
 ```
 
 ## py

@@ -2,7 +2,7 @@
 # ================================================================
 ARG BASE_IMAGE_TAG
 
-FROM ghcr.io/suisrc/webtop:sshd-${BASE_IMAGE_TAG}
+FROM ghcr.io/suisrc/webtop:vsc-${BASE_IMAGE_TAG}
 # ================================================================
 # set environment variables
 ENV SVC_XFCE="1" \
