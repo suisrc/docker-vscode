@@ -40,7 +40,10 @@ RUN UVX_URL="https://github.com/astral-sh/uv/releases/download/${UVX_VERSION}/uv
     rm -rf /tmp/* /var/tmp/* /var/lib/apt/lists/*
 
 # nvm list
-RUN nvm install 24 && nvm use 24 && \
+RUN export NVM_DIR="$([ -z "${XDG_CONFIG_HOME-}" ] && printf %s "${HOME}/.nvm" || printf %s "${XDG_CONFIG_HOME}/nvm")" &&\
+    [ -s "$NVM_DIR/nvm.sh" ] && \. "$NVM_DIR/nvm.sh"  --no-use &&\
+    nvm install 14 && \
+    nvm install 24 && nvm use 24 && \
     npm install pnpm yarn -g && \
     rm -rf ${HOME}/.nvm/.cache/* && \
     rm -rf ${HOME}/.npm/_cacache && \
