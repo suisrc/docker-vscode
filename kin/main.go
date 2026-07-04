@@ -806,11 +806,14 @@ func main() {
 		http.Redirect(w, r, back, http.StatusSeeOther)
 	})
 
-	// /__logout – clears the token cookie.
+	// /__logout – clears the token cookie. Returns a minimal JSON response
+	// (not a page) so it can be called via fetch from the logout button script.
+	// The caller is responsible for reloading/redirecting after logout.
 	mux.HandleFunc("/__logout", func(w http.ResponseWriter, r *http.Request) {
 		setTokenCookie(w, "", -1)
 		log.Printf("logout: cleared cookie %s", cfg.TokenCookie)
-		serveStaticAsset(w, "logout.html")
+		w.Header().Set("Content-Type", "application/json")
+		_, _ = w.Write([]byte(`{"success":true,"message":"logout success"}`))
 	})
 
 	// /favicon.ico – a minimal inline SVG favicon (blue rounded square with "C")

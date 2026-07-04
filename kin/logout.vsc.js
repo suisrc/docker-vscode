@@ -24,12 +24,18 @@
     li.appendChild(ind);
 
     li.addEventListener('click', function () {
-      window.location.href = '/__logout';
+      // Use fetch (no page navigation) so the browser stays on the current URL
+      // and the Referer is preserved for the subsequent login redirect.
+      fetch('/__logout', { credentials: 'include' })
+        .then(function () { window.location.reload(); })
+        .catch(function () { window.location.reload(); });
     });
     li.addEventListener('keydown', function (e) {
       if (e.key === 'Enter' || e.key === ' ') {
         e.preventDefault();
-        window.location.href = '/__logout';
+        fetch('/__logout', { credentials: 'include' })
+          .then(function () { window.location.reload(); })
+          .catch(function () { window.location.reload(); });
       }
     });
     return li;
