@@ -801,7 +801,7 @@ func main() {
 			return
 		}
 		setTokenCookie(w, tkn, 0)
-		back := safeReferer(r.Referer())
+		back := safeReferer(r.Referer(), r.Host)
 		log.Printf("login ok, cookie %s=%s, reloading: %s", cfg.TokenCookie, tkn, back)
 		http.Redirect(w, r, back, http.StatusSeeOther)
 	})
@@ -1028,17 +1028,35 @@ func serverAddrs(servers []serverInstance) []string {
 }
 
 // safeReferer returns a same-origin redirect target, falling back to "/".
-// Only relative paths are allowed to prevent open redirect attacks.
-// url.Parse may fail on refs containing spaces; those safely fall back to "/".
-func safeReferer(ref string) string {
+// It accepts both relative paths and absolute URLs: when the referer is an
+// absolute URL on the same host (r.Host), only the path+query is returned so
+// the redirect stays same-origin. Cross-origin or unparseable referers fall
+// back to "/". This preserves query strings (e.g. ?folder=/wsc) that would
+// otherwise be lost.
+func safeReferer(ref, host string) string {
 	if ref == "" {
 		return "/"
 	}
 	u, err := url.Parse(ref)
-	if err != nil || u.Host != "" {
+	if err != nil {
 		return "/"
 	}
-	return ref
+	// Relative referer (no host) — use as-is.
+	if u.Host == "" {
+		return ref
+	}
+	// Absolute referer — only allow same-origin, then strip to path+query.
+	if u.Host != host {
+		return "/"
+	}
+	path := u.Path
+	if path == "" {
+		path = "/"
+	}
+	if u.RawQuery != "" {
+		path += "?" + u.RawQuery
+	}
+	return path
 }
 
 // applyProxyHeaders rewrites request headers according to PROXY_HEADER_* env vars.
