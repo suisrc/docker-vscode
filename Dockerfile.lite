@@ -76,7 +76,7 @@ ENV VSCODE_WSC="/wsc" \
     PROXY_HEADER_x-forwarded-port="443" \
     PASSWORD=""
 
-COPY script/vscode.kas.ini   /etc/kas.ini
+COPY script/vscode.kas.ini /etc/kas.ini
 COPY script/init.sh script/vscode.sh  /usr/srv/
 
 # creating the user and usergroup
