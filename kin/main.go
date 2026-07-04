@@ -8,6 +8,7 @@ import (
 	"crypto/ecdsa"
 	"crypto/elliptic"
 	"crypto/rand"
+	"crypto/subtle"
 	"crypto/tls"
 	"crypto/x509"
 	"crypto/x509/pkix"
@@ -60,6 +61,7 @@ type Config struct {
 	ServiceCmd   string // SERVICE_CMD — optional shell command to run as the backend
 	ProxyPort    string
 	TokenCookie  string            // cookie name, default "vscode-tkn"
+	AuthToken    string            // optional static token; when set, cookie value must match it (flag-only, no env)
 	ProxyUseSSL  bool              // enable HTTPS with a self-signed cert
 	ProxyAuthz   bool              // enable auth redirect + logout button injection
 	ProxyHeaders map[string]string // PROXY_HEADER_Xxx=Val → set/override; PROXY_HEADER_Xxx= → delete
@@ -127,8 +129,6 @@ func resolveVscodeHash() {
 }
 
 func loadInitConfig() Config {
-	resolveVscodeHash()
-
 	// Flags provide defaults; environment variables take precedence over flags.
 	// Bind flags with hard-coded defaults first, parse, then let env vars override.
 	backendURL := ""
@@ -141,6 +141,7 @@ func loadInitConfig() Config {
 	serviceCmd := ""
 	proxyPort := "7080"
 	cookie := "vscode-tkn"
+	authToken := ""
 	useSSLFlag := false
 	authzFlag := false
 
@@ -154,21 +155,33 @@ func loadInitConfig() Config {
 	flag.StringVar(&serviceCmd, "svc-cmd", serviceCmd, "Backend service command")
 	flag.StringVar(&proxyPort, "port", proxyPort, "Proxy listen port")
 	flag.StringVar(&cookie, "cookie", cookie, "Token cookie name")
+	flag.StringVar(&authToken, "token", authToken, "Static token to validate the cookie against (flag-only, no env var)")
 	flag.BoolVar(&useSSLFlag, "use-ssl", useSSLFlag, "Enable HTTPS with self-signed cert")
 	flag.BoolVar(&authzFlag, "authz", authzFlag, "Enable auth redirect + logout button injection")
 	flag.Parse()
 
 	// Environment variables override flag values (env-first precedence).
+	// Resolve SERVICE_CMD first (from env or flag) so we know whether a service
+	// will be deployed. Only then do we resolve VSCODE_HASH=vscode:latest and
+	// expand the fields that reference ${VSCODE_HASH} — this avoids a network
+	// fetch when Kin is used as a plain reverse proxy (no SERVICE_CMD).
 	backendURL = GetEnvDef("BACKEND_URL", backendURL)
 	serviceWsc = GetEnvDef("SERVICE_WSC", serviceWsc)
-	serviceUrl = GetEnvDef("SERVICE_URL", serviceUrl)
-	serviceVer = GetEnvDef("SERVICE_VER", serviceVer)
-	servicePxy = GetEnvDef("SERVICE_PXY", servicePxy)
-	serviceDir = GetEnvDef("SERVICE_DIR", serviceDir)
 	serviceSet = GetEnvDef("SERVICE_SET", serviceSet)
 	serviceCmd = GetEnvDef("SERVICE_CMD", serviceCmd)
+	servicePxy = GetEnvDef("SERVICE_PXY", servicePxy)
 	proxyPort = GetEnvDef("VSCODE_PORT", proxyPort) // VSCODE_PORT 兼容
 	proxyPort = GetEnvDef("PROXY_PORT", proxyPort)  // PROXY_PORT 最优先
+
+	// Resolve VSCODE_HASH=vscode:latest only when a service will actually be
+	// deployed (SERVICE_CMD non-empty, from env or flag). Must run before the
+	// SERVICE_URL/VER/DIR fields are expanded via os.ExpandEnv below.
+	if serviceCmd != "" {
+		resolveVscodeHash()
+	}
+	serviceUrl = GetEnvDef("SERVICE_URL", serviceUrl)
+	serviceVer = GetEnvDef("SERVICE_VER", serviceVer)
+	serviceDir = GetEnvDef("SERVICE_DIR", serviceDir)
 
 	cookie = GetEnvDef("TOKEN_COOKIE", cookie)
 	useSSLEnv := GetEnvDef("PROXY_USE_SSL", "")
@@ -200,6 +213,7 @@ func loadInitConfig() Config {
 		ServiceCmd:   serviceCmd,
 		ProxyPort:    proxyPort,
 		TokenCookie:  cookie,
+		AuthToken:    authToken,
 		ProxyUseSSL:  useSSLFlag,
 		ProxyAuthz:   authzFlag,
 		ProxyHeaders: parseProxyHeaders(),
@@ -424,7 +438,13 @@ func serveLoadingPage(w http.ResponseWriter, status string) {
 // prepareService downloads (if needed), extracts, and runs fixups for the backend
 // service. It blocks until preparation is complete. srvState tracks status for the
 // loading page.
+//
+// When SERVICE_CMD is empty there is no backend subprocess to start, so the
+// whole download/extract/fixup pipeline is skipped (Kin acts as a plain proxy).
 func prepareService(cfg Config, srvState *serviceState) error {
+	if cfg.ServiceCmd == "" {
+		return nil // no backend subprocess → nothing to deploy
+	}
 	if cfg.ServiceUrl == "" {
 		return nil // nothing to download
 	}
@@ -877,7 +897,16 @@ func main() {
 		http.Error(w, "no backend matched", http.StatusBadGateway)
 	})
 
-	servers := buildServers(cfg.ProxyPort, cfg.ProxyUseSSL, mux)
+	// When --token is set, wrap the mux with a token-checking middleware:
+	// requests carrying a cookie whose value equals the configured token pass
+	// through; all others get 401. The login/logout endpoints and other kin
+	// internal assets are always reachable so the user can authenticate.
+	finalHandler := http.Handler(mux)
+	if cfg.AuthToken != "" {
+		finalHandler = tokenAuthMiddleware(mux, cfg.TokenCookie, cfg.AuthToken)
+	}
+
+	servers := buildServers(cfg.ProxyPort, cfg.ProxyUseSSL, finalHandler)
 
 	// Graceful shutdown on SIGINT/SIGTERM.
 	sigCh := make(chan os.Signal, 1)
@@ -900,6 +929,9 @@ func main() {
 
 	log.Printf("proxy starting: %s", strings.Join(serverAddrs(servers), ", "))
 	log.Printf("token cookie: %s", cfg.TokenCookie)
+	if cfg.AuthToken != "" {
+		log.Printf("token auth: enabled (cookie %s must match --token)", cfg.TokenCookie)
+	}
 	log.Printf("backends: %d", len(cfg.Backends))
 	for i, b := range cfg.Backends {
 		marker := ""
@@ -1705,4 +1737,36 @@ func killProcessGroup(cmd *exec.Cmd) {
 func serveStaticAsset(w http.ResponseWriter, name string) {
 	w.Header().Set("Content-Type", "text/html; charset=utf-8")
 	_, _ = w.Write(mustAsset(name))
+}
+
+// tokenAuthMiddleware wraps next with a static-token cookie check. When the
+// request's cookie named cookieName does not equal token, it serves the login
+// page (login.html) so the user can authenticate. The kin-owned paths
+// (/__login, /__logout, /favicon.ico, /__logout.vsc.js and the /__proxy/
+// external proxy) are exempt so authentication can proceed and cached assets
+// still load on the login page.
+func tokenAuthMiddleware(next http.Handler, cookieName, token string) http.Handler {
+	return http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		if isPublicAuthPath(r.URL.Path) {
+			next.ServeHTTP(w, r)
+			return
+		}
+		c, err := r.Cookie(cookieName)
+		if err != nil || c.Value == "" || subtle.ConstantTimeCompare([]byte(c.Value), []byte(token)) != 1 {
+			// http.Error(w, "Unauthorized", http.StatusUnauthorized) // flag, don't delete
+			serveStaticAsset(w, "login.html")
+			return
+		}
+		next.ServeHTTP(w, r)
+	})
+}
+
+// isPublicAuthPath reports whether path is reachable without a valid token
+// (login/logout flow, favicon, logout script, external proxy).
+func isPublicAuthPath(path string) bool {
+	switch path {
+	case "/__login", "/__logout", "/favicon.ico":
+		return true
+	}
+	return strings.HasPrefix(path, "/__proxy/") || strings.HasPrefix(path, "/__logout.")
 }

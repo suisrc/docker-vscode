@@ -1,0 +1,57 @@
+#!/usr/bin/bash
+set -e
+
+# GitHub 国内加速前缀（空则直连）。常见可用值：
+#   https://ghfast.top
+#   https://ghproxy.com
+#   https://mirror.ghproxy.com
+GH_PROXY="https://ghfast.top"
+gh_url() {             # 把 github.com / raw.githubusercontent.com 走代理
+    local url="$1"
+    if [ -n "${GH_PROXY}" ]; then
+        echo "${GH_PROXY}/${url#https://}"
+    else
+        echo "${url}"
+    fi
+}
+gh_latest() {          # 取 GitHub repo 最新 release tag（纯 tag，去 v 前缀）
+    local repo="$1" strip_v="${2:-0}"
+    local tag
+    tag="$(curl -fsSL "https://api.github.com/repos/${repo}/releases/latest" \
+            | grep -m1 '"tag_name"' | sed -E 's/.*"([^"]+)".*/\1/')"
+    [ -z "${tag}" ] && { echo "无法获取 ${repo} 最新版本" >&2; exit 1; }
+    [ "${strip_v}" = "1" ] && tag="${tag#v}"
+    echo "${tag}"
+}
+
+apt update && DEBIAN_FRONTEND=noninteractive \
+apt install --no-install-recommends -y \
+    zip \
+    gcc \
+    binutils \
+    libxfont2 \
+    libdbus-glib-1-2 \
+    libatomic1 \
+    build-essential \
+    libz-dev \
+    zlib1g-dev
+
+# --- uv：自动获取最新版，走 GH 加速 ---
+UVX_VERSION="$(gh_latest astral-sh/uv 1)"
+echo "安装 uv ${UVX_VERSION} ..."
+UVX_URL="$(gh_url "https://github.com/astral-sh/uv/releases/download/${UVX_VERSION}/uv-x86_64-unknown-linux-gnu.tar.gz")"
+curl -fSL "${UVX_URL}" -o /tmp/uv.tar.gz && \
+tar -xzf /tmp/uv.tar.gz -C /usr/bin/ --strip-components=1 && rm -f /tmp/uv.tar.gz
+
+# --- nvm：自动获取最新版，走 GH 加速 ---
+NVM_VERSION="$(gh_latest nvm-sh/nvm 1)"
+echo "安装 nvm ${NVM_VERSION} ..."
+curl -fsSL -o- "$(gh_url "https://raw.githubusercontent.com/nvm-sh/nvm/v${NVM_VERSION}/install.sh")" | bash
+export NVM_DIR="$([ -z "${XDG_CONFIG_HOME-}" ] && printf %s "${HOME}/.nvm" || printf %s "${XDG_CONFIG_HOME}/nvm")"
+[ -s "$NVM_DIR/nvm.sh" ] && \. "$NVM_DIR/nvm.sh" --no-use
+
+# --- sdkman：官方安装脚本直连（已自带 CDN，国内可访问） ---
+curl -s "https://get.sdkman.io" | bash && . "$HOME/.sdkman/bin/sdkman-init.sh"
+
+# Go 由 fix-golang 独立安装，此处不再硬编码版本号
+

@@ -1,0 +1,30 @@
+FROM golang:1.26-trixie as builder
+
+RUN apt-get update && apt-get install -y git
+COPY kin/ /kin/
+RUN cd /kin/ && CGO_ENABLED=0 go build -ldflags="-s -w" -o kin .
+COPY kas/ /kas/
+RUN cd /kas/ && CGO_ENABLED=0 go build -ldflags="-s -w" -o kas .
+
+ARG BASE_IMAGE_TAG
+FROM ghcr.io/suisrc/webtop:xfce-${BASE_IMAGE_TAG}
+
+# set environment variables
+# VSCODE_INIT 支持指定脚本: file:///usr/srv/vsinit.sh
+ENV KAS_SSHD="0" \
+    KAS_VSCODE="0" \
+    KAS_KASM="1" \
+    VSCODE_WSC="/wsc" \
+    PROXY_PORT="7080" \
+    PROXY_HEADER_x_forwarded_port="443" \
+    PASSWORD=""
+
+COPY --from=builder  /kin/kin  /usr/bin/kin
+COPY --from=builder  /kas/kas  /usr/bin/kas
+
+COPY rootfs/ /
+COPY script/vscode.kas.ini /etc/kas.ini
+
+ENTRYPOINT ["/usr/bin/kas"]
+
+# EXPOSE 7080

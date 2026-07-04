@@ -40,13 +40,14 @@ BACKEND_URL=http://localhost:8080 ./kin
 | `SERVICE_URL` | `-svc-url` | 空 | 后端下载地址 |
 | `SERVICE_VER` | `-svc-ver` | 空 | 缓存路径，支持 `{ext}` |
 | `SERVICE_DIR` | `-svc-dir` | 空 | 解压目录 |
-| `SERVICE_PRE` | `-svc-pre` | 空 | 启动前脚本（`file://` 走 shebang；否则 `sh -c`） |
+| `SERVICE_SET` | `-svc-set` | 空 | 启动前脚本（`file://` 走 shebang；否则 `sh -c`） |
 | `SERVICE_CMD` | `-svc-cmd` | 空 | 以子进程启动的后端命令 |
-| `SERVICE_PXY` | `-svc-pxy` | 空 | `/__proxy/` 缓存根；留空禁用 |
+| `SERVICE_PXY` | `-svc-pxy` | 空 | `/__proxy/` 缓存根文件夹；留空禁用 |
 | `VSCODE_PORT` / `PROXY_PORT` | `-port` | `7080` | 监听端口（SSL 时 HTTPS = port+1） |
 | `TOKEN_COOKIE` | `-cookie` | `vscode-tkn` | Token Cookie 名 |
+| — | `-token` | 空 | 静态 Token 校验值（**仅 flag，无环境变量**）；设置后 Cookie 值必须等于此值，否则返回登录页 |
 | `PROXY_USE_SSL` | `-use-ssl` | `false` | 启用自签名 HTTPS |
-| `PROXY_HEADER_*` | — | — | 请求头改写（`Xxx=Val` 设置；`Xxx=` 删除） |
+| `PROXY_HEADER_*` | — | — | 请求头改写（`Xxx=Val` 设置；`Xxx=` 删除）；环境变量名中的 `_` 会还原为 `-` |
 
 ---
 
@@ -78,7 +79,7 @@ text://Hello World
 2. 跟随重定向解析扩展名 → 替换 `{ext}`
 3. 下载缓存（原子 temp+rename）
 4. 解压 tar.gz（剥离顶层目录）
-5. 执行 `SERVICE_PRE`
+5. 执行 `SERVICE_SET`
 6. 启动 `SERVICE_CMD`
 
 准备期间返回加载页（503 + 自动刷新），完成后正常代理。
@@ -90,7 +91,7 @@ export SERVICE_URL="https://update.code.visualstudio.com/commit:${VSCODE_HASH}/s
 export SERVICE_VER="${SERVICE_WSC}/.vcache/version/${VSCODE_HASH}.{ext}"
 export SERVICE_PXY="${SERVICE_WSC}/.vcache/proxies/"
 export SERVICE_DIR="${SERVICE_WSC}/.vserve/${VSCODE_HASH}/"
-export SERVICE_PRE="sed -i 's|https://www.vscode-unpkg.net/nls/|/__proxy/www.vscode-unpkg.net/nls/|g' ${SERVICE_DIR}/product.json"
+export SERVICE_SET="sed -i 's|https://www.vscode-unpkg.net/nls/|/__proxy/www.vscode-unpkg.net/nls/|g' ${SERVICE_DIR}/product.json"
 export SERVICE_CMD="${SERVICE_DIR}/bin/code-server --accept-server-license-terms --socket-path /var/run/vscode.sock --connection-token 7788"
 ./kin --backend unix:///var/run/vscode.sock
 ```
@@ -98,6 +99,23 @@ export SERVICE_CMD="${SERVICE_DIR}/bin/code-server --accept-server-license-terms
 ---
 
 ## Token 认证
+
+两种模式，可单独或组合使用：
+
+### 1. 静态 Token 校验（`--token`）
+
+设置 `--token <值>` 后，Kin 在所有非 `/__` 前缀路径上校验 Cookie（名为 `TOKEN_COOKIE`）的值是否等于该 token，不一致返回**登录页**（`login.html`）。
+
+- **仅 flag，无对应环境变量**（避免 token 泄露在环境里）
+- `/__login`、`/__logout`、`/__proxy/` 等 `/__` 开头的路径始终放行
+- 比较使用常数时间（`subtle.ConstantTimeCompare`）防时序攻击
+
+```bash
+# 启用静态校验：Cookie vscode-tkn 必须等于 secret123
+./kin --backend http://127.0.0.1:8080 --token secret123
+```
+
+### 2. 后端鉴权代理
 
 - 后端返回 **401** → 拦截并返回 `login.html`
 - 提交 Token → 写入 `HttpOnly` + `SameSite=Lax` Cookie

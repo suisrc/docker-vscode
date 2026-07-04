@@ -1,11 +1,3 @@
-FROM golang:1.26-trixie as builder
-
-RUN apt-get update && apt-get install -y git
-COPY kin/ /kin/
-RUN cd /kin/ && CGO_ENABLED=0 go build -ldflags="-s -w" -o kin .
-COPY kas/ /kas/
-RUN cd /kas/ && CGO_ENABLED=0 go build -ldflags="-s -w" -o kas .
-
 FROM debian:trixie-slim
 
 # update linux
@@ -22,6 +14,7 @@ RUN apt update && DEBIAN_FRONTEND=noninteractive \
     jq \
     git \
     unzip \
+    zip \
     7zip \
     xz-utils \
     nano \
@@ -64,13 +57,7 @@ ENV LANGUAGE="zh_CN.UTF-8" \
     LANG="zh_CN.UTF-8" \
     USER="webtop" \
     HOME="/home/webtop" \
-    KAS_SSHD="0" \
-    KAS_VSCODE="1" \
-    ZSH_CUSTOM="/home/webtop/.oh-my-zsh/plugins" \
-    VSCODE_WSC="/wsc" \
-    PROXY_PORT="7080" \
-    PROXY_HEADER_x_forwarded_port="443" \
-    PASSWORD=""
+    ZSH_CUSTOM="/home/webtop/.oh-my-zsh/plugins"
 
 # creating the user and usergroup
 RUN mkdir -p $HOME /app /wsc && \
@@ -85,12 +72,18 @@ RUN mkdir -p $HOME /app /wsc && \
     sed -i "3iexport \$(sudo cat /proc/1/environ |tr '\\\\0' '\\\\n' | xargs)" /etc/profile
 # /etc/profile: ssh 连接会导致环境变量消失, 在docker中,可以通过进程ID=1上的环境变量还原, 通过profile文件还原
 
-COPY --from=builder  /kin/kin  /usr/bin/kin
-COPY --from=builder  /kas/kas  /usr/bin/kas
+# vux python https://github.com/astral-sh/uv
+# nvm nodejs https://github.com/nvm-sh/nvm
+# sdk java.. https://sdkman.io/usage
 
-COPY script/vscode.kas.ini /etc/kas.ini
-COPY script/init.sh script/vscode.sh  /usr/srv/
-
-ENTRYPOINT ["/usr/bin/kas"]
-
-# EXPOSE 7080
+SHELL ["/bin/bash", "-c"]
+# 自动获取最新版：uv / nvm（GitHub API 取 releases/latest 的 tag_name）
+RUN UVX_VERSION="$(curl -fsSL https://api.github.com/repos/astral-sh/uv/releases/latest | jq -r .tag_name)" && \
+    NVM_VERSION="$(curl -fsSL https://api.github.com/repos/nvm-sh/nvm/releases/latest | jq -r .tag_name | sed 's/^v//')" && \
+    UVX_URL="https://github.com/astral-sh/uv/releases/download/${UVX_VERSION}/uv-x86_64-unknown-linux-gnu.tar.gz" && \
+    curl -fSL "${UVX_URL}" -o /tmp/uv.tar.gz && tar -xzf /tmp/uv.tar.gz -C /usr/bin/ --strip-components=1 && \
+    curl -o- "https://raw.githubusercontent.com/nvm-sh/nvm/v${NVM_VERSION}/install.sh" | bash && \
+    export NVM_DIR="$([ -z "${XDG_CONFIG_HOME-}" ] && printf %s "${HOME}/.nvm" || printf %s "${XDG_CONFIG_HOME}/nvm")" && \
+    [ -s "$NVM_DIR/nvm.sh" ] && \. "$NVM_DIR/nvm.sh" --no-use && \
+    curl -s  "https://get.sdkman.io" | bash && . "$HOME/.sdkman/bin/sdkman-init.sh" && \
+    rm -rf /tmp/* /var/tmp/* /var/lib/apt/lists/*

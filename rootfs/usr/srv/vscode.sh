@@ -51,6 +51,6 @@ fi
 # kin 是一个用于授权的工具，它会在启动 vscode server 前进行授权验证，确保只有通过验证的用户才能访问 vscode server
 echo 'start vscode server. wss need set env: PROXY_HEADER_x-forwarded-port=443'
 SERVICE_SET=${VSCODE_INIT} SERVICE_WSC=${VSCODE_WSC:-/wsc} \
-SERVICE_CMD='${SERVICE_DIR}/bin/code-server --socket-path /var/run/vscode.sock \
---accept-server-license-terms --server-data-dir ${SERVICE_WSC}/.vsc --connection-token ${PASSWORD}' \
-exec kin --use-ssl --authz --backend "/__healthz=text://OK:{now};^/=unix:///var/run/vscode.sock"
+SERVICE_CMD='${SERVICE_DIR}/bin/code-server --accept-server-license-terms --without-connection-token \
+  --server-data-dir ${SERVICE_WSC}/.vsc --socket-path /var/run/vscode.sock' \
+exec kin --use-ssl --backend "/__healthz=text://OK:{now};^/=unix:///var/run/vscode.sock" --token "${PASSWORD}"

@@ -1,6 +1,53 @@
 #!/usr/bin/bash
 set -e
 
+# 国内加速镜像（Go 官方中国镜像 golang.google.cn，路径与 dl.google.com 一致）
+#   GO_MIRROR  : SDK 二进制下载，原 https://dl.google.com/go
+#   GOPROXY    : 模块下载代理（goproxy.cn，七牛），原 proxy.golang.org
+#   GOSUMDB    : 校验和数据库国内官方镜像，原 sum.golang.org
+GO_MIRROR="https://golang.google.cn/dl"
+export GOPROXY="https://goproxy.cn,direct"
+export GOSUMDB="sum.golang.google.cn"
+
+# 自动获取最新稳定版（go.dev 返回最新 release tag，如 go1.26.4）
+GO_VERSION="$(curl -fsSL https://go.dev/VERSION?m=text | head -n1)"
+[ -z "${GO_VERSION}" ] && { echo "无法获取 Go 最新版本"; exit 1; }
+echo "安装 Go ${GO_VERSION} ..."
+
+GO_ROOT="/usr/local/golang"
+GO_TAR="go${GO_VERSION}.linux-amd64.tar.gz"
+
+# 下载并校验官方 sha256（从 GO_MIRROR 拉取 .sha256 文件，国内加速）
+curl -fSL "${GO_MIRROR}/${GO_TAR}"        -o "/tmp/${GO_TAR}"
+curl -fSL "${GO_MIRROR}/${GO_TAR}.sha256" -o "/tmp/${GO_TAR}.sha256"
+echo "$(cat /tmp/${GO_TAR}.sha256 | awk '{print $1}')"  "/tmp/${GO_TAR}" | sha256sum -c -
+
+# 解压（strip-components=1 直接展开到 GO_ROOT，便于多版本共存切换）
+rm -rf "${GO_ROOT}"
+mkdir -p "${GO_ROOT}"
+tar -xz -C "${GO_ROOT}" --strip-components=1 -f "/tmp/${GO_TAR}"
+rm -f "/tmp/${GO_TAR}" "/tmp/${GO_TAR}.sha256"
+
+# 不再 ln -s 到 /usr/bin；官方推荐通过 PATH 让 ${GO_ROOT}/bin 生效
+# 写入 /etc/profile.d，登录 shell 自动加载，且便于后续多版本切换
+cat > /etc/profile.d/golang.sh <<EOF
+# Go environment
+export GOROOT="${GO_ROOT}"
+export GOPATH="\${HOME}/go"
+export PATH="\${GOROOT}/bin:\${GOPATH}/bin:\${PATH}"
+export GOPROXY="${GOPROXY}"
+export GOSUMDB="${GOSUMDB}"
+EOF
+chmod 0644 /etc/profile.d/golang.sh
+
+# 当前脚本进程内立即生效，供后续 go install 使用
+export GOROOT="${GO_ROOT}"
+export GOPATH="${HOME}/go"
+export PATH="${GOROOT}/bin:${GOPATH}/bin:${PATH}"
+
+go version
+
+# 安装 VSCode Go 扩展常用工具链
 go install github.com/ramya-rao-a/go-outline@latest
 go install github.com/cweill/gotests/gotests@latest
 go install github.com/fatih/gomodifytags@latest

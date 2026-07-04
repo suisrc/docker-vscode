@@ -9,10 +9,13 @@ Dockerfile.ssh(proxyssh-3.0.0)(ssh代理)
 Dockerfile.ngx(ssh-3.0.0)(vsc代理)  
   
 开发环境  
-Dockerfile.vsc -> vscode online 
-Dockerfile.xfc -> 启动一个桌面环境，之所有桌面下放到这层，是因为桌面基本不太会进行变动  
-Dockerfile.dev-vsc ->  nvm(nodejs) + nv(python) + sdk(java) + golang  
-Dockerfile.dev-xfc ->  golang + nodejs + java, 由于python安装简单，不在考虑范围内  
+Dockerfile.base -> 基础镜像  
+Dockerfile.bvsc -> 基于 base 构建的 kas/kin/vsc 镜像  
+Dockerfile.xfce -> 桌面镜像， 基于 base  
+Dockerfile.xvsc -> 基于 base 构建的 kas/kin/vsc 镜像  
+  
+Dockerfile.dev-bvsc -> node 14, 24; java 8, 25
+Dockerfile.dev-xvsc -> node 14, 24; java 8, 25
 Dockerfile.pwright ->  安装 playwirght 环境  
 
 
