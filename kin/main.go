@@ -35,7 +35,7 @@ import (
 	"time"
 )
 
-//go:embed favicon.ico loading.html login.html logout.html logout.vsc.js
+//go:embed favicon.ico loading.html login.html logout.vsc.js
 var staticFS embed.FS
 
 // mustAsset reads an embedded asset by name, failing fast at startup if missing.
