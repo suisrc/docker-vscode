@@ -8,18 +8,6 @@ RUN cd /kas/ && CGO_ENABLED=0 go build -ldflags="-s -w" -o kas .
 
 FROM debian:trixie-slim
 
-COPY --from=builder  /kin/kin  /usr/bin/kin
-COPY --from=builder  /kas/kas  /usr/bin/kas
-
-# set environment variables
-ENV LANGUAGE="zh_CN.UTF-8" \
-    LANG="zh_CN.UTF-8" \
-    USER="webtop" \
-    HOME="/home/webtop" \
-    KAS_SSHD="0" \
-    KAS_VSCODE="1" \
-    ZSH_CUSTOM="/home/webtop/.oh-my-zsh/plugins"
-
 # update linux
 RUN apt update && DEBIAN_FRONTEND=noninteractive \
     apt install --no-install-recommends -y \
@@ -70,14 +58,19 @@ RUN apt update && DEBIAN_FRONTEND=noninteractive \
     rm -rf /tmp/* /var/tmp/* /var/lib/apt/lists/*
 
 # set environment variables
-# VSCODE_INIT 支持指定脚本: file:///wsc/.vsinit.sh
-ENV VSCODE_WSC="/wsc" \
+# VSCODE_INIT 支持指定脚本: file:///usr/srv/vsinit.sh
+# set environment variables
+ENV LANGUAGE="zh_CN.UTF-8" \
+    LANG="zh_CN.UTF-8" \
+    USER="webtop" \
+    HOME="/home/webtop" \
+    KAS_SSHD="0" \
+    KAS_VSCODE="1" \
+    ZSH_CUSTOM="/home/webtop/.oh-my-zsh/plugins"
+    VSCODE_WSC="/wsc" \
     PROXY_PORT="7080" \
     PROXY_HEADER_x-forwarded-port="443" \
     PASSWORD=""
-
-COPY script/vscode.kas.ini /etc/kas.ini
-COPY script/init.sh script/vscode.sh  /usr/srv/
 
 # creating the user and usergroup
 RUN mkdir -p $HOME /app /wsc && \
@@ -91,6 +84,12 @@ RUN mkdir -p $HOME /app /wsc && \
     sed -i "1iZSH_DISABLE_COMPFIX=true" ~/.zshrc && sed -i -e "1iHOME=${HOME}" -e "2isource /etc/profile" /root/.bashrc &&\
     sed -i "3iexport \$(sudo cat /proc/1/environ |tr '\\\\0' '\\\\n' | xargs)" /etc/profile
 # /etc/profile: ssh 连接会导致环境变量消失, 在docker中,可以通过进程ID=1上的环境变量还原, 通过profile文件还原
+
+COPY --from=builder  /kin/kin  /usr/bin/kin
+COPY --from=builder  /kas/kas  /usr/bin/kas
+
+COPY script/vscode.kas.ini /etc/kas.ini
+COPY script/init.sh script/vscode.sh  /usr/srv/
 
 ENTRYPOINT ["/usr/bin/kas"]
 
