@@ -69,7 +69,7 @@ ENV LANGUAGE="zh_CN.UTF-8" \
     ZSH_CUSTOM="/home/webtop/.oh-my-zsh/plugins" \
     VSCODE_WSC="/wsc" \
     PROXY_PORT="7080" \
-    PROXY_HEADER_x-forwarded-port="443" \
+    PROXY_HEADER_x_forwarded_port="443" \
     PASSWORD=""
 
 # creating the user and usergroup

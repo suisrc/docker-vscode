@@ -320,8 +320,12 @@ func newBackend(prefix, rawURL string) *Backend {
 }
 
 // parseProxyHeaders reads PROXY_HEADER_* env vars.
-// PROXY_HEADER_Xxx=Val → set/override header Xxx to Val.
-// PROXY_HEADER_Xxx=    → delete header Xxx.
+// Since env var names cannot contain hyphens, underscores are used in place of
+// hyphens and converted back when building the header name:
+//
+//	PROXY_HEADER_X_Forwarded_Port=443  →  X-Forwarded-Port: 443
+//	PROXY_HEADER_Xxx=Val               →  set/override header Xxx to Val
+//	PROXY_HEADER_Xxx=                  →  delete header Xxx
 func parseProxyHeaders() map[string]string {
 	hdrs := make(map[string]string)
 	const prefix = "PROXY_HEADER_"
@@ -334,6 +338,8 @@ func parseProxyHeaders() map[string]string {
 		if name == "" {
 			continue
 		}
+		// Convert underscores back to hyphens for the actual HTTP header name.
+		name = strings.ReplaceAll(name, "_", "-")
 		hdrs[name] = v
 	}
 	return hdrs
