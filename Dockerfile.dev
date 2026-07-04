@@ -41,7 +41,7 @@ RUN apt update && DEBIAN_FRONTEND=noninteractive \
 
 # nvm list
 RUN nvm install 24 && nvm use 24 && \
-    npm install pnpm yarn -g &&
+    npm install pnpm yarn -g && \
     rm -rf ${HOME}/.nvm/.cache/* && \
     rm -rf ${HOME}/.npm/_cacache && \
     rm -rf ${HOME}/.npm/_locks && \
