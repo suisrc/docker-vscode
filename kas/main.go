@@ -80,6 +80,10 @@ type programConfig struct {
 	// RestartDelay is the fixed delay between restart attempts. When 0, kas uses
 	// exponential backoff (restartInitDelay doubling up to restartMaxDelay).
 	RestartDelay time.Duration
+	// Shell is the shell used to execute Command. Defaults to "false" (direct
+	// exec without a shell). Set to "/bin/sh", "/bin/bash", etc. to run the
+	// command through that shell (enables &&, |, >, $VAR, etc.).
+	Shell string
 }
 
 // runningProc tracks a live process.
@@ -262,6 +266,7 @@ func parseConfig(path string) (map[string]*programConfig, error) {
 				Priority:     999,
 				Type:         "long",
 				MaxRetries:   defaultMaxRetries,
+				Shell:        "false",
 			}
 			if _, dup := progs[name]; dup {
 				return nil, fmt.Errorf("line %d: duplicate program %q", lineNo, name)
@@ -374,6 +379,10 @@ func applyKV(p *programConfig, key, val string) error {
 				p.Deps = append(p.Deps, d)
 			}
 		}
+	case "shell":
+		// kas extension: shell to execute command with (default /bin/sh).
+		// Set to "false" to exec the command directly without a shell.
+		p.Shell = val
 	default:
 		// Unknown keys are ignored for forward compatibility.
 	}
@@ -453,6 +462,34 @@ func stripValueQuotes(s string) string {
 
 // ---- Process lifecycle -----------------------------------------------------
 
+// shellSplit splits a command string into args using basic shell word splitting
+// rules (respects single/double quotes). Used when shell=false.
+func shellSplit(s string) []string {
+	var args []string
+	var cur strings.Builder
+	inSingle, inDouble := false, false
+	for i := 0; i < len(s); i++ {
+		c := s[i]
+		switch {
+		case c == '\'' && !inDouble:
+			inSingle = !inSingle
+		case c == '"' && !inSingle:
+			inDouble = !inDouble
+		case c == ' ' && !inSingle && !inDouble:
+			if cur.Len() > 0 {
+				args = append(args, cur.String())
+				cur.Reset()
+			}
+		default:
+			cur.WriteByte(c)
+		}
+	}
+	if cur.Len() > 0 {
+		args = append(args, cur.String())
+	}
+	return args
+}
+
 // start launches a program if it is not currently running.
 func (s *kas) start(p *programConfig) {
 	s.mu.Lock()
@@ -480,7 +517,19 @@ func (s *kas) start(p *programConfig) {
 // backoff is the delay before a failed/crashed restart is attempted.
 // retries is the number of restart attempts already made for this program.
 func (s *kas) spawn(p *programConfig, rp *runningProc, backoff time.Duration, retries int) {
-	cmd := exec.Command("/bin/sh", "-c", p.Command)
+	var cmd *exec.Cmd
+	if p.Shell == "" || p.Shell == "false" || p.Shell == "no" || p.Shell == "none" {
+		// Direct exec: split the command string by shell rules.
+		args := shellSplit(p.Command)
+		if len(args) == 0 {
+			s.logger.Printf("program %s: empty command for shell=false", p.Name)
+			return
+		}
+		cmd = exec.Command(args[0], args[1:]...)
+	} else {
+		// Use the specified shell (e.g. /bin/sh, /bin/bash, /bin/zsh).
+		cmd = exec.Command(p.Shell, "-c", p.Command)
+	}
 	cmd.Env = os.Environ()
 	if len(p.Environment) > 0 {
 		cmd.Env = append(cmd.Env, p.Environment...)
@@ -907,6 +956,9 @@ func configChanged(a, b *programConfig) bool {
 		}
 	}
 	if a.StdoutLog != b.StdoutLog || a.StderrLog != b.StderrLog {
+		return true
+	}
+	if a.Shell != b.Shell {
 		return true
 	}
 	return false

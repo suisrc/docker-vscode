@@ -106,6 +106,7 @@ off   0        long  stopped      0
 | `depends` | **kas 扩展**：逗号分隔的依赖服务名，需先启动/完成 | 无 |
 | `max_retries` | **kas 扩展**：崩溃后最大重试次数，`0` 表示无限重试 | `3` |
 | `restart_delay` | **kas 扩展**：重启固定间隔秒数，`0` 表示指数退避（0.5s→30s） | `0` |
+| `shell` | **kas 扩展**：执行 command 的 shell；默认 `false`（直接 exec）；可设 `/bin/sh`、`/bin/bash` 等 | `false` |
 
 ### `${VAR}` 环境变量展开
 
