@@ -53,4 +53,4 @@ echo 'start vscode server. wss need set env: PROXY_HEADER_x-forwarded-port=443'
 SERVICE_SET=${VSCODE_INIT} SERVICE_WSC=${VSCODE_WSC:-/wsc} \
 SERVICE_CMD='${SERVICE_DIR}/bin/code-server --accept-server-license-terms --without-connection-token \
   --server-data-dir ${SERVICE_WSC}/.vsc --socket-path /var/run/vscode.sock' \
-exec kin --use-ssl --backend "/__healthz=text://OK:{now};^/=unix:///var/run/vscode.sock" --token "${PASSWORD}"
+exec kin --use-ssl --backend "/__healthz=text://OK:{now};^/=unix:///var/run/vscode.sock" --authz --token "${PASSWORD}"
