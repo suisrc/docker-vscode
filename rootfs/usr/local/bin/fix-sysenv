@@ -1,0 +1,11 @@
+#!/usr/bin/bash
+
+cat >> ${HOME}/.bashrc <<'EOF'
+
+export $(cat /proc/1/environ |tr '\0' '\n' | xargs)
+EOF
+
+cat >> ${HOME}/.zshrc <<'EOF'
+
+export $(cat /proc/1/environ |tr '\0' '\n' | xargs)
+EOF

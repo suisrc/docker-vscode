@@ -10,7 +10,7 @@ on:
 
 env:
   IMAGE_NAME: suisrc/webtop
-  IMAGE_VERSION: 'dev-vsc-3.0.1-1'
+  IMAGE_VERSION: 'dev-vsc-3.0.1-2'
   GITHUB_REGISTRY: ghcr.io
   DOCKER_REGISTRY: docker.io
   QUAY_REGISTRY: quay.io
@@ -27,8 +27,8 @@ jobs:
 
       - name: Build image
         run: |
-          if [[ "$IMAGE_VERSION" == *-1 ]]; then
-            docker build -f "Dockerfile.1" -t image --no-cache --build-arg BASE_IMAGE_TAG=${IMAGE_VERSION%-1} .
+          if [[ "$IMAGE_VERSION" == *-2 ]]; then
+            docker build -f "Dockerfile.1" -t image --no-cache --build-arg BASE_IMAGE_TAG=${IMAGE_VERSION%-*} .
           else
             docker build -f "Dockerfile.${IMAGE_VERSION%%-*}" -t image --no-cache --build-arg BASE_IMAGE_TAG=${IMAGE_VERSION#*-} .
           fi
