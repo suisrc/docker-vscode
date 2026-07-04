@@ -3,11 +3,3 @@ ARG BASE_IMAGE_TAG
 FROM ghcr.io/suisrc/webtop:${BASE_IMAGE_TAG}
 
 COPY rootfs/ /
-
-RUN cat >> ${HOME}/.bashrc <<'EOF'
-
-export $(cat /proc/1/environ |tr '\0' '\n' | xargs)
-EOF && cat >> ${HOME}/.zshrc <<'EOF'
-
-export $(cat /proc/1/environ |tr '\0' '\n' | xargs)
-EOF
