@@ -1,5 +1,5 @@
 FROM nginx:1.31-alpine-slim
 
-COPY others/nbase.conf /etc/nginx/base.conf
-COPY others/nginx.conf /etc/nginx/nginx.conf
-COPY others/podman.conf /etc/nginx/templates/default.conf.template
+COPY ngx/nbase.conf /etc/nginx/base.conf
+COPY ngx/nginx.conf /etc/nginx/nginx.conf
+COPY ngx/podman.conf /etc/nginx/templates/default.conf.template
