@@ -30,8 +30,7 @@ ENV UVX_VERSION=0.11.26 \
 # sdk java.. https://sdkman.io/usage
 
 SHELL ["/bin/bash", "-c"]
-RUN apt update && DEBIAN_FRONTEND=noninteractive \
-    UVX_URL="https://github.com/astral-sh/uv/releases/download/${UVX_VERSION}/uv-x86_64-unknown-linux-gnu.tar.gz" && \
+RUN UVX_URL="https://github.com/astral-sh/uv/releases/download/${UVX_VERSION}/uv-x86_64-unknown-linux-gnu.tar.gz" && \
     curl -fSL "${UVX_URL}" -o /tmp/uv.tar.gz && tar -xzf /tmp/uv.tar.gz -C /usr/bin/ --strip-components=1 && \
     curl -o- "https://raw.githubusercontent.com/nvm-sh/nvm/v${NVM_VERSION}/install.sh" | bash && \
     export NVM_DIR="$([ -z "${XDG_CONFIG_HOME-}" ] && printf %s "${HOME}/.nvm" || printf %s "${XDG_CONFIG_HOME}/nvm")" && \
