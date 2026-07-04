@@ -8,6 +8,7 @@ FROM ghcr.io/suisrc/webtop:${BASE_IMAGE_TAG}
 # update linux
 RUN apt update && DEBIAN_FRONTEND=noninteractive \
     apt install --no-install-recommends -y \
+    zip \
     gcc \
     binutils \
     libxfont2 \
