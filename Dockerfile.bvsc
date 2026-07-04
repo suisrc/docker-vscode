@@ -6,8 +6,9 @@ RUN cd /kin/ && CGO_ENABLED=0 go build -ldflags="-s -w" -o kin .
 COPY kas/ /kas/
 RUN cd /kas/ && CGO_ENABLED=0 go build -ldflags="-s -w" -o kas .
 
-ARG BASE_IMAGE_TAG
-FROM ghcr.io/suisrc/webtop:base-${BASE_IMAGE_TAG}
+# ARG BASE_IMAGE_TAG
+# FROM ghcr.io/suisrc/webtop:base-${BASE_IMAGE_TAG}
+FROM ghcr.io/suisrc/webtop:base-3.2.1
 
 # set environment variables
 # VSCODE_INIT 支持指定脚本: file:///usr/srv/vsinit.sh
