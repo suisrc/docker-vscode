@@ -18,7 +18,6 @@ package main
 import (
 	"bufio"
 	"errors"
-	"flag"
 	"fmt"
 	"io"
 	"log"
@@ -1385,7 +1384,8 @@ func parseSubArgs(args []string) (sockPath string, positional []string) {
 // runSubcommand dispatches the named client subcommand using the already-parsed
 // socket path and positional args. It returns true when name is a recognized
 // subcommand (and has been executed via os.Exit); false otherwise so the caller
-// can fall through to the daemon path. Keeping the recognition and dispatch in a
+// can decide what to do with an unrecognized token (flag -> daemon; otherwise
+// an unknown-subcommand error). Keeping the recognition and dispatch in a
 // single switch avoids a separate subcommand set that could drift out of sync.
 func runSubcommand(name, sockPath string, args []string) bool {
 	requireName := func(usage string) string {
@@ -1415,6 +1415,14 @@ func runSubcommand(name, sockPath string, args []string) bool {
 func main() {
 	args := os.Args[1:]
 
+	// No arguments at all: print help and exit. The daemon must be started
+	// explicitly with -c so an accidental bare `kas` does not silently take
+	// over PID 1 duties.
+	if len(args) == 0 {
+		printUsage(os.Stdout)
+		os.Exit(0)
+	}
+
 	// --- Client subcommands -------------------------------------------------
 	// The subcommand and -s may appear in either order. parseSubArgs strips -s
 	// (wherever it is) and collects the remaining positional tokens; the first
@@ -1424,26 +1432,119 @@ func main() {
 	//	kas -s /p ps           -> sub="ps",  args=[]
 	//	kas start web -s /p    -> sub="start", args=["web"]
 	//	kas -s /p start web    -> sub="start", args=["web"]
-	if len(args) > 0 {
-		sock, rest := parseSubArgs(args)
-		if len(rest) > 0 && runSubcommand(rest[0], sock, rest[1:]) {
+	sock, rest := parseSubArgs(args)
+	if len(rest) > 0 {
+		if runSubcommand(rest[0], sock, rest[1:]) {
 			return
+		}
+		// rest[0] is not a recognized subcommand. If it looks like a flag
+		// (e.g. "-c"), fall through to daemon mode so `kas -c cfg` and
+		// `kas -s /p -c cfg` still work. Otherwise it is an unknown
+		// subcommand (e.g. `kas foo`) and we must NOT silently start the
+		// daemon: report it and exit.
+		if !strings.HasPrefix(rest[0], "-") {
+			fmt.Fprintf(os.Stderr, "error: unknown command %q (use: ps | reload | restart <name> | start <name> | stop <name>)\n", rest[0])
+			os.Exit(2)
 		}
 	}
 
 	// --- Daemon (PID 1) mode ------------------------------------------------
-	// Not a subcommand invocation: run as PID 1. -s/-c are plain flags with no
-	// positional args, so the standard flag package handles them fine. SOCK_PATH
-	// env acts as the default for -s.
-	runDaemon()
+	// Not a subcommand invocation: run as PID 1. The daemon requires an explicit
+	// -c flag (which may carry no value, in which case the default config path
+	// /etc/kas.ini is used) so that bare `kas` never silently starts the manager.
+	// parseSubArgs has already resolved -s into sock; pass it along with the raw
+	// args so runDaemon can locate -c.
+	runDaemon(args, sock)
 }
 
-// runDaemon starts kas as the PID-1 process manager. The -s flag (or SOCK_PATH
-// env) selects the IPC socket; -c selects the config file.
-func runDaemon() {
-	cfgPath := flag.String("c", defaultConfigPath, "path to the kas ini config file")
-	sockPath := flag.String("s", defaultSock(), "path to the kas unix socket for IPC")
-	flag.Parse()
+// printUsage writes a detailed help message to w. It documents both the
+// daemon mode (entered via -c) and the client subcommands, so a single `kas -h`
+// or bare `kas` gives the operator everything they need.
+func printUsage(w io.Writer) {
+	fmt.Fprintf(w, `kas - a tiny PID-1 process manager for containers
+
+Usage:
+  kas -c [PATH] [-s SOCK]     Run as the PID-1 daemon (manages programs)
+  kas -h | --help              Show this help and exit
+  kas <subcommand> [NAME] [-s SOCK]
+                               Send a control command to a running daemon
+
+Daemon mode (PID 1):
+  -c [PATH]   REQUIRED. Path to the kas ini config file. When PATH is omitted
+              the default %q is used. This flag must be present to start the
+              daemon, so a bare 'kas' never silently takes over PID 1.
+  -s SOCK     Path to the unix socket used for IPC (default %q or $SOCK_PATH).
+
+  The config uses [program:NAME] sections (supervisor-style) with directives:
+    command, autostart, autorestart, stopwaitsecs, priority, user, environment,
+    stdout_logfile, stderr_logfile, type (once|long), depends, max_retries,
+    restart_delay, shell.
+
+Client subcommands (talk to a running daemon via the socket):
+  ps                          Print the managed process table
+  reload                      Re-read the config and reconcile
+  start NAME                  Start a service by name
+  stop NAME                   Stop a service by name
+  restart NAME                Stop then start a service by name
+
+  -s SOCK     Override the IPC socket path for a single command.
+
+Examples:
+  kas -c                       Start daemon with /etc/kas.ini
+  kas -c /path/to/kas.ini      Start daemon with a custom config
+  kas -c -s /tmp/kas.sock      Start daemon with a custom socket
+  kas ps                       Show the process table
+  kas -s /tmp/kas.sock ps      Query a daemon on a non-default socket
+  kas reload                   Reload config without restarting kas
+
+Signals:
+  SIGHUP                      Reload the config (same as 'kas reload')
+  SIGTERM / SIGINT            Gracefully stop all programs and exit
+`, defaultConfigPath, defaultSockPath)
+}
+
+// runDaemon starts kas as the PID-1 process manager. The socket path is taken
+// from sockPath (already resolved by parseSubArgs, which honors -s and
+// $SOCK_PATH). The -c flag selects the config file and is REQUIRED to start
+// the daemon, but it may be given without a value (`kas -c`), in which case
+// the default config path /etc/kas.ini is used. This prevents an accidental
+// bare `kas` from silently taking over PID 1 duties.
+func runDaemon(args []string, sockPath string) {
+	// Locate -c (and -h) among the raw args. parseSubArgs has already stripped
+	// -s, but we scan the original args here so -c may appear in any position.
+	cfgPath := defaultConfigPath
+	var hasC bool
+	for i := 0; i < len(args); i++ {
+		a := args[i]
+		switch {
+		case a == "-c":
+			hasC = true
+			// -c may carry no value: only consume the next token as the value if
+			// it exists and does not look like another flag.
+			if i+1 < len(args) && !strings.HasPrefix(args[i+1], "-") {
+				cfgPath = args[i+1]
+				i++
+			}
+		case strings.HasPrefix(a, "-c="):
+			hasC = true
+			if v := strings.TrimPrefix(a, "-c="); v != "" {
+				cfgPath = v
+			} else {
+				cfgPath = defaultConfigPath
+			}
+		case a == "-h" || a == "--help" || a == "-help":
+			printUsage(os.Stdout)
+			os.Exit(0)
+		}
+	}
+
+	if !hasC {
+		// The daemon must be started explicitly with -c. Without it, print help
+		// (mirroring `kas` with no args) instead of silently starting.
+		fmt.Fprintln(os.Stderr, "error: -c is required to start the daemon (use `kas -c` for the default config, or `kas -h` for help)")
+		printUsage(os.Stderr)
+		os.Exit(2)
+	}
 
 	s := newKas() // also starts the single child-reaping goroutine (tini role)
 
@@ -1451,7 +1552,7 @@ func runDaemon() {
 	hupCh := make(chan struct{}, 1)
 
 	// Start the IPC socket server for `kas ps` and `kas reload`.
-	go s.serveSock(*sockPath, hupCh)
+	go s.serveSock(sockPath, hupCh)
 
 	// Signal handling.
 	sigCh := make(chan os.Signal, 1)
@@ -1469,21 +1570,21 @@ func runDaemon() {
 			default:
 				s.logger.Printf("received %v: shutting down", sig)
 				s.shutdown()
-				_ = os.Remove(*sockPath)
+				_ = os.Remove(sockPath)
 				os.Exit(0)
 			}
 		}
 	}()
 
 	// Initial config load.
-	s.logger.Printf("kas started, config=%s", *cfgPath)
+	s.logger.Printf("kas started, config=%s", cfgPath)
 	loadConfig := func(reason string) map[string]*programConfig {
-		progs, err := parseConfig(*cfgPath)
+		progs, err := parseConfig(cfgPath)
 		if err != nil {
 			s.logger.Printf("config %s error: %v", reason, err)
 			return nil
 		}
-		s.logger.Printf("config %s (mtime=%s)", reason, fileMtime(*cfgPath).Format(time.RFC3339))
+		s.logger.Printf("config %s (mtime=%s)", reason, fileMtime(cfgPath).Format(time.RFC3339))
 		return progs
 	}
 	var lastProgs map[string]*programConfig

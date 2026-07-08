@@ -25,6 +25,6 @@ COPY --from=builder  /kas/kas  /usr/bin/kas
 COPY rootfs/ /
 COPY script/vscode.kas.ini /etc/kas.ini
 
-ENTRYPOINT ["/usr/bin/kas"]
+ENTRYPOINT ["/usr/bin/kas", "-c"]
 
 # EXPOSE 7080
