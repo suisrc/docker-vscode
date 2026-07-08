@@ -32,6 +32,31 @@ go build -o kas .
 ./kas -h
 ```
 
+### `-s` 与 `SOCK_PATH`
+
+所有子命令（以及守护模式）的 IPC socket 路径按以下优先级确定：
+
+1. 命令行 `-s <path>`（或 `-s=<path>`）
+2. 环境变量 `SOCK_PATH`
+3. 默认值 `/var/run/kas/kas.sock`
+
+`-s` 可写在子命令**之前或之后**，两者等价：
+
+```bash
+./kas -s /path/to/kas.sock ps          # -s 在前
+./kas ps -s /path/to/kas.sock           # -s 在后
+./kas -s /path/to/kas.sock start web    # -s 在前
+./kas start web -s /path/to/kas.sock    # -s 在后
+```
+
+也可用环境变量统一指定（客户端与守护进程共享同一 socket）：
+
+```bash
+export SOCK_PATH=/path/to/kas.sock
+./kas ps          # 自动使用 $SOCK_PATH
+./kas start web   # 自动使用 $SOCK_PATH
+```
+
 作为容器入口运行：
 
 ```dockerfile
@@ -43,10 +68,13 @@ ENTRYPOINT ["/usr/local/bin/kas"]
 
 ### 子命令
 
+子命令通过 IPC 连接运行中的 kas。`-s` 可写在子命令前后任意位置，也可用 `SOCK_PATH` 环境变量代替（详见上文）。
+
 ```bash
-# 查看所有被管理的进程（连接运行中的 kas）
+# 查看所有被管理的进程
 ./kas ps
 ./kas ps -s /var/run/kas/kas.sock
+./kas -s /var/run/kas/kas.sock ps
 
 # 触发配置重载
 ./kas reload
@@ -55,6 +83,7 @@ ENTRYPOINT ["/usr/local/bin/kas"]
 # 启动指定服务（即使 autostart=false 也能手动启动）
 ./kas start web
 ./kas start web -s /var/run/kas/kas.sock
+./kas -s /var/run/kas/kas.sock start web
 
 # 停止指定服务
 ./kas stop web

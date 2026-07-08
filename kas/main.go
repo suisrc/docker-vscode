@@ -1156,24 +1156,27 @@ func (s *kas) handleConn(conn net.Conn, hupCh chan<- struct{}) {
 		default:
 			fmt.Fprintln(conn, "reload already pending")
 		}
-	case "restart":
+	case "restart", "start", "stop":
 		if len(parts) < 2 || parts[1] == "" {
-			fmt.Fprintln(conn, "error: restart requires a service name")
+			fmt.Fprintf(conn, "error: %s requires a service name\n", parts[0])
 			return
 		}
-		s.handleRestart(conn, parts[1])
-	case "start":
-		if len(parts) < 2 || parts[1] == "" {
-			fmt.Fprintln(conn, "error: start requires a service name")
+		name := parts[1]
+		// Reject names containing whitespace/newlines: they can never match a
+		// configured [program:NAME] section (which is a single line) and a
+		// newline would let a crafted client inject a second command line.
+		if strings.ContainsAny(name, " \t\n\r") {
+			fmt.Fprintf(conn, "error: invalid service name %q\n", name)
 			return
 		}
-		s.handleStart(conn, parts[1])
-	case "stop":
-		if len(parts) < 2 || parts[1] == "" {
-			fmt.Fprintln(conn, "error: stop requires a service name")
-			return
+		switch parts[0] {
+		case "restart":
+			s.handleRestart(conn, name)
+		case "start":
+			s.handleStart(conn, name)
+		case "stop":
+			s.handleStop(conn, name)
 		}
-		s.handleStop(conn, parts[1])
 	default:
 		fmt.Fprintln(conn, "unknown command (use: ps | reload | restart <name> | start <name> | stop <name>)")
 	}
@@ -1285,19 +1288,30 @@ func reloadClient(sockPath string) int {
 	return runClient(sockPath, "reload")
 }
 
+// namedCmdClient sends a "<cmd> <name>" request. It rejects names containing
+// whitespace/newlines so a crafted name cannot inject a second command line
+// over the socket protocol (which is line-oriented).
+func namedCmdClient(sockPath, cmd, name string) int {
+	if strings.ContainsAny(name, " \t\n\r") {
+		fmt.Fprintf(os.Stderr, "error: invalid service name %q (no whitespace allowed)\n", name)
+		return 2
+	}
+	return runClient(sockPath, cmd+" "+name)
+}
+
 // restartClient connects to the kas unix socket and restarts a service.
 func restartClient(sockPath, name string) int {
-	return runClient(sockPath, "restart "+name)
+	return namedCmdClient(sockPath, "restart", name)
 }
 
 // startClient connects to the kas unix socket and starts a service.
 func startClient(sockPath, name string) int {
-	return runClient(sockPath, "start "+name)
+	return namedCmdClient(sockPath, "start", name)
 }
 
 // stopClient connects to the kas unix socket and stops a service.
 func stopClient(sockPath, name string) int {
-	return runClient(sockPath, "stop "+name)
+	return namedCmdClient(sockPath, "stop", name)
 }
 
 // runClient sends a command to the kas socket and copies the response to stdout.
@@ -1317,60 +1331,118 @@ func runClient(sockPath, cmd string) int {
 	return 0
 }
 
+// ---- argument parsing for subcommands --------------------------------------
+
+// defaultSock resolves the IPC socket path from $SOCK_PATH, falling back to
+// defaultSockPath when unset. Shared by the client subcommands and the daemon
+// so they always agree on the default.
+func defaultSock() string {
+	if p := os.Getenv("SOCK_PATH"); p != "" {
+		return p
+	}
+	return defaultSockPath
+}
+
+// parseSubArgs scans args and extracts the -s socket flag plus the remaining
+// positional tokens (the service NAME for start/stop/restart). Unlike the
+// standard flag package, -s may appear anywhere: before, after, or between
+// positional args, so all of these work:
+//
+//	kas ps -s /p            kas -s /p ps
+//	kas start web -s /p     kas -s /p start web
+//	kas start -s /p web     kas start web -s=/p
+//
+// -s value precedence: command-line -s > $SOCK_PATH > defaultSockPath.
+// It returns the resolved socket path and the collected positional args. It
+// calls os.Exit on a malformed -s (missing or empty value).
+func parseSubArgs(args []string) (sockPath string, positional []string) {
+	sockPath = defaultSock()
+	for i := 0; i < len(args); i++ {
+		a := args[i]
+		switch {
+		case a == "-s":
+			// Reject a missing value, or a value that itself looks like a flag
+			// (e.g. `kas -s -c cfg` would otherwise eat "-c" as the socket path).
+			if i+1 >= len(args) || strings.HasPrefix(args[i+1], "-") {
+				fmt.Fprintln(os.Stderr, "error: -s requires a value")
+				os.Exit(2)
+			}
+			sockPath = args[i+1]
+			i++ // consume the value
+		case strings.HasPrefix(a, "-s="):
+			sockPath = strings.TrimPrefix(a, "-s=")
+		default:
+			positional = append(positional, a)
+		}
+	}
+	if sockPath == "" {
+		fmt.Fprintln(os.Stderr, "error: -s value must not be empty")
+		os.Exit(2)
+	}
+	return sockPath, positional
+}
+
+// runSubcommand dispatches the named client subcommand using the already-parsed
+// socket path and positional args. It returns true when name is a recognized
+// subcommand (and has been executed via os.Exit); false otherwise so the caller
+// can fall through to the daemon path. Keeping the recognition and dispatch in a
+// single switch avoids a separate subcommand set that could drift out of sync.
+func runSubcommand(name, sockPath string, args []string) bool {
+	requireName := func(usage string) string {
+		if len(args) < 1 {
+			fmt.Fprintln(os.Stderr, usage)
+			os.Exit(1)
+		}
+		return args[0]
+	}
+	switch name {
+	case "ps":
+		os.Exit(psClient(sockPath))
+	case "reload":
+		os.Exit(reloadClient(sockPath))
+	case "restart":
+		os.Exit(restartClient(sockPath, requireName("usage: kas restart NAME [-s sock]")))
+	case "start":
+		os.Exit(startClient(sockPath, requireName("usage: kas start NAME [-s sock]")))
+	case "stop":
+		os.Exit(stopClient(sockPath, requireName("usage: kas stop NAME [-s sock]")))
+	}
+	return false // not a subcommand
+}
+
 // ---- main ------------------------------------------------------------------
 
 func main() {
-	// Subcommand: `kas ps` queries a running kas instance.
-	if len(os.Args) > 1 && os.Args[1] == "ps" {
-		fs := flag.NewFlagSet("ps", flag.ExitOnError)
-		sockPath := fs.String("s", defaultSockPath, "path to the kas unix socket")
-		_ = fs.Parse(os.Args[2:])
-		os.Exit(psClient(*sockPath))
-	}
-	// Subcommand: `kas reload` triggers a config reload in a running kas.
-	if len(os.Args) > 1 && os.Args[1] == "reload" {
-		fs := flag.NewFlagSet("reload", flag.ExitOnError)
-		sockPath := fs.String("s", defaultSockPath, "path to the kas unix socket")
-		_ = fs.Parse(os.Args[2:])
-		os.Exit(reloadClient(*sockPath))
-	}
-	// Subcommand: `kas restart NAME` restarts a service in a running kas.
-	if len(os.Args) > 1 && os.Args[1] == "restart" {
-		fs := flag.NewFlagSet("restart", flag.ExitOnError)
-		sockPath := fs.String("s", defaultSockPath, "path to the kas unix socket")
-		_ = fs.Parse(os.Args[2:])
-		if fs.NArg() < 1 {
-			fmt.Fprintln(os.Stderr, "usage: kas restart NAME [-s sock]")
-			os.Exit(1)
+	args := os.Args[1:]
+
+	// --- Client subcommands -------------------------------------------------
+	// The subcommand and -s may appear in either order. parseSubArgs strips -s
+	// (wherever it is) and collects the remaining positional tokens; the first
+	// of those is the subcommand. Examples that all resolve identically:
+	//
+	//	kas ps -s /p           -> sub="ps",  args=[]
+	//	kas -s /p ps           -> sub="ps",  args=[]
+	//	kas start web -s /p    -> sub="start", args=["web"]
+	//	kas -s /p start web    -> sub="start", args=["web"]
+	if len(args) > 0 {
+		sock, rest := parseSubArgs(args)
+		if len(rest) > 0 && runSubcommand(rest[0], sock, rest[1:]) {
+			return
 		}
-		os.Exit(restartClient(*sockPath, fs.Arg(0)))
-	}
-	// Subcommand: `kas start NAME` starts a service in a running kas.
-	if len(os.Args) > 1 && os.Args[1] == "start" {
-		fs := flag.NewFlagSet("start", flag.ExitOnError)
-		sockPath := fs.String("s", defaultSockPath, "path to the kas unix socket")
-		_ = fs.Parse(os.Args[2:])
-		if fs.NArg() < 1 {
-			fmt.Fprintln(os.Stderr, "usage: kas start NAME [-s sock]")
-			os.Exit(1)
-		}
-		os.Exit(startClient(*sockPath, fs.Arg(0)))
-	}
-	// Subcommand: `kas stop NAME` stops a service in a running kas.
-	if len(os.Args) > 1 && os.Args[1] == "stop" {
-		fs := flag.NewFlagSet("stop", flag.ExitOnError)
-		sockPath := fs.String("s", defaultSockPath, "path to the kas unix socket")
-		_ = fs.Parse(os.Args[2:])
-		if fs.NArg() < 1 {
-			fmt.Fprintln(os.Stderr, "usage: kas stop NAME [-s sock]")
-			os.Exit(1)
-		}
-		os.Exit(stopClient(*sockPath, fs.Arg(0)))
 	}
 
-	// Default config: /etc/kas.ini. Override with -c <path>.
+	// --- Daemon (PID 1) mode ------------------------------------------------
+	// Not a subcommand invocation: run as PID 1. -s/-c are plain flags with no
+	// positional args, so the standard flag package handles them fine. SOCK_PATH
+	// env acts as the default for -s.
+	runDaemon()
+}
+
+// runDaemon starts kas as the PID-1 process manager. The -s flag (or SOCK_PATH
+// env) selects the IPC socket; -c selects the config file.
+func runDaemon() {
 	cfgPath := flag.String("c", defaultConfigPath, "path to the kas ini config file")
-	sockPath := flag.String("s", defaultSockPath, "path to the kas unix socket for IPC")
+	sockPath := flag.String("s", defaultSock(), "path to the kas unix socket for IPC")
 	flag.Parse()
 
 	s := newKas() // also starts the single child-reaping goroutine (tini role)
