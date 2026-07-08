@@ -15,7 +15,7 @@ GO_VERSION="$(curl -fsSL https://go.dev/VERSION?m=text | head -n1)"
 echo "安装 Go ${GO_VERSION} ..."
 
 GO_ROOT="/usr/local/golang"
-GO_TAR="go${GO_VERSION}.linux-amd64.tar.gz"
+GO_TAR="${GO_VERSION}.linux-amd64.tar.gz"
 
 # 下载并校验官方 sha256（从 GO_MIRROR 拉取 .sha256 文件，国内加速）
 curl -fSL "${GO_MIRROR}/${GO_TAR}"        -o "/tmp/${GO_TAR}"

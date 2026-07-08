@@ -2,6 +2,8 @@
 
 ## 这是 ms 官方版本，并且在使用中自动加载最新版本
 
+# source /etc/profile
+
 # PASSWORD is empty, randomly generate a password
 if [[ -z "${PASSWORD}" ]]; then
     export PASSWORD=$(openssl rand -hex 16)

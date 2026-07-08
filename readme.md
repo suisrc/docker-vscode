@@ -18,6 +18,10 @@ Dockerfile.dev-bvsc -> node 14, 24; java 8, 25
 Dockerfile.dev-xvsc -> node 14, 24; java 8, 25
 Dockerfile.pwright ->  安装 playwirght 环境  
 
+## vscode 技能必装
+
+mhutchie.git-graph  
+esbenp.prettier-vscode
 
 ## 鸣谢
 https://github.com/microsoft/vscode/releases  
