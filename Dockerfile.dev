@@ -15,9 +15,9 @@ RUN export NVM_DIR="$([ -z "${XDG_CONFIG_HOME-}" ] && printf %s "${HOME}/.nvm" |
 
 # sdk list
 RUN . "$HOME/.sdkman/bin/sdkman-init.sh" &&\
-    sdk install java 8.0.482.1-sem &&\
     sdk install java 25.0.3-sem &&\
     sdk use java 25.0.3-sem &&\
+    sdk install java 8.0.482.1-sem &&\
     sdk install maven 3.9.16 &&\
     rm -rf ${HOME}/.sdkman/tmp/*
 
