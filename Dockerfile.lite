@@ -5,24 +5,27 @@ COPY kin/ /kin/
 RUN cd /kin/ && CGO_ENABLED=0 go build -ldflags="-s -w" -o kin .
 COPY kas/ /kas/
 RUN cd /kas/ && CGO_ENABLED=0 go build -ldflags="-s -w" -o kas .
+COPY ssh/ /ssh/
+RUN cd /ssh/ && CGO_ENABLED=0 go build -ldflags="-s -w" -o sshp .
+RUN mkdir /app/ && mv /kin/kin /kas/kas /ssh/sshp /app/
 
 FROM debian:trixie-slim
 
 # set environment variables
-# VSCODE_INIT 支持指定脚本: file:///usr/srv/vsinit.sh
 ENV KAS_SSHD="0" \
     KAS_VSCODE="1" \
     VSCODE_WSC="/wsc" \
-    PROXY_PORT="7080" \
+    VSCODE_PORT="7080" \
     PROXY_HEADER_x_forwarded_port="443" \
-    PASSWORD=""
+    PASSWORD="" \
+    PASSROOT=""
 
-COPY --from=builder  /kin/kin  /usr/bin/kin
-COPY --from=builder  /kas/kas  /usr/bin/kas
+COPY --from=builder  /app/  /usr/bin/
 
 COPY rootfs/ /
+COPY srv/init.sh srv/vscode.sh /usr/srv
 COPY script/vscode.kas.ini /etc/kas.ini
 
-ENTRYPOINT ["/usr/bin/kas"]
+ENTRYPOINT ["/usr/bin/kas", "-c"]
 
 # EXPOSE 7080
