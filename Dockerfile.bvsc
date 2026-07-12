@@ -7,7 +7,7 @@ COPY kas/ /kas/
 RUN cd /kas/ && CGO_ENABLED=0 go build -ldflags="-s -w" -o kas .
 COPY ssh/ /ssh/
 RUN cd /ssh/ && CGO_ENABLED=0 go build -ldflags="-s -w" -o sshp .
-RUN cd /app/ && mv /kin/kin /kas/kas /ssh/sshp /app/
+RUN mkdir /app/ && mv /kin/kin /kas/kas /ssh/sshp /app/
 
 # ARG BASE_IMAGE_TAG
 # FROM ghcr.io/suisrc/webtop:base-${BASE_IMAGE_TAG}
