@@ -3,8 +3,12 @@ set -e
 
 # # 安装 vscode
 CODE_URL="https://update.code.visualstudio.com/latest/linux-deb-x64/stable" &&\
-curl -o /tmp/vscode.deb -L "${CODE_URL}" && apt update && apt install -y /tmp/vscode.deb
-# cp /usr/share/applications/code.desktop $HOME/Desktop/vscode.desktop
-
-# 禁用沙盒
-# sed -i 's#/usr/share/code/code#& --no-sandbox##' /usr/share/applications/code.desktop
+curl -o /tmp/vscode.deb -L "${CODE_URL}" && apt install -y /tmp/vscode.deb && rm /tmp/vscode.deb
+# 快捷方式
+cp /usr/share/applications/code.desktop /home/webtop/Desktop/vscode.desktop
+chown webtop:webtop /home/webtop/Desktop/vscode.desktop
+# 禁用沙盒 (避免重复添加)
+for f in /usr/share/applications/code.desktop /home/webtop/Desktop/vscode.desktop; do
+    grep -q '\--no-sandbox' "$f" 2>/dev/null || \
+        sed -i 's#/usr/share/code/code#& --no-sandbox##' "$f"
+done

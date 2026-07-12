@@ -24,10 +24,13 @@ gh_latest() {          # 取 GitHub repo 最新 release tag（纯 tag，去 v �
     echo "${tag}"
 }
 
+fix-mchina
+
 apt update && DEBIAN_FRONTEND=noninteractive \
 apt install --no-install-recommends -y \
     zip \
     gcc \
+    make \
     binutils \
     libxfont2 \
     libdbus-glib-1-2 \
@@ -36,22 +39,25 @@ apt install --no-install-recommends -y \
     libz-dev \
     zlib1g-dev
 
-# --- uv：自动获取最新版，走 GH 加速 ---
-UVX_VERSION="$(gh_latest astral-sh/uv 1)"
-echo "安装 uv ${UVX_VERSION} ..."
-UVX_URL="$(gh_url "https://github.com/astral-sh/uv/releases/download/${UVX_VERSION}/uv-x86_64-unknown-linux-gnu.tar.gz")"
-curl -fSL "${UVX_URL}" -o /tmp/uv.tar.gz && \
-tar -xzf /tmp/uv.tar.gz -C /usr/bin/ --strip-components=1 && rm -f /tmp/uv.tar.gz
+# # --- uv：自动获取最新版，走 GH 加速 ---
+# UVX_VERSION="$(gh_latest astral-sh/uv 1)"
+# echo "安装 uv ${UVX_VERSION} ..."
+# UVX_URL="$(gh_url "https://github.com/astral-sh/uv/releases/download/${UVX_VERSION}/uv-x86_64-unknown-linux-gnu.tar.gz")"
+# curl -fSL "${UVX_URL}" -o /tmp/uv.tar.gz && \
+# tar -xzf /tmp/uv.tar.gz -C /usr/bin/ --strip-components=1 && rm -f /tmp/uv.tar.gz
 
-# --- nvm：自动获取最新版，走 GH 加速 ---
-NVM_VERSION="$(gh_latest nvm-sh/nvm 1)"
-echo "安装 nvm ${NVM_VERSION} ..."
-curl -fsSL -o- "$(gh_url "https://raw.githubusercontent.com/nvm-sh/nvm/v${NVM_VERSION}/install.sh")" | bash
-export NVM_DIR="$([ -z "${XDG_CONFIG_HOME-}" ] && printf %s "${HOME}/.nvm" || printf %s "${XDG_CONFIG_HOME}/nvm")"
-[ -s "$NVM_DIR/nvm.sh" ] && \. "$NVM_DIR/nvm.sh" --no-use
+# # --- nvm：自动获取最新版，走 GH 加速 ---
+# NVM_VERSION="$(gh_latest nvm-sh/nvm 1)"
+# echo "安装 nvm ${NVM_VERSION} ..."
+# curl -fsSL -o- "$(gh_url "https://raw.githubusercontent.com/nvm-sh/nvm/v${NVM_VERSION}/install.sh")" | bash
+# export NVM_DIR="$([ -z "${XDG_CONFIG_HOME-}" ] && printf %s "${HOME}/.nvm" || printf %s "${XDG_CONFIG_HOME}/nvm")"
+# [ -s "$NVM_DIR/nvm.sh" ] && \. "$NVM_DIR/nvm.sh" --no-use
 
-# --- sdkman：官方安装脚本直连（已自带 CDN，国内可访问） ---
-curl -s "https://get.sdkman.io" | bash && . "$HOME/.sdkman/bin/sdkman-init.sh"
+# # --- sdkman：官方安装脚本直连（已自带 CDN，国内可访问） ---
+# curl -s "https://get.sdkman.io" | bash && . "$HOME/.sdkman/bin/sdkman-init.sh"
 
-# Go 由 fix-golang 独立安装，此处不再硬编码版本号
+# add-golang
+# add-chrome
+# add-vscode
+# add-zcode
 

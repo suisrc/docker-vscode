@@ -20,9 +20,9 @@ ENV DEBIAN_FRONTEND=noninteractive \
     DISPLAY=:1 \
     TITLE="webtop" \
     WEBTOP_PORT="7090" \
-    KAS_WEBTOP="0" \
+    KAS_WEBTOP="1" \
     KAS_SSHD="0" \
-    KAS_VSCODE="1" \
+    KAS_VSCODE="0" \
     VSCODE_WSC="/wsc" \
     VSCODE_PORT="7080" \
     PROXY_HEADER_x_forwarded_port="443" \
@@ -37,3 +37,6 @@ COPY rootfs/ /
 COPY /srv/*  /usr/srv/
 COPY script/webtop.kas.ini /etc/kas.ini
 
+ENTRYPOINT ["/usr/bin/kas", "-c"]
+
+# EXPOSE 7090

@@ -1,10 +1,20 @@
 #!/usr/bin/bash
 set -e
 
-## 配置下载仓库
-curl -fsSL https://dl.google.com/linux/linux_signing_key.pub | gpg --dearmor -o /usr/share/keyrings/google-chrome.gpg
-echo "deb [arch=amd64 signed-by=/usr/share/keyrings/google-chrome.gpg] http://dl.google.com/linux/chrome/deb/ stable main" | tee /etc/apt/sources.list.d/google-chrome.list
+echo "使用 chromium 替代 chrome, 原版 chrome 使用 add-chrome0 安装，但是没有经过测试"
 
-# 安装最新版本
-apt update && DEBIAN_FRONTEND=noninteractive \
-apt install --no-install-recommends -y  google-chrome-stable
+# 安装 chromium, 由于chrome 和 chromium 差不多，这里就不安装chrome了
+apt update && apt install -y chromium chromium-l10n chromium-sandbox
+
+sed -i 's#^Exec=/usr/bin/chromium#Exec=/usr/local/bin/wrapped-chromium#g' \
+        /usr/share/applications/chromium.desktop 2>/dev/null || true && \
+    cp /usr/share/applications/chromium.desktop /home/webtop/Desktop/ && \
+    chown webtop:webtop /home/webtop/Desktop/chromium.desktop
+
+# 新标签页使用空白页 (about:blank)
+mkdir -p /etc/chromium/policies/managed
+cat > /etc/chromium/policies/managed/blank-newtab.json <<'POLICY'
+{
+  "NewTabPageLocation": "about:blank"
+}
+POLICY

@@ -22,4 +22,4 @@ export XCURSOR_THEME=breeze_cursors
 export PULSE_RUNTIME_PATH=/run/user/$(id -u webtop)/pulse
 
 exec su -s /bin/bash webtop -c "HOME=${HOME} DISPLAY=${DISPLAY} PULSE_RUNTIME_PATH=${PULSE_RUNTIME_PATH} \
-    /lsiopy/bin/selkies --addr=localhost --mode=websockets --audio-device-name=output.monitor"
+    /lsiopy/bin/selkies --addr=localhost --mode=websockets"

@@ -1,0 +1,12 @@
+#!/usr/bin/bash
+set -e
+
+# google 原版 chrome
+
+## 配置下载仓库
+curl -fsSL https://dl.google.com/linux/linux_signing_key.pub | gpg --dearmor -o /usr/share/keyrings/google-chrome.gpg
+echo "deb [arch=amd64 signed-by=/usr/share/keyrings/google-chrome.gpg] http://dl.google.com/linux/chrome/deb/ stable main" | tee /etc/apt/sources.list.d/google-chrome.list
+
+# 安装最新版本
+apt update && DEBIAN_FRONTEND=noninteractive \
+apt install --no-install-recommends -y  google-chrome-stable
