@@ -168,9 +168,7 @@ func loadInitConfig() Config {
 	if len(backends) == 0 {
 		log.Fatal("BACKEND_URL parsed to zero backends")
 	}
-
-	proxyPort = GetEnvDef("VSCODE_PORT", proxyPort) // VSCODE_PORT 兼容
-	proxyPort = GetEnvDef("PROXY_PORT", proxyPort)  // PROXY_PORT 最优先
+	proxyPort = GetEnvDef("PROXY_PORT", proxyPort)
 
 	// Peek whether SERVICE_CMD is provided (via env or flag) to decide if we
 	// need to resolve VSCODE_HASH=vscode:latest. We can't expand SERVICE_CMD

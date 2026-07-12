@@ -1,6 +1,6 @@
 #!/bin/bash
 # ============================================================================
-# selkies.sh - 运行时初始化（kas init-setup 一次性任务）
+# selkies.sh - 运行时初始化（kas svc-ainit 一次性任务）
 #
 # 镜像链: base → bvsc → 本层(Dockerfile)
 #   Dockerfile 已在构建时完成:
@@ -13,7 +13,7 @@
 
 set -e
 
-echo "[init-setup] 运行时初始化..."
+echo "[svc-ainit] 运行时初始化..."
 
 # 运行时目录（可能在 tmpfs 上, 每次启动需重建）
 mkdir -p /run/dbus
@@ -22,7 +22,9 @@ mkdir -p /var/run/kas
 mkdir -p /home/webtop/Desktop
 mkdir -p /home/webtop/.config/xfce4/xfconf/xfce-perchannel-xml
 
+# ============================================================
 # XFCE 默认配置（首次运行）
+# ============================================================
 if [ -d /defaults/xfce ]; then
     for f in xfce4-panel.xml xfwm4.xml xsettings.xml; do
         [ -f "/defaults/xfce/$f" ] && cp "/defaults/xfce/$f" /home/webtop/.config/xfce4/xfconf/xfce-perchannel-xml/ 2>/dev/null || true
@@ -35,46 +37,45 @@ chown -R webtop:webtop /run/dbus 2>/dev/null || true
 
 chown webtop:webtop /usr/share/selkies 2>/dev/null || true
 
-# 标题设为主机名
+# ============================================================
+# 创建 selkies web 目录
+# ============================================================
+DASHBOARD="${DASHBOARD:-selkies-dashboard}"
 HNAME=$(hostname)
-if [ -f /usr/share/selkies/web/manifest.json ]; then
-    sed -i "s/\"name\": \".*\"/\"name\": \"${HNAME}\"/" /usr/share/selkies/web/manifest.json
-    sed -i "s/\"short_name\": \".*\"/\"short_name\": \"${HNAME}\"/" /usr/share/selkies/web/manifest.json
-    echo "[init-setup] 标题已设为: ${HNAME}"
+
+if [ -d "/usr/share/selkies/${DASHBOARD}" ]; then
+    rm -rf /usr/share/selkies/web
+    cp -a "/usr/share/selkies/${DASHBOARD}" /usr/share/selkies/web
+    echo "[svc-ainit] selkies web 从 ${DASHBOARD} 复制完成."
+else
+    echo "[svc-ainit] 警告: /usr/share/selkies/${DASHBOARD} 不存在，跳过 web 目录创建."
 fi
+
+# 图标
+if [ -f /usr/share/selkies/www/icon.png ]; then
+    cp /usr/share/selkies/www/icon.png /usr/share/selkies/web/icon.png 2>/dev/null || true
+    cp /usr/share/selkies/www/icon.png /usr/share/selkies/web/favicon.ico 2>/dev/null || true
+fi
+
+# 动态生成 manifest.json
+cat > /usr/share/selkies/web/manifest.json << MEOF
+{
+  "name": "${TITLE}-${HNAME}",
+  "short_name": "${HNAME}",
+  "manifest_version": 2,
+  "version": "1.0.0",
+  "display": "fullscreen",
+  "background_color": "#000000",
+  "theme_color": "#000000",
+  "icons": [{ "src": "icon.png", "type": "image/png", "sizes": "180x180" }],
+  "start_url": "/"
+}
+MEOF
+echo "[svc-ainit] manifest.json 已生成，标题: ${TITLE}-${HNAME}"
+
+chown -R webtop:webtop /usr/share/selkies/web 2>/dev/null || true
 
 rm -f /etc/xdg/autostart/xscreensaver.desktop 2>/dev/null || true
 
-echo "[init-setup] 初始化完成."
-
-# 创建 chromium 包装器（绕过容器 seccomp 限制）
-if [ ! -f /usr/local/bin/wrapped-chromium ]; then
-    cat > /usr/local/bin/wrapped-chromium << 'CEOF'
-#!/bin/bash
-BIN=/usr/bin/chromium
-if ! pgrep -x chromium > /dev/null 2>&1; then
-    rm -f $HOME/.config/chromium/Singleton* 2>/dev/null || true
-fi
-exec ${BIN} \
-    --password-store=basic \
-    --no-sandbox \
-    --test-type \
-    --disable-dev-shm-usage \
-    --disable-features=UseClone3ForSandbox \
-    --ozone-platform=x11 \
-    "$@"
-CEOF
-    chmod +x /usr/local/bin/wrapped-chromium
-    echo "[init-setup] wrapped-chromium 已创建."
-fi
-
-# 修复 chromium desktop 入口指向 wrapped-chromium
-if [ -f /usr/share/applications/chromium.desktop ]; then
-    sed -i 's#^Exec=/usr/bin/chromium#Exec=/usr/local/bin/wrapped-chromium#g' /usr/share/applications/chromium.desktop
-    # 创建桌面快捷方式
-    cp /usr/share/applications/chromium.desktop /home/webtop/Desktop/
-    chown webtop:webtop /home/webtop/Desktop/chromium.desktop
-    chmod +x /home/webtop/Desktop/chromium.desktop
-    echo "[init-setup] chromium 桌面入口已修复."
-fi
+echo "[svc-ainit] 初始化完成."
 
