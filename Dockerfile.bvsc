@@ -20,7 +20,8 @@ ENV KAS_SSHD="0" \
     VSCODE_WSC="/wsc" \
     PROXY_PORT="7080" \
     PROXY_HEADER_x_forwarded_port="443" \
-    PASSWORD=""
+    PASSWORD="" \
+    PASSROOT=""
 
 COPY --from=builder  /app/  /usr/bin/
 

@@ -4,8 +4,6 @@ RUN apt-get update && apt-get install -y git
 COPY ssh/ /ssh/
 RUN cd /ssh/ && CGO_ENABLED=0 go build -ldflags="-s -w" -o sshp .
 
-
-
 FROM debian:trixie-slim
 # ================================================================
 # KEYS_FOLDER, LISTEN_ADDR, TARGET_ADDR
