@@ -29,13 +29,6 @@ ENV DEBIAN_FRONTEND=noninteractive \
     PASSWORD="" \
     PASSROOT=""
 
-RUN apt-get update && \
-    apt-get install --no-install-recommends -y \
-        chromium \
-        chromium-l10n && \
-    apt-get autoclean && \
-    rm -rf /var/lib/apt/lists/* /tmp/* /var/tmp/*
-
 # =======================================================================
 
 COPY --from=builder  /app/  /usr/bin/
@@ -44,15 +37,3 @@ COPY rootfs/ /
 COPY /srv/*  /usr/srv/
 COPY script/webtop.kas.ini /etc/kas.ini
 
-# ========================================================================
-# 4. 运行时目录和权限
-# ========================================================================
-RUN mkdir -p /wsc/kway /run/dbus /dev/shm /var/run/kas /home/webtop/Desktop \
-             /home/webtop/.config/xfce4/xfconf/xfce-perchannel-xml && \
-    [ -d /defaults/xfce ] && cp /defaults/xfce/* /home/webtop/.config/xfce4/xfconf/xfce-perchannel-xml/ 2>/dev/null || true && \
-    chown -R webtop:webtop /home/webtop /usr/share/selkies && \
-    rm -f /etc/xdg/autostart/xscreensaver.desktop 2>/dev/null || true && \
-    sed -i 's#^Exec=/usr/bin/chromium#Exec=/usr/local/bin/wrapped-chromium#g' \
-        /usr/share/applications/chromium.desktop 2>/dev/null || true && \
-    cp /usr/share/applications/chromium.desktop /home/webtop/Desktop/ && \
-    chown webtop:webtop /home/webtop/Desktop/chromium.desktop
