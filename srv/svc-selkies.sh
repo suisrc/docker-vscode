@@ -18,5 +18,8 @@ done
 # 设置光标主题
 export XCURSOR_THEME=breeze_cursors
 
-exec su -s /bin/bash webtop -c "HOME=${HOME} DISPLAY=${DISPLAY} \
-    /lsiopy/bin/selkies --addr=localhost --mode=websockets"
+# PulseAudio 音频 (selkies 需要 PULSE_RUNTIME_PATH 才能连接 pulseaudio)
+export PULSE_RUNTIME_PATH=/run/user/$(id -u webtop)/pulse
+
+exec su -s /bin/bash webtop -c "HOME=${HOME} DISPLAY=${DISPLAY} PULSE_RUNTIME_PATH=${PULSE_RUNTIME_PATH} \
+    /lsiopy/bin/selkies --addr=localhost --mode=websockets --audio-device-name=output.monitor"

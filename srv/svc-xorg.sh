@@ -8,8 +8,8 @@ export DISPLAY=${DISPLAY:-:1}
 # Cleanup previous lock
 rm -f /tmp/.X1-lock
 
-# 默认虚拟分辨率
-DEFAULT_RES="${MAX_RES:-1920x1080}"
+# 默认虚拟分辨率（大尺寸避免 selkies resize 时触发 XShm 重初始化崩溃）
+DEFAULT_RES="${MAX_RES:-15360x8640}"
 
 if [ -n "${SELKIES_MANUAL_HEIGHT}" ] || [ -n "${SELKIES_MANUAL_WIDTH}" ]; then
     T_WIDTH="${SELKIES_MANUAL_WIDTH:-1024}"
