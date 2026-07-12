@@ -9,6 +9,7 @@ COPY ssh/ /ssh/
 RUN cd /ssh/ && CGO_ENABLED=0 go build -ldflags="-s -w" -o sshp .
 RUN mkdir /app/ && mv /kin/kin /kas/kas /ssh/sshp /app/
 
+
 # ARG BASE_IMAGE_TAG
 # FROM ghcr.io/suisrc/webtop:base-${BASE_IMAGE_TAG}
 FROM ghcr.io/suisrc/webtop:base-3.2.1
@@ -18,7 +19,7 @@ FROM ghcr.io/suisrc/webtop:base-3.2.1
 ENV KAS_SSHD="0" \
     KAS_VSCODE="1" \
     VSCODE_WSC="/wsc" \
-    PROXY_PORT="7080" \
+    VSCODE_PORT="7080" \
     PROXY_HEADER_x_forwarded_port="443" \
     PASSWORD="" \
     PASSROOT=""

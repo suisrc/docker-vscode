@@ -1,33 +1,48 @@
-# ============================================================================
-# Dockerfile - 基于当前系统构建 webtop 桌面环境
-# 构建: docker build -t webtop-kas .
-# 运行: docker run -d -p 7090:7090 --name webtop-kas webtop-kas
-# ============================================================================
-FROM ghcr.io/suisrc/webtop:base-3.2.1
+FROM golang:1.26-trixie as builder
 
+RUN apt-get update && apt-get install -y git
+COPY kin/ /kin/
+RUN cd /kin/ && CGO_ENABLED=0 go build -ldflags="-s -w" -o kin .
+COPY kas/ /kas/
+RUN cd /kas/ && CGO_ENABLED=0 go build -ldflags="-s -w" -o kas .
+COPY ssh/ /ssh/
+RUN cd /ssh/ && CGO_ENABLED=0 go build -ldflags="-s -w" -o sshp .
+RUN mkdir /app/ && mv /kin/kin /kas/kas /ssh/sshp /app/
+
+
+# ARG BASE_IMAGE_TAG
+# FROM ghcr.io/suisrc/webtop:xfce-${BASE_IMAGE_TAG}
+FROM ghcr.io/suisrc/webtop:xfce-3.2.1
+
+# set environment variables
+# VSCODE_INIT 支持指定脚本: file:///usr/srv/vsinit.sh
 ENV DEBIAN_FRONTEND=noninteractive \
     DISPLAY=:1 \
-    TITLE="webtop-desktop"
-
+    TITLE="webtop" \
+    WEBTOP_PORT="7090" \
+    KAS_WEBTOP="0" \
+    KAS_SSHD="0" \
+    KAS_VSCODE="1" \
+    VSCODE_WSC="/wsc" \
+    VSCODE_PORT="7080" \
+    PROXY_HEADER_x_forwarded_port="443" \
+    PASSWORD="" \
+    PASSROOT=""
 
 RUN apt-get update && \
     apt-get install --no-install-recommends -y \
         chromium \
-        chromium-l10n \
-# ---------- 覆盖 xfce4-panel 配置（隐藏底部 toolbar） ----------
-COPY usr/defaults/xfce/xfce4-panel.xml /defaults/xfce/xfce4-panel.xml
+        chromium-l10n && \
+    apt-get autoclean && \
+    rm -rf /var/lib/apt/lists/* /tmp/* /var/tmp/*
 
-# ========================================================================
-# 3. 复制服务脚本和 kas.ini
-# ========================================================================
-# ---------- 复制 chromium 包装器 ----------
-COPY usr/local/bin/wrapped-chromium /usr/local/bin/wrapped-chromium
-RUN chmod +x /usr/local/bin/wrapped-chromium
+# =======================================================================
 
-COPY usr/srv/ /usr/srv/
-RUN chmod +x /usr/srv/*.sh
+COPY --from=builder  /app/  /usr/bin/
 
-COPY kas.ini /wsc/kway/kas.ini
+COPY rootfs/ /
+COPY /srv/*  /usr/srv/
+COPY script/webtop.kas.ini /etc/kas.ini
 
 # ========================================================================
 # 4. 运行时目录和权限
@@ -40,4 +55,4 @@ RUN mkdir -p /wsc/kway /run/dbus /dev/shm /var/run/kas /home/webtop/Desktop \
     sed -i 's#^Exec=/usr/bin/chromium#Exec=/usr/local/bin/wrapped-chromium#g' \
         /usr/share/applications/chromium.desktop 2>/dev/null || true && \
     cp /usr/share/applications/chromium.desktop /home/webtop/Desktop/ && \
-    chown webtop:webtop /home/webtop/Desktop/chromium.desktop && \
+    chown webtop:webtop /home/webtop/Desktop/chromium.desktop

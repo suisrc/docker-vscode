@@ -1,0 +1,26 @@
+#!/bin/bash
+set -e
+BIN=/usr/bin/chromium
+
+# 清理单例锁
+if ! pgrep -x chromium > /dev/null 2>&1; then
+    rm -f $HOME/.config/chromium/Singleton* 2>/dev/null || true
+fi
+
+# webtop 风格绕过容器 seccomp
+# 注意: --no-sandbox --test-type 必须
+# 额外针对容器 seccomp(Seccomp:2) 加绕过参数
+export DBUS_SESSION_BUS_ADDRESS="$(echo $DBUS_SESSION_BUS_ADDRESS)"
+export PULSE_RUNTIME_PATH="${PULSE_RUNTIME_PATH:-/run/user/$(id -u)/pulse}"
+export ALSA_DEVICE=default
+
+exec ${BIN} \
+    --password-store=basic \
+    --no-sandbox \
+    --test-type \
+    --disable-dev-shm-usage \
+    --disable-features=UseClone3ForSandbox \
+    --ozone-platform=x11 \
+    --alsa-output-device=default \
+    --user-data-dir="${HOME}/.config/chromium" \
+    "$@"
