@@ -39,6 +39,8 @@ apt install --no-install-recommends -y \
     libz-dev \
     zlib1g-dev
 
+npm install pnpm yarn -g
+
 # # --- uv：自动获取最新版，走 GH 加速 ---
 # UVX_VERSION="$(gh_latest astral-sh/uv 1)"
 # echo "安装 uv ${UVX_VERSION} ..."

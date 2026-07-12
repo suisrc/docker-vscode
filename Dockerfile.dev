@@ -3,11 +3,26 @@ ARG BASE_IMAGE_TAG
 FROM ghcr.io/suisrc/webtop:${BASE_IMAGE_TAG}
 # ================================================================
 
+RUN apt-get update && \
+    apt-get install --no-install-recommends -y \
+        zip \
+        gcc \
+        make \
+        binutils \
+        libxfont2 \
+        libdbus-glib-1-2 \
+        libatomic1 \
+        build-essential \
+        libz-dev \
+        zlib1g-dev \
+        && \
+    apt-get autoclean && \
+    rm -rf /var/lib/apt/lists/* /tmp/* /var/tmp/*
+
 # nvm list
 RUN export NVM_DIR="$([ -z "${XDG_CONFIG_HOME-}" ] && printf %s "${HOME}/.nvm" || printf %s "${XDG_CONFIG_HOME}/nvm")" &&\
     [ -s "$NVM_DIR/nvm.sh" ] && \. "$NVM_DIR/nvm.sh"  --no-use &&\
     nvm install 24 && nvm use 24 && nvm install 14 && \
-    npm install pnpm yarn -g && \
     rm -rf ${HOME}/.nvm/.cache/* && \
     rm -rf ${HOME}/.npm/_cacache && \
     rm -rf ${HOME}/.npm/_locks && \
@@ -29,8 +44,8 @@ RUN . "$HOME/.sdkman/bin/sdkman-init.sh" &&\
 # ENV GOPATH=${HOME}/go \
 #     PATH=/usr/local/golang/bin:${HOME}/go/bin:$PATH
 
-# # https://golang.google.cn/dl/
-# RUN GO_VERSION=1.26.4 && mkdir /usr/local/golang && \
+# https://golang.google.cn/dl/
+# RUN GO_VERSION=1.26.5 && mkdir /usr/local/golang && \
 #     curl -fSL --compressed "https://dl.google.com/go/go${GO_VERSION}.linux-amd64.tar.gz" | \
 #     tar -xz -C /usr/local/golang --strip-components=1 && go version
 
