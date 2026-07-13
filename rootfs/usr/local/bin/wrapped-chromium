@@ -7,7 +7,7 @@ if ! pgrep -x chromium > /dev/null 2>&1; then
     rm -f $HOME/.config/chromium/Singleton* 2>/dev/null || true
 fi
 
-# webtop 风格绕过容器 seccomp
+# 绕过容器 seccomp
 # 注意: --no-sandbox --test-type 必须
 # 额外针对容器 seccomp(Seccomp:2) 加绕过参数
 export DBUS_SESSION_BUS_ADDRESS="$(echo $DBUS_SESSION_BUS_ADDRESS)"

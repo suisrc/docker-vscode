@@ -5,10 +5,10 @@ set -e
 CODE_URL="https://cdn-zcode.z.ai/zcode/electron/releases/3.3.4/ZCode-3.3.4-linux-x64.deb" &&\
 curl -o /tmp/zcode.deb -L "${CODE_URL}" && apt install -y /tmp/zcode.deb && rm /tmp/zcode.deb
 # 快捷方式
-cp /usr/share/applications/zcode.desktop /home/webtop/Desktop/zcode.desktop
-chown webtop:webtop /home/webtop/Desktop/zcode.desktop
+cp /usr/share/applications/zcode.desktop /home/${USER:-root}/Desktop/zcode.desktop
+[ "$(id -u)" -ne 0 ] && chown ${USER:-root}:${USER:-root} /home/${USER:-root}/Desktop/zcode.desktop
 # 禁用沙盒 (避免重复添加)
-for f in /usr/share/applications/code.desktop /home/webtop/Desktop/zcode.desktop; do
+for f in /usr/share/applications/code.desktop /home/${USER:-root}/Desktop/zcode.desktop; do
     grep -q '\--no-sandbox' "$f" 2>/dev/null || \
         sed -i 's#/opt/ZCode/zcode#& --no-sandbox##' "$f"
 done

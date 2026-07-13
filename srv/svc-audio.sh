@@ -43,14 +43,20 @@ fi
 
 # kas 会捕获 stdout/stderr 到日志文件，不要丢弃
 # device.description 属性是 WebRTC 枚举音频设备的必要条件，缺少会导致 OverconstrainedError
-PULSE_CMD="/usr/bin/pulseaudio -n \
-    --log-level=2 --log-target=stderr --exit-idle-time=-1 \
-    -L 'module-native-protocol-unix' \
-    -L 'module-null-sink sink_name=output sink_properties=device.description=output' \
-    -L 'module-null-sink sink_name=input sink_properties=device.description=input'"
+PULSE_ARGS=(
+    -n
+    --log-level=2
+    --log-target=stderr
+    --exit-idle-time=-1
+    -L module-native-protocol-unix
+    -L 'module-null-sink sink_name=output sink_properties=device.description=output'
+    -L 'module-null-sink sink_name=input sink_properties=device.description=input'
+)
 
 if [ "$USER" = "root" ]; then
-    exec env PULSE_RUNTIME_PATH="${PULSE_RUNTIME_PATH}" ${PULSE_CMD}
+    exec env PULSE_RUNTIME_PATH="${PULSE_RUNTIME_PATH}" /usr/bin/pulseaudio "${PULSE_ARGS[@]}"
 else
-    exec su -s /bin/bash "${USER}" -c "PULSE_RUNTIME_PATH=${PULSE_RUNTIME_PATH} ${PULSE_CMD}"
+    # 为 su -c 构建可安全传递的命令字符串（内层 shell 需要引号保护含空格的参数）
+    printf -v CMD_STR '%q ' /usr/bin/pulseaudio "${PULSE_ARGS[@]}"
+    exec su -s /bin/bash "${USER}" -c "PULSE_RUNTIME_PATH=${PULSE_RUNTIME_PATH} ${CMD_STR}"
 fi

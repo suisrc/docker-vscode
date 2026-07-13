@@ -8,8 +8,8 @@ fi &&\
 EDGE_URL="https://packages.microsoft.com/repos/edge/pool/main/m/microsoft-edge-stable/$EDGE_VERSION" &&\
 curl -o /tmp/msedge.deb -L "${EDGE_URL}" && apt update && apt install -y /tmp/msedge.deb && rm /tmp/msedge.deb
 # 快捷方式
-cp /usr/share/applications/microsoft-edge.desktop /home/webtop/Desktop/msedge.desktop
-chown webtop:webtop /home/webtop/Desktop/msedge.desktop
+cp /usr/share/applications/microsoft-edge.desktop /home/${USER:-root}/Desktop/msedge.desktop
+[ "$(id -u)" -ne 0 ] && chown ${USER:-root}:${USER:-root} /home/${USER:-root}/Desktop/msedge.desktop
 # 禁用沙盒 (避免重复添加)
 if [[ `cat /opt/microsoft/msedge/microsoft-edge | grep -c '--no-sandbox'` -eq 0 ]]; then
     sed -i 's|"\$@"| --no-sandbox  &|' /opt/microsoft/msedge/microsoft-edge

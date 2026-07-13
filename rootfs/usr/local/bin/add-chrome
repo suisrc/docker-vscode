@@ -8,8 +8,8 @@ apt update && apt install -y chromium chromium-l10n chromium-sandbox
 
 sed -i 's#^Exec=/usr/bin/chromium#Exec=/usr/local/bin/wrapped-chromium#g' \
         /usr/share/applications/chromium.desktop 2>/dev/null || true && \
-    cp /usr/share/applications/chromium.desktop /home/webtop/Desktop/ && \
-    chown webtop:webtop /home/webtop/Desktop/chromium.desktop
+    cp /usr/share/applications/chromium.desktop /home/${USER:-root}/Desktop/ && \
+    [ "$(id -u)" -ne 0 ] && chown ${USER:-root}:${USER:-root} /home/${USER:-root}/Desktop/chromium.desktop
 
 # 新标签页使用空白页 (about:blank)
 mkdir -p /etc/chromium/policies/managed
