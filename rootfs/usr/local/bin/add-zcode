@@ -9,7 +9,7 @@ curl -o /tmp/zcode.deb -L "${CODE_URL}" && apt install -y /tmp/zcode.deb && rm /
 cp /usr/share/applications/zcode.desktop $HD/Desktop/zcode.desktop
 [ "$(id -u)" -ne 0 ] && chown ${USER:-root}:${USER:-root} $HD/Desktop/zcode.desktop
 # 禁用沙盒 (避免重复添加)
-for f in /usr/share/applications/code.desktop $HD/Desktop/zcode.desktop; do
+for f in /usr/share/applications/zcode.desktop $HD/Desktop/zcode.desktop; do
     grep -q '\--no-sandbox' "$f" 2>/dev/null || \
         sed -i 's#/opt/ZCode/zcode#& --no-sandbox##' "$f"
 done
