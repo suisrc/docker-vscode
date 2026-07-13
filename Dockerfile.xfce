@@ -6,12 +6,12 @@
 #   xfce:     base + X11/XFCE + selkies(from linuxserver/webtop:debian-xfce)
 # ============================================================================
 
-FROM ghcr.io/suisrc/webtop:base-3.2.1
+FROM ghcr.io/suisrc/webtop:base-3.3.0
 
 # ========================================================================
 # 1. 安装 X11/XFCE/桌面栈（base 中不包含）
 # ========================================================================
-RUN apt-get update && \
+RUN apt-get update && DEBIAN_FRONTEND=noninteractive \
     apt-get install --no-install-recommends -y \
         dbus \
         dbus-x11 \
