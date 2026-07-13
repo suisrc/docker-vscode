@@ -31,7 +31,7 @@ ENV KAS_SSHD="0" \
 COPY --from=builder  /app/  /usr/bin/
 
 COPY rootfs/ /
-COPY srv/init.sh srv/vscode.sh /usr/srv
+COPY srv/init.sh srv/vscode.sh /usr/srv/
 COPY script/vscode.kas.ini /etc/kas.ini
 
 ENTRYPOINT ["/usr/bin/kas", "-c"]
