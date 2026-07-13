@@ -12,3 +12,5 @@ for f in /usr/share/applications/code.desktop /home/webtop/Desktop/vscode.deskto
     grep -q '\--no-sandbox' "$f" 2>/dev/null || \
         sed -i 's#/usr/share/code/code#& --no-sandbox##' "$f"
 done
+# cp /usr/share/applications/code.desktop /home/webtop/Desktop/vscode-admin.desktop
+# chown webtop:webtop /home/webtop/Desktop/vscode-admin.desktop

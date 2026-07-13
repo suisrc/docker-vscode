@@ -41,6 +41,11 @@ import (
 // dialTimeout 拨号超时时间。
 const dialTimeout = 30 * time.Second
 
+// tcpKeepAlive 是 TCP 层面的 KeepAlive 周期。
+// 内网防火墙/NAT 可能在 5-15 分钟无数据后断开空闲连接，
+// 设置为 30 秒可确保在绝大多数中间设备超时前发送探测包。
+const tcpKeepAlive = 30 * time.Second
+
 // passKey 是 Permissions.Extensions 中存放客户端输入密码的 key。
 const passKey = "pass"
 
@@ -183,6 +188,16 @@ func (p *Proxy) AddHostKey(conf *ssh.ServerConfig, file string) error {
 	return nil
 }
 
+// setKeepAlive 在 net.Conn 上启用 TCP KeepAlive。
+// 对于内网环境尤其重要：防火墙/NAT/负载均衡器可能在连接空闲时
+// 丢弃连接跟踪记录，导致长时间运行的脚本异常中断。
+func setKeepAlive(conn net.Conn) {
+	if tcpConn, ok := conn.(*net.TCPConn); ok {
+		_ = tcpConn.SetKeepAlive(true)
+		_ = tcpConn.SetKeepAlivePeriod(tcpKeepAlive)
+	}
+}
+
 // =============================================================================
 // 连接处理
 // =============================================================================
@@ -194,6 +209,10 @@ func (p *Proxy) AddHostKey(conf *ssh.ServerConfig, file string) error {
 //  4. 双向转发 channel 与 global request
 func (p *Proxy) HandleSshConn(ssc net.Conn, config *ssh.ServerConfig) {
 	defer ssc.Close()
+
+	// 启用 TCP KeepAlive，防止内网防火墙/NAT 在连接空闲时断开
+	setKeepAlive(ssc)
+
 	// ===== 与客户端 SSH 握手 =====
 	cConn, cChans, cReqs, err := ssh.NewServerConn(ssc, config)
 	if err != nil {
@@ -226,6 +245,8 @@ func (p *Proxy) HandleSshConn(ssc net.Conn, config *ssh.ServerConfig) {
 		return
 	}
 	defer ttc.Close()
+	// 目标侧也要启用 KeepAlive，防止内网中间设备断开空闲连接
+	setKeepAlive(ttc)
 
 	slog.Info("sshp >>> begin", "tag", tTag, "user", target.User)
 	defer slog.Info("sshp <<< final", "tag", tTag, "user", target.User)
