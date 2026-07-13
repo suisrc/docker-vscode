@@ -6,7 +6,7 @@
 #   xfce:     base + X11/XFCE + selkies(from linuxserver/webtop:debian-xfce)
 # ============================================================================
 
-FROM ghcr.io/suisrc/webtop:base-3.3.0
+FROM ghcr.io/suisrc/webtop:base-3.5.0
 
 # ========================================================================
 # 1. 安装 X11/XFCE/桌面栈（base 中不包含）

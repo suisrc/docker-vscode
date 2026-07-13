@@ -13,7 +13,7 @@ RUN mkdir /app/ && mv /kin/kin /kas/kas /ssh/sshp /app/
 
 
 # FROM ghcr.io/suisrc/webtop:${BASE_IMAGE_TAG}
-FROM ghcr.io/suisrc/webtop:xfce-3.3.6
+FROM ghcr.io/suisrc/webtop:xfce-3.5.0
 # ================================================================
 
 ENV DEBIAN_FRONTEND=noninteractive \
