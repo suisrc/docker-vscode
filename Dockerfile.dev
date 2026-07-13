@@ -3,9 +3,8 @@ ARG BASE_IMAGE_TAG
 FROM ghcr.io/suisrc/webtop:${BASE_IMAGE_TAG}
 # ================================================================
 
-RUN apt-get update && \
+RUN apt-get update && DEBIAN_FRONTEND=noninteractive \
     apt-get install --no-install-recommends -y \
-        zip \
         gcc \
         make \
         binutils \
@@ -38,24 +37,18 @@ RUN . "$HOME/.sdkman/bin/sdkman-init.sh" &&\
 
 # uv 是 python 环境变量
 
-# ================================================================
+# golang https://go.dev/dl
+RUN GO_VERSION=go1.26.5 && mkdir -p /usr/local/golang && \
+    curl -fSL --compressed "https://go.dev/dl/${GO_VERSION}.linux-amd64.tar.gz" | \
+    tar -xz -C /usr/local/golang --strip-components=1 && go version
 
-# RUN mkdir -p ${HOME}/go/bin
-# ENV GOPATH=${HOME}/go \
-#     PATH=/usr/local/golang/bin:${HOME}/go/bin:$PATH
-
-# https://golang.google.cn/dl/
-# RUN GO_VERSION=1.26.5 && mkdir /usr/local/golang && \
-#     curl -fSL --compressed "https://dl.google.com/go/go${GO_VERSION}.linux-amd64.tar.gz" | \
-#     tar -xz -C /usr/local/golang --strip-components=1 && go version
-
-# # golang extension
-# RUN go install github.com/ramya-rao-a/go-outline@latest &&\
-#     go install github.com/cweill/gotests/gotests@latest &&\
-#     go install github.com/fatih/gomodifytags@latest &&\
-#     go install github.com/josharian/impl@latest &&\
-#     go install github.com/haya14busa/goplay/cmd/goplay@latest &&\
-#     go install github.com/go-delve/delve/cmd/dlv@latest &&\
-#     go install honnef.co/go/tools/cmd/staticcheck@latest &&\
-#     go install golang.org/x/tools/gopls@latest &&\
-#     go install github.com/google/wire/cmd/wire@latest; exit 0
+# golang extension
+RUN go install github.com/ramya-rao-a/go-outline@latest &&\
+    go install github.com/cweill/gotests/gotests@latest &&\
+    go install github.com/fatih/gomodifytags@latest &&\
+    go install github.com/josharian/impl@latest &&\
+    go install github.com/haya14busa/goplay/cmd/goplay@latest &&\
+    go install github.com/go-delve/delve/cmd/dlv@latest &&\
+    go install honnef.co/go/tools/cmd/staticcheck@latest &&\
+    go install golang.org/x/tools/gopls@latest &&\
+    go install github.com/google/wire/cmd/wire@latest; exit 0
