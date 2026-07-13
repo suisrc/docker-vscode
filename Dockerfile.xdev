@@ -1,3 +1,5 @@
+ARG BASE_IMAGE_TAG
+
 FROM golang:1.26-trixie as builder
 
 RUN apt-get update && apt-get install -y git
@@ -9,8 +11,6 @@ COPY ssh/ /ssh/
 RUN cd /ssh/ && CGO_ENABLED=0 go build -ldflags="-s -w" -o sshp .
 RUN mkdir /app/ && mv /kin/kin /kas/kas /ssh/sshp /app/
 
-
-ARG BASE_IMAGE_TAG
 
 FROM ghcr.io/suisrc/webtop:${BASE_IMAGE_TAG}
 # ================================================================
