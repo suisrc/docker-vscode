@@ -1,2 +1,6 @@
 ARG BASE_IMAGE_TAG
-FROM ghcr.io/suisrc/webtop:base-${BASE_IMAGE_TAG}
+FROM ghcr.io/suisrc/webtop:${BASE_IMAGE_TAG}
+
+COPY rootfs/ /
+RUN sed -i "1iexport \$(sudo cat /proc/1/environ |tr '\\\\0' '\\\\n' | xargs)\n" ${HOME}/.bashrc && \
+    sed -i "1iexport \$(sudo cat /proc/1/environ |tr '\\\\0' '\\\\n' | xargs)\n" ${HOME}/.zshrc

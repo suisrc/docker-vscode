@@ -50,7 +50,8 @@ RUN apt update && DEBIAN_FRONTEND=noninteractive \
     fonts-noto-color-emoji && \
     fc-cache -f -v && \
     sed -i 's/^# zh_CN.UTF-8/zh_CN.UTF-8/' /etc/locale.gen &&\
-    locale-gen zh_CN.UTF-8 && \
+    sed -i 's/^# C.UTF-8/C.UTF-8/' /etc/locale.gen &&\
+    locale-gen zh_CN.UTF-8 C.UTF-8 && \
     echo 'precmd_functions+=( f ) && f() { PS1="$(powerline-go -error $? -shell zsh -cwd-max-depth 1 -cwd-mode dironly -modules time,cwd,git,exit)"; }' >> ~/.zshrc && \
     echo "source /usr/share/zsh-autosuggestions/zsh-autosuggestions.zsh" >> ~/.zshrc && \
     echo "# source /usr/share/zsh-syntax-highlighting/zsh-syntax-highlighting.zsh" >> ~/.zshrc && \
@@ -60,8 +61,13 @@ RUN apt update && DEBIAN_FRONTEND=noninteractive \
 # sed -i "3iexport \$(sudo cat /proc/1/environ |tr '\\\\0' '\\\\n' | xargs)" /etc/profile
 
 # set environment variables
-ENV LANGUAGE="zh_CN.UTF-8" \
-    LANG="zh_CN.UTF-8"
+ENV LANGUAGE="zh_CN:zh" \
+    LANG="zh_CN.UTF-8" \
+    LC_ALL="zh_CN.UTF-8" \
+    LC_CTYPE="zh_CN.UTF-8"
+
+# 将默认 locale 写入 /etc/default/locale，避免 setlocale 警告
+RUN echo 'LANG=zh_CN.UTF-8\nLC_ALL=zh_CN.UTF-8\nLC_CTYPE=zh_CN.UTF-8\nLANGUAGE=zh_CN:zh' > /etc/default/locale
 
 # vux python https://github.com/astral-sh/uv
 # nvm nodejs https://github.com/nvm-sh/nvm
