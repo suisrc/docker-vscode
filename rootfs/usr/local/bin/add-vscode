@@ -1,16 +1,17 @@
 #!/usr/bin/bash
 set -e
+eval HD=~${USER:-root}
 
 # # 安装 vscode
 CODE_URL="https://update.code.visualstudio.com/latest/linux-deb-x64/stable" &&\
 curl -o /tmp/vscode.deb -L "${CODE_URL}" && apt install -y /tmp/vscode.deb && rm /tmp/vscode.deb
 # 快捷方式
-cp /usr/share/applications/code.desktop /home/${USER:-root}/Desktop/vscode.desktop
-[ "$(id -u)" -ne 0 ] && chown ${USER:-root}:${USER:-root} /home/${USER:-root}/Desktop/vscode.desktop
+cp /usr/share/applications/code.desktop $HD/Desktop/vscode.desktop
+[ "$(id -u)" -ne 0 ] && chown ${USER:-root}:${USER:-root} $HD/Desktop/vscode.desktop
 # 禁用沙盒 (避免重复添加)
-for f in /usr/share/applications/code.desktop /home/${USER:-root}/Desktop/vscode.desktop; do
+for f in /usr/share/applications/code.desktop $HD/Desktop/vscode.desktop; do
     grep -q '\--no-sandbox' "$f" 2>/dev/null || \
         sed -i 's#/usr/share/code/code#& --no-sandbox##' "$f"
 done
-# cp /usr/share/applications/code.desktop /home/${USER:-root}/Desktop/vscode-admin.desktop
-# [ "$(id -u)" -ne 0 ] && chown ${USER:-root}:${USER:-root} /home/${USER:-root}/Desktop/vscode-admin.desktop
+# cp /usr/share/applications/code.desktop $HD/Desktop/vscode-admin.desktop
+# [ "$(id -u)" -ne 0 ] && chown ${USER:-root}:${USER:-root} $HD/Desktop/vscode-admin.desktop

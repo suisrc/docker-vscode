@@ -1,5 +1,6 @@
 #!/usr/bin/bash
 set -e
+eval HD=~${USER:-root}
 
 echo "使用 chromium 替代 chrome, 原版 chrome 使用 add-chrome0 安装，但是没有经过测试"
 
@@ -8,8 +9,8 @@ apt update && apt install -y chromium chromium-l10n chromium-sandbox
 
 sed -i 's#^Exec=/usr/bin/chromium#Exec=/usr/local/bin/wrapped-chromium#g' \
         /usr/share/applications/chromium.desktop 2>/dev/null || true && \
-    cp /usr/share/applications/chromium.desktop /home/${USER:-root}/Desktop/ && \
-    [ "$(id -u)" -ne 0 ] && chown ${USER:-root}:${USER:-root} /home/${USER:-root}/Desktop/chromium.desktop
+    cp /usr/share/applications/chromium.desktop $HD/Desktop/ && \
+    [ "$(id -u)" -ne 0 ] && chown ${USER:-root}:${USER:-root} $HD/Desktop/chromium.desktop
 
 # 新标签页使用空白页 (about:blank)
 mkdir -p /etc/chromium/policies/managed
