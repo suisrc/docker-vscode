@@ -30,19 +30,19 @@ if [ ! -f '/etc/ssh/_init' ]; then
         echo "======== init user: ${USER}."
         # 如果 USER 不是 root, 则创建用户
         if ! id -u "${USER}" >/dev/null 2>&1; then
-            mkdir -p /home/${USER} && \
-            groupadd --gid 1000 ${USER} && \
-            useradd  --uid 1000 --gid ${USER} -d /home/${USER} -m -s /usr/bin/zsh ${USER} && \
-            echo ${USER} ALL=(root) NOPASSWD:ALL > /etc/sudoers.d/${USER} && \
-            chmod 0440 /etc/sudoers.d/${USER} && chmod g+rw /home && \
-            cat <<EOF > /home/${USER}/.zshrc
+            mkdir -p /home/$USER && \
+            groupadd --gid 1000 $USER && \
+            useradd  --uid 1000 --gid $USER -d /home/$USER -m -s /usr/bin/zsh $USER && \
+            echo "${USER} ALL=(root) NOPASSWD:ALL" > /etc/sudoers.d/$USER && \
+            chmod 0440 /etc/sudoers.d/$USER && chmod g+rw /home && \
+            cat <<EOF > /home/$USER/.zshrc
 # .zshrc
 source /usr/share/powerlevel9k/powerlevel9k.zsh-theme
 source /usr/share/zsh-autosuggestions/zsh-autosuggestions.zsh
 source /usr/share/zsh-syntax-highlighting/zsh-syntax-highlighting.zsh
 
 EOF && \
-            chown ${USER}:${USER} /home/${USER}/.zshrc
+            chown $USER:$USER /home/$USER/.zshrc
         fi
         # 配置 ssh 的登录密码
         if [[ -n "${PASSWORD}" ]]; then
