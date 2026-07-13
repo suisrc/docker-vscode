@@ -40,7 +40,7 @@ RUN apt update && DEBIAN_FRONTEND=noninteractive \
 RUN apt update && DEBIAN_FRONTEND=noninteractive \
     apt install --no-install-recommends -y \
     zsh \
-    zsh-theme-powerlevel9k \
+    powerline-go \
     zsh-autosuggestions \
     zsh-syntax-highlighting \
     python3 \
@@ -51,9 +51,9 @@ RUN apt update && DEBIAN_FRONTEND=noninteractive \
     fc-cache -f -v && \
     sed -i 's/^# zh_CN.UTF-8/zh_CN.UTF-8/' /etc/locale.gen &&\
     locale-gen zh_CN.UTF-8 && \
-    echo "source /usr/share/powerlevel9k/powerlevel9k.zsh-theme" >> ~/.zshrc && \
+    echo 'precmd_functions+=( f ) && f() { PS1="$(powerline-go -error $? -shell zsh -cwd-max-depth 1 -cwd-mode dironly -modules time,cwd,git,exit)"; }' >> ~/.zshrc && \
     echo "source /usr/share/zsh-autosuggestions/zsh-autosuggestions.zsh" >> ~/.zshrc && \
-    echo "source /usr/share/zsh-syntax-highlighting/zsh-syntax-highlighting.zsh" >> ~/.zshrc && \
+    echo "# source /usr/share/zsh-syntax-highlighting/zsh-syntax-highlighting.zsh" >> ~/.zshrc && \
     chsh -s /usr/bin/zsh && \
     apt-get autoremove && apt-get clean && \
     rm -rf /tmp/* /var/tmp/* /var/lib/apt/lists/*
