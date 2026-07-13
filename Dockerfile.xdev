@@ -10,8 +10,9 @@ RUN cd /ssh/ && CGO_ENABLED=0 go build -ldflags="-s -w" -o sshp .
 RUN mkdir /app/ && mv /kin/kin /kas/kas /ssh/sshp /app/
 
 
+ARG BASE_IMAGE_TAG
+FROM ghcr.io/suisrc/webtop:${BASE_IMAGE_TAG}
 # ================================================================
-FROM ghcr.io/suisrc/webtop:xfce-3.3.0
 
 ENV DEBIAN_FRONTEND=noninteractive \
     DISPLAY=:1 \

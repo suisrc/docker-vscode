@@ -10,7 +10,7 @@ on:
 
 env:
   IMAGE_NAME: suisrc/webtop
-  IMAGE_VERSION: 'xdev-3.3.6'
+  IMAGE_VERSION: 'xdev-xfce-3.3.6'
   GITHUB_REGISTRY: ghcr.io
   DOCKER_REGISTRY: docker.io
   QUAY_REGISTRY: quay.io
