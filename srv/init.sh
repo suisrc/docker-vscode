@@ -41,7 +41,7 @@ source /usr/share/zsh-autosuggestions/zsh-autosuggestions.zsh
 source /usr/share/zsh-syntax-highlighting/zsh-syntax-highlighting.zsh
 
 EOF
-              chown "${USER}":"${USER}" /home/"${USER}"/.zshrc
+            chown -R "${USER}":"${USER}" /home/"${USER}"
         fi
         # 配置 ssh 的登录密码
         if [[ -n "${PASSWORD}" ]]; then
