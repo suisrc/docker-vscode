@@ -25,6 +25,9 @@ ENV KAS_SSHD="0" \
     PASSROOT="" \
     GIT_USER_NAME="" \
     GIT_USER_EMAIL="" \
+    GOROOT="/usr/local/golang" \
+    GOPATH="/root/.go" \
+    PATH="/usr/local/golang/bin:/root/.go/bin:${PATH}" \
     USER="root"
 # VSCODE_INIT 支持指定脚本: file:///usr/srv/vsinit.sh
 

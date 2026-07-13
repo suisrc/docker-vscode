@@ -34,14 +34,10 @@ if [ ! -f '/etc/ssh/_init' ]; then
             useradd  --uid 1000 --gid "${USER}" -d /home/"${USER}" -m -s /usr/bin/zsh "${USER}"
             echo "${USER} ALL=(root) NOPASSWD:ALL" > /etc/sudoers.d/"${USER}"
             chmod 0440 /etc/sudoers.d/"${USER}" && chmod g+rw /home
-            cat <<EOF > /home/"${USER}"/.zshrc
-# .zshrc
-source /usr/share/powerlevel9k/powerlevel9k.zsh-theme
-source /usr/share/zsh-autosuggestions/zsh-autosuggestions.zsh
-source /usr/share/zsh-syntax-highlighting/zsh-syntax-highlighting.zsh
-
-EOF
+            cp /root/.zshrc /home/"${USER}"/.zshrc
+            sed -i "s#\$HOME#/root#g" /home/"${USER}"/.zshrc
             chown -R "${USER}":"${USER}" /home/"${USER}"
+            # chmod 777 -R /root/.nvm && chmod 777 -R /root/.sdkman
         fi
         # 配置 ssh 的登录密码
         if [[ -n "${PASSWORD}" ]]; then
