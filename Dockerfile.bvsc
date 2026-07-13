@@ -15,14 +15,18 @@ RUN mkdir /app/ && mv /kin/kin /kas/kas /ssh/sshp /app/
 FROM ghcr.io/suisrc/webtop:base-3.2.1
 
 # set environment variables
-# VSCODE_INIT 支持指定脚本: file:///usr/srv/vsinit.sh
 ENV KAS_SSHD="0" \
     KAS_VSCODE="1" \
     VSCODE_WSC="/wsc" \
     VSCODE_PORT="7080" \
+    VSCODE_HASH="vscode:latest" \
     PROXY_HEADER_x_forwarded_port="443" \
     PASSWORD="" \
-    PASSROOT=""
+    PASSROOT="" \
+    GIT_USER_NAME="" \
+    GIT_USER_EMAIL="" \
+    USER="root"
+# VSCODE_INIT 支持指定脚本: file:///usr/srv/vsinit.sh
 
 COPY --from=builder  /app/  /usr/bin/
 

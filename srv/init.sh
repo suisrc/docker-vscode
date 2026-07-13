@@ -12,6 +12,25 @@ if [ $GIT_USER_EMAIL ]; then
 fi
 
 ## =======================================================================
+# creating the user and usergroup
+# RUN mkdir -p $HOME /app /wsc && \
+#     groupadd --gid 1000 $USER && \
+#     useradd  --uid 1000 --gid $USER -d $HOME -m -s /bin/bash $USER && \
+#     echo $USER ALL=\(root\) NOPASSWD:ALL > /etc/sudoers.d/$USER && \
+#     chmod 0440 /etc/sudoers.d/$USER && chmod g+rw /home && \
+# 如果 USER 不是 root, 则创建用户
+if [[ -n "${USER}" ]] && [[ "$USER" != "root" ]]; then
+    echo "======== init user: ${USER}."
+    # 创建用户
+    if ! id -u "${USER}" >/dev/null 2>&1; then
+        groupadd --gid 1000 "${USER}" && \
+        useradd --uid 1000 --gid "${USER}" -d /home/"${USER}" -m -s /bin/zsh "${USER}" && \
+        echo "${USER} ALL=(root) NOPASSWD:ALL" > /etc/sudoers.d/"${USER}" && \
+        chmod 0440 /etc/sudoers.d/"${USER}" && chmod g+rw /home
+    fi
+fi
+
+## =======================================================================
 
 if [ ! -f '/etc/ssh/_init' ]; then
     echo `date -Iseconds` > /etc/ssh/_init
@@ -24,14 +43,23 @@ if [ ! -f '/etc/ssh/_init' ]; then
     echo y | ssh-keygen -q -t rsa -N '' -f /etc/ssh/ssh_host_ecdsa_key
     echo y | ssh-keygen -q -t rsa -N '' -f /etc/ssh/ssh_host_ed25519_key
     echo ''
-    
-    # 配置 ssh 的登录密码
-    if [[ -n "${USER}" ]] && [[ "$USER" != "root" ]] && [[ -n "${PASSWORD}" ]]; then
-        echo "set ssh password for ${USER} ..."
-        echo "${USER}:${PASSWORD}" | chpasswd
-    fi
     echo "PasswordAuthentication yes" >> /etc/ssh/sshd_config
-    
+
+    if [[ -n "${USER}" ]] && [[ "$USER" != "root" ]]; then
+        echo "======== init user: ${USER}."
+        # 创建用户
+        if ! id -u "${USER}" >/dev/null 2>&1; then
+            groupadd --gid 1000 ${USER} && \
+            useradd  --uid 1000 --gid ${USER} -d /home/${USER} -m -s /usr/bin/zsh ${USER} && \
+            echo ${USER} ALL=(root) NOPASSWD:ALL > /etc/sudoers.d/${USER} && \
+            chmod 0440 /etc/sudoers.d/${USER} && chmod g+rw /home
+        fi
+        # 配置 ssh 的登录密码
+        if [[ -n "${PASSWORD}" ]]; then
+            echo "set ssh password for ${USER} ..."
+            echo "${USER}:${PASSWORD}" | chpasswd
+        fi
+    fi
     # 配置 root 用户的 ssh password
     if [[ -n "${PASSROOT}" ]]; then
         echo 'set ssh password for root ...'
