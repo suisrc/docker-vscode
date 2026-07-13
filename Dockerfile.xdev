@@ -11,6 +11,7 @@ RUN mkdir /app/ && mv /kin/kin /kas/kas /ssh/sshp /app/
 
 
 ARG BASE_IMAGE_TAG
+
 FROM ghcr.io/suisrc/webtop:${BASE_IMAGE_TAG}
 # ================================================================
 
