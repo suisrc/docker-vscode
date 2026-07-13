@@ -1,0 +1,47 @@
+ARG BASE_IMAGE_TAG
+
+FROM golang:1.26-trixie as builder
+
+RUN apt-get update && apt-get install -y git
+COPY kin/ /kin/
+RUN cd /kin/ && CGO_ENABLED=0 go build -ldflags="-s -w" -o kin .
+COPY kas/ /kas/
+RUN cd /kas/ && CGO_ENABLED=0 go build -ldflags="-s -w" -o kas .
+COPY ssh/ /ssh/
+RUN cd /ssh/ && CGO_ENABLED=0 go build -ldflags="-s -w" -o sshp .
+RUN mkdir /app/ && mv /kin/kin /kas/kas /ssh/sshp /app/
+
+
+# FROM ghcr.io/suisrc/webtop:${BASE_IMAGE_TAG}
+FROM ghcr.io/suisrc/webtop:xfce-3.3.6
+# ================================================================
+
+ENV DEBIAN_FRONTEND=noninteractive \
+    DISPLAY=:1 \
+    TITLE="webtop" \
+    WEBTOP_PORT="7090" \
+    KAS_WEBTOP="1" \
+    KAS_SSHD="0" \
+    KAS_VSCODE="0" \
+    VSCODE_WSC="/wsc" \
+    VSCODE_PORT="7080" \
+    VSCODE_HASH="vscode:latest" \
+    PROXY_HEADER_x_forwarded_port="443" \
+    PASSWORD="" \
+    PASSROOT="" \
+    GIT_USER_NAME="" \
+    GIT_USER_EMAIL="" \
+    GOROOT="/usr/local/golang" \
+    GOPATH="/root/.go" \
+    PATH="/usr/local/golang/bin:/root/.go/bin:${PATH}" \
+    USER="root"
+
+COPY --from=builder  /app/  /usr/bin/
+
+COPY rootfs/ /
+COPY /srv/*  /usr/srv/
+COPY script/webtop.kas.ini /etc/kas.ini
+
+ENTRYPOINT ["/usr/bin/kas", "-c"]
+
+# EXPOSE 7090
