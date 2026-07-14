@@ -11,8 +11,8 @@ if [ ! -f "$KEYS_FOLDER/_sshd_init" ]; then
     echo `date` > $KEYS_FOLDER/_sshd_init
     # sshd-keygen,初始化, dsa 已经被禁用
     echo y | ssh-keygen -q -t rsa -N '' -f $KEYS_FOLDER/ssh_host_rsa_key
-    echo y | ssh-keygen -q -t rsa -N '' -f $KEYS_FOLDER/ssh_host_ecdsa_key
-    echo y | ssh-keygen -q -t rsa -N '' -f $KEYS_FOLDER/ssh_host_ed25519_key
+    echo y | ssh-keygen -q -t ecdsa -N '' -f $KEYS_FOLDER/ssh_host_ecdsa_key
+    echo y | ssh-keygen -q -t ed25519 -N '' -f $KEYS_FOLDER/ssh_host_ed25519_key
 fi
 
 exec /usr/bin/sshp

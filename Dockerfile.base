@@ -48,6 +48,7 @@ RUN apt update && DEBIAN_FRONTEND=noninteractive \
     fonts-noto-core \
     fonts-noto-cjk \
     fonts-noto-color-emoji && \
+    fonts-powerline && \
     fc-cache -f -v && \
     sed -i 's/^# zh_CN.UTF-8/zh_CN.UTF-8/' /etc/locale.gen &&\
     sed -i 's/^# C.UTF-8/C.UTF-8/' /etc/locale.gen &&\
