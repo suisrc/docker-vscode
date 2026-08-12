@@ -649,6 +649,9 @@ func loadInitConfig() Config {
 
 		// 3. download — re-expand with svcVars (may reference {SVC_VERSION_HASH})
 		cfg.SvcDownload = expandValue(svcStr(ini, "download", ""), svcVars)
+		cfg.SvcDownload = strings.ReplaceAll(cfg.SvcDownload, "SVC_VERSION_HASH", cfg.SvcVersionHash)
+		cfg.SvcDownload = strings.ReplaceAll(cfg.SvcDownload, "SVC_VERSION", cfg.SvcVersion)
+		log.Printf("backend download url: %s", cfg.SvcDownload)
 
 		// 4. download_info / download_field_url
 		cfg.SvcDownloadInfo = expandValue(svcStr(ini, "download_info", ""), svcVars)

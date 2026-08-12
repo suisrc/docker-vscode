@@ -99,7 +99,8 @@ version_hash_url = "{SVC_VERSION_BASE_URL}/api/versions/{SVC_VERSION}/server-lin
 
 # 后端下载地址 (设置后首次请求触发下载→解压→启动)， 优先级最高， 如果没有指定， 使用 download_info + download_field_url 组合的 url 下载
 # 地址可能是一个重定向地址，所以时候的时候，需要将重定向后的地址，获取下载文件的 .ext, 同时作为环境变量 SVC_PACKAGE_EXT 供后面下载的时候使用
-download = {SVC_VERSION_BASE_URL}/{KVS_VSCODE_DOWNLOAD_PATH:-commit:}${SVC_VERSION_HASH}/server-linux-x64-web/stable
+# stable/{SVC_VERSION_HASH}/vscode-server-linux-x64-web.tar.gz|commit:{SVC_VERSION_HASH}/server-linux-x64-web/stable
+download = {SVC_VERSION_BASE_URL}/{KVS_VSCODE_DOWNLOAD_PATH:-commit:SVC_VERSION_HASH/server-linux-x64-web/stable}
 
 # 下载版本信息的接口，返回 json，download_field_url 指定了版本号的字段名， download_field_url 默认值 url， 只有在 download_info 有效时候才生效
 # https://update.code.visualstudio.com/api/versions/1.132.0/server-linux-x64-web/stable
