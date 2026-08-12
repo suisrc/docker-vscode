@@ -1,0 +1,13 @@
+<!DOCTYPE html><html lang="en"><head><meta charset="utf-8"><title>Preparing</title>
+<style>
+:root{--bg:#0f0f13;--text:#e4e4e7}
+:root.light{--bg:#f4f4f8;--text:#18181b}
+@media(prefers-color-scheme:light){:root:not(.dark){--bg:#f4f4f8;--text:#18181b}}
+body{background:var(--bg);color:var(--text);font:14px/1.6 -apple-system,BlinkMacSystemFont,"Segoe UI",sans-serif;display:flex;align-items:center;justify-content:center;min-height:100vh;margin:0;transition:background .3s,color .3s}
+p{opacity:.9}
+</style></head>
+<body><p>__STATUS__</p>
+<script>
+var t=localStorage.getItem('proxy-theme');if(t==='light'||t==='dark')document.documentElement.classList.add(t);
+setTimeout(function(){location.reload()},5e3)
+</script></body></html>

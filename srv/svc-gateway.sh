@@ -16,8 +16,6 @@ else
     HOME_DIR="/home/${USER}"
 fi
 
-export BACKEND_URL="/websocket=http://127.0.0.1:8081;/files=file://${HOME_DIR}/Desktop/;/=file:///usr/share/selkies/web/"
-
 # 等待 selkies 就绪 (端口 8081)
 echo "等待 selkies 服务就绪..."
 for i in $(seq 1 30); do
@@ -26,4 +24,6 @@ for i in $(seq 1 30); do
 done
 echo "selkies 已就绪，启动 gateway 代理..."
 
-exec kin --backend "${BACKEND_URL}" --port ${WEBTOP_PORT:-7090}  --token "${PASSWORD:-webtop}"
+BACKEND_URL="/websocket=http://127.0.0.1:8081;/files=file://${HOME_DIR}/Desktop/;/=file:///usr/share/selkies/web/" \
+KVS_PORT=${WEBTOP_PORT:-7080} KVS_COOKIE=webtop-tkn KVS_LOGIN_TOKEN="${PASSWORD:-webtop}" \
+exec kvs -n "${BACKEND_URL}"

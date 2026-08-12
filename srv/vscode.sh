@@ -34,25 +34,8 @@ if [ ! -f "${VSCODE_WSC:-/wsc}/.vsc/data/Machine/settings.json" ]; then
 EOF
 fi
 
-# 判断 VSCODE_INIT 是否为空， 如果为空， 则设置默认值
-if [[ -z "${VSCODE_INIT}" ]]; then
-    export VSCODE_INIT='sed -i \
-    -e "s|https://www.vscode-unpkg.net/nls/||g" \
-    -e "s|https://www.vscode-unpkg.net/_lp/||g" \
-    -e "s|https://main.vscode-cdn.net/extensions/marketplace.json||g" \
-    -e "s|https://main.vscode-cdn.net/mcp/servers.json||g" \
-    -e "s|https://main.vscode-cdn.net/extensions/chat.json||g" \
-    ${SERVICE_DIR}/product.json'
-fi
-
-# VSCODE_HASH 不存在，则设置默认值为 vscode:latest
-if [[ -z "${VSCODE_HASH}" ]]; then
-    export VSCODE_HASH="vscode:latest"
-fi
-
-# kin 是一个用于授权的工具，它会在启动 vscode server 前进行授权验证，确保只有通过验证的用户才能访问 vscode server
-echo 'start vscode server. wss need set env: PROXY_HEADER_x-forwarded-port=443'
-SERVICE_SET=${VSCODE_INIT} SERVICE_WSC=${VSCODE_WSC:-/wsc} \
-SERVICE_CMD='${SERVICE_DIR}/bin/code-server --accept-server-license-terms --without-connection-token \
-  --server-data-dir ${SERVICE_WSC}/.vsc --socket-path /var/run/vscode.sock' \
-exec kin --use-ssl --backend "/__healthz=text://OK:{now};^/=unix:///var/run/vscode.sock" --authz --port ${VSCODE_PORT:-7080} --token "${PASSWORD}"
+# kvs 是一个用于授权的工具，它会在启动 vscode server 前进行授权验证，确保只有通过验证的用户才能访问 vscode server
+echo 'start vscode server. wss need set env: KVS_SVC_HEADER_X_FORWARDED_PORT=443'
+KVS_SVC_SOCK_FILE=/var/run/vscode.sock KVS_HOME="${VSCODE_WSC:-/wsc}/.vsc" KVS_LOGIN_AUTHZ=true \
+KVS_PORT="${VSCODE_PORT:-7080}" KVS_COOKIE=vscode-tkn KVS_LOGIN_TOKEN="${PASSWORD}" \
+exec kvs -c default

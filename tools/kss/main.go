@@ -1,4 +1,4 @@
-// sshp：基于登录名进行 SSH 分流、中继与代理。
+// kssh：基于登录名进行 SSH 分流、中继与代理。
 //
 // 登录格式：server-name[/user-name][:password]@proxy-host
 //   - server-name 既可以是单纯主机名，也可以是 host-port-ssvc{snum} 复合形式

@@ -1,4 +1,4 @@
-module sshp
+module kss
 
 go 1.25.0
 

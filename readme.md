@@ -10,12 +10,12 @@ Dockerfile.ngx(ssh-3.0.0)(vsc代理)
   
 开发环境  
 Dockerfile.base -> 基础镜像  
-Dockerfile.bvsc -> 基于 base 构建的 kas/kin/vsc 镜像  
+Dockerfile.code -> 基于 base 构建的 kas/kvs/kss 镜像  
 Dockerfile.xfce -> 桌面镜像， 基于 base  
-Dockerfile.xvsc -> 基于 base 构建的 kas/kin/vsc 镜像  
+Dockerfile.desk -> 基于 base 构建的 kas/kvs/kss 镜像  
   
-Dockerfile.dev-bvsc -> node 14, 24; java 8, 25
-Dockerfile.dev-xvsc -> node 14, 24; java 8, 25
+Dockerfile.dev-code -> node 14, 24; java 8, 25
+Dockerfile.dev-desk -> node 14, 24; java 8, 25
 Dockerfile.pwright ->  安装 playwirght 环境  
 
 ## vscode 技能必装

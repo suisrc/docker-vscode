@@ -1,0 +1,159 @@
+# ============================================================================
+# kvs.ini — kvs 反向代理网关配置文件
+#
+# 使用方式:
+#   kvs demo            # 生成示例配置文件 kvs.ini
+#   kvs -c kvs.ini      # 指定配置文件 (必填)
+#   kvs -c default      # 使用默认配置，即 embed 中的 kvs.ini.example配置
+#   kvs -n "/__healthz=text://OK:@now;/=http://127.0.0.1:8080"
+#                       # -n 自动补充 -c default，用 ; 分割的 prefix=url 替代 [proxies] 段
+#
+# 所有值都支持 ${VAR} 或 $VAR 环境变量展开。
+# ============================================================================
+
+# ----------------------------------------------------------------------------
+# 基础配置
+# ----------------------------------------------------------------------------
+
+# 监听端口 (SSL 时 HTTPS = port+1)
+port = {KVS_PORT:-7080}
+
+# 启用自签名 HTTPS
+use_ssl = {KVS_USESSL:-false}
+
+# 启用 401/403→登录页重定向 + 退出按钮注入
+login_authz = {KVS_LOGIN_AUTHZ:-false}
+
+# 静态 Cookie 校验值 (留空则不校验，依赖后端 401 鉴权)
+# 设置后 Cookie 值必须等于此值，否则返回登录页
+login_token = {KVS_LOGIN_TOKEN}
+
+# 默认为空(跟0一致)，将 token 原样放入 cookie 中，session 同生命周期, 小于 0 启动报错， 错误的参数
+# 大于0， 生成16位0~f随机字符串， time.rand.(sha256(time.rand.token)[:24]) 作为 value 放入 cookie 中。
+# 作为网关需要校验的内容， 1: sha256(time.rand.token)[:24]是否一致， 2: 时间是否过期（还剩1/4时间，自动更新cookie令牌） 
+login_timeout = {KVS_LOGIN_TIMEOUT:-0}
+
+# Cookie 名
+cookie = {KVS_COOKIE:-kvs}
+
+# ----------------------------------------------------------------------------
+# 后端路由 ([proxies] 段，必填)
+# ----------------------------------------------------------------------------
+# 每行一个路由: prefix = url，按文件顺序匹配。
+# prefix 以 & 开头标记为 kvs 托管的服务后端 (触发自动部署、loading 页)。
+# prefix 以 ^ 开头标记为正则表达式匹配 (不支持 & 前缀)。
+#
+# 服务后端必须以 & 开头显式标记，无隐式提升。
+#
+# 单后端示例:
+#   /=http://localhost:8080
+#   /=unix:///var/run/app.sock
+#   /=file:///var/www/html
+#   /=text://Hello World
+#
+# 多后端示例:
+#   /api/=http://api:8080  前缀匹配
+#   /cdn/=file:///var/www  静态文件
+#   ^xxx=http://localhost:8080  正则表达式匹配
+#   &/=unix:///var/run/app.sock  kvs 托管服务
+#   http://exp.com/api/=http://localhost:8080  http:// or https:// 开头的 使用全域名匹配
+#
+# 特殊示例
+#   /__healthz=text://OK:@now  健康检查，返回 200 OK， 会被替换为当前时间 time.Now().Format(time.RFC3339)
+# 
+[proxies]
+/__healthz=text://OK:@now
+&/=unix://{KVS_SVC_SOCK_FILE:-./kvs.sock}
+
+# ----------------------------------------------------------------------------
+# 请求头改写
+#   请求头改写。Xxx=Val 设置/覆盖；Xxx= 删除。
+#   值支持 ${VAR} 环境变量展开。
+# ----------------------------------------------------------------------------
+[headers]
+x-forwarded-port = {KVS_SVC_HEADER_X_FORWARDED_PORT:-443}
+
+# ----------------------------------------------------------------------------
+# 服务自动部署 ([service] 段)
+# ----------------------------------------------------------------------------
+
+[service]
+
+# 防止重复启动， 支持 http://和unix://网络请求，判断应用是否存在;  file:// 判断文件是否存在，如果存在，就不再启动后端服务
+# 如果是 unix 协议，有一个特殊的操作， 如果网络不通， 会尝试删除这个 socket 文件， 重新启动后端服务
+check = unix://{KVS_SVC_SOCK_FILE:-./kvs.sock}
+
+# 工作目录基准， 有先加载，会在应用上下文中增加 的环境变量 SVC_HOME (覆盖系统环境变量，在 download 等后面使用)
+home = {KVS_HOME:-/app/.vsc}
+
+# 应用版本
+# version 必须是版本号 (如 1.133.0)，留空则使用 version_latest_url 地址获取版本
+# version_latest_url 地址中 #后的值是返回值的取值KEY，KEY对应的值不存在，返回的内容就是版本号
+# version 得到值后， 如果 version_hash_url 不存在，SVC_VERSION_HASH 等于 SVC_VERSION, 如果存在，使用此 url 获取版本的哈希值
+version_base_url = {KVS_VSCODE_DOWNLOAD_BASE:-https://update.code.visualstudio.com}
+version = {KVS_VSCODE_VERSION}
+# https://update.code.visualstudio.com/api/latest/server-linux-x64-web/stable#name
+version_latest_url = "{SVC_VERSION_BASE_URL}/api/latest/server-linux-x64-web/stable#name"
+# https://update.code.visualstudio.com/api/versions/1.133.0/server-linux-x64-web/stable#name
+version_hash_url = "{SVC_VERSION_BASE_URL}/api/versions/{SVC_VERSION}/server-linux-x64-web/stable#version"
+
+# 后端下载地址 (设置后首次请求触发下载→解压→启动)， 优先级最高， 如果没有指定， 使用 download_info + download_field_url 组合的 url 下载
+# 地址可能是一个重定向地址，所以时候的时候，需要将重定向后的地址，获取下载文件的 .ext, 同时作为环境变量 SVC_PACKAGE_EXT 供后面下载的时候使用
+download = {SVC_VERSION_BASE_URL}/{KVS_VSCODE_DOWNLOAD_PATH:-commit:}${SVC_VERSION_HASH}/server-linux-x64-web/stable
+
+# 下载版本信息的接口，返回 json，download_field_url 指定了版本号的字段名， download_field_url 默认值 url， 只有在 download_info 有效时候才生效
+# https://update.code.visualstudio.com/api/versions/1.132.0/server-linux-x64-web/stable
+# download_info = "{SVC_VERSION_BASE_URL}/api/versions/{SVC_VERSION_HASH}/server-linux-x64-web/stable"
+# download_field_url = url
+
+# 下载代理 (留空=直连)，支持 http://、https://、socks5:// 协议
+# download_proxy = socks5://127.0.0.1:1080
+
+# 解压目录 (非空且非空目录则跳过下载)
+# 缓存1：{CACHE_DIR}/cache/version/{SVC_VERSION}_{SVC_VERSION_HASH}.{SVC_PACKAGE_EXT}
+# 缓存2：{CACHE_DIR}/cache/ccproxy/{domain}/{path}[.{version}].xxx
+cache_dir = {SVC_HOME}/cache
+
+# /__cache/ 外部资源代理缓存路径前缀；留空禁用缓存代理 (默认空)
+# proxy_path = /__cache/
+
+# ----------------------------------------------------------------------------
+
+# 如果这个文件不存在，就是第一次请求，触发下载解压后端服务，等待启动完成后再返回请求, 转换为 SVC_BIN_HOME 应用环境变量
+bin_home = {SVC_HOME}/serve/{SVC_VERSION_HASH}
+
+# 启动前脚本 (每次部署执行一次；file:// 走 shebang；否则 sh -c 执行)
+init_shell = sed -i \
+    -e "s|https://www.vscode-unpkg.net/nls/||g" \
+    -e "s|https://www.vscode-unpkg.net/_lp/||g" \
+    -e "s|https://main.vscode-cdn.net/extensions/marketplace.json||g" \
+    -e "s|https://main.vscode-cdn.net/mcp/servers.json||g" \
+    -e "s|https://main.vscode-cdn.net/extensions/chat.json||g" \
+    ${SVC_BIN_HOME}/product.json
+
+# 退出前脚本 (每次终止执行一次；file:// 走 shebang；否则 sh -c 执行)， 仅在 kvs 管理后端生命周期时执行 (check 未检测到外部服务时)
+stop_shell = rm {KVS_SVC_SOCK_FILE:-./kvs.sock}
+
+# 进程启动的后端命令 (按空白分割，不支持带空格的参数)
+command = {SVC_BIN_HOME}/bin/code-server --accept-server-license-terms --without-connection-token --server-data-dir ${SVC_HOME}/ --socket-path {KVS_SVC_SOCK_FILE:-./kvs.sock}
+
+# ----------------------------------------------------------------------------
+# 将应用镜像同步s3服务器上， 这个是为 vscode 定制的功能
+# 支持命令：
+# kvs mirror -c kvs.ini 完成 latest 版本同步
+# kvs mirror -c default 使用默认配置，即 embed 中的 kvs.ini.example配置
+# ----------------------------------------------------------------------------
+
+[mirror]
+vsc_base_url = https://update.code.visualstudio.com
+vsc_platform = server-linux-x64-web
+# vsc_download 不存在，使用 api/versions/1.132.1/server-linux-x64-web/stable 返回 url 指定的地址
+# 参数支持 {name} 和 {hash} 两个字段, 都来自 ~/stable接口的返回值
+# https://update.code.visualstudio.com/commit:{hash}/{vsc_platform}/stable
+vsc_download = 
+
+# 这里将 [CDN域名和桶名和前缀] 统一整理为 s3prefix, 如果没有配置 s3prefix，运行提示，提示已经禁用该功能
+s3_prefix = {KVS_MIRROR_VSCODE_S3_PREFIX}
+s3_access = {KVS_MIRROR_VSCODE_S3_ACCESS}
+s3_secret = {KVS_MIRROR_VSCODE_S3_SECRET}
+s3_region = {KVS_MIRROR_VSCODE_S3_REGION}

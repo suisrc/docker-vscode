@@ -1,22 +1,24 @@
 FROM golang:1.26-trixie as builder
 
 RUN apt-get update && apt-get install -y git
-COPY kin/ /kin/
-RUN cd /kin/ && CGO_ENABLED=0 go build -ldflags="-s -w" -o kin .
+COPY kvs/ /kvs/
+RUN cd /kvs/ && CGO_ENABLED=0 go build -ldflags="-s -w" -o kvs .
 COPY kas/ /kas/
 RUN cd /kas/ && CGO_ENABLED=0 go build -ldflags="-s -w" -o kas .
-COPY ssh/ /ssh/
-RUN cd /ssh/ && CGO_ENABLED=0 go build -ldflags="-s -w" -o sshp .
-RUN mkdir /app/ && mv /kin/kin /kas/kas /ssh/sshp /app/
+RUN mkdir /app/ && mv /kvs/kvs /kas/kas /app/
 
 FROM debian:trixie-slim
+
+RUN apt-get update && apt-get install -y \
+    ca-certificates curl openssh-client &&\
+    apt-get autoremove && apt-get clean && \
+    rm -rf /tmp/* /var/tmp/* /var/lib/apt/lists/*
 
 # set environment variables
 ENV KAS_SSHD="0" \
     KAS_VSCODE="1" \
     VSCODE_WSC="/wsc" \
     VSCODE_PORT="7080" \
-    PROXY_HEADER_x_forwarded_port="443" \
     PASSWORD="" \
     PASSROOT=""
 

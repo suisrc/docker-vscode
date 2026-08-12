@@ -1,8 +1,8 @@
-# sshp
+# kssh
 
 基于登录名进行 SSH 分流、中继与代理。
 
-客户端通过用户名携带目标信息，sshp 据此解析出目标地址，建立到目标的 SSH 连接，
+客户端通过用户名携带目标信息，kssh 据此解析出目标地址，建立到目标的 SSH 连接，
 并在客户端与目标之间双向转发 channel 与 global request。
 
 ## 登录格式
@@ -87,16 +87,16 @@ ssh-keygen -A -f /etc/ssh
 
 ## 代码结构
 
-单文件 `main.go`，`package main`：
+单文件 `main.go`，`package main`，基于 [suisrc/sshproxy](https://github.com/suisrc/sshproxy) 算法，仅认证部分扩展为双认证模式：
 
 | 部分 | 说明 |
 | --- | --- |
 | `Proxy` | 服务生命周期：`Start`/`Stop`/`Wait`/`serve`/`InitConf`/`AddHostKey` |
-| `HandleSshConn` | 连接处理：握手 → 解析 → 拨号 → 转发 |
+| `InitConf` | 双认证配置：`NoClientAuth` + `NoClientAuthCallback` + `PartialSuccessError` + `PasswordCallback` |
+| `HandleSshConn` | 连接处理：握手 → 解析用户名/密码 → 解析地址 → 拨号 → 转发 |
 | `ForwardRequest` | 全局请求双向转发 |
 | `ForwardChannel` | channel 数据流与请求双向转发 |
-| `parseTarget` | 从用户名解析 host/port/ssvc/snum/user，密码由参数传入 |
-| `passKey` | Permissions.Extensions 中存放客户端输入密码的 key |
+| `passKey` | `Permissions.Extensions` 中存放客户端输入密码的 key |
 
 ## 认证流程
 
@@ -109,3 +109,32 @@ ssh-keygen -A -f /etc/ssh
                                                           └─ 客户端输入密码 → 通过
                                                           └─ 密码经 Permissions.Extensions 传递给 HandleSshConn
 ```
+
+密码来源（`HandleSshConn` 内）：
+
+- **内嵌**：用户名含 `:`，冒号后即为密码，同时截掉冒号及密码部分得到纯净用户名
+- **后输入**：用户名不含 `:`，从 `cConn.Permissions.Extensions[passKey]` 读取
+
+## Channel 转发关闭编排
+
+`ForwardChannel` 中每条 channel 共 6 条 goroutine（stdout×2 + stderr×2 + request×2），关闭顺序至关重要：
+
+```
+stdout EOF → CloseWrite（只关写端，exit-status 等请求仍可从读端通过）
+           → wg.Done（通知本侧 stderr + request 可收尾）
+           → wg.Wait（等本侧 stderr + request 全部完成）
+           → Close（最终关闭，此时 exit-status 已送达）
+```
+
+每侧（origin/target）各有一个 `WaitGroup(3)` 编排本侧的 stdout + stderr + request，
+确保 `Close()` 在 `exit-status` 等 channel 级请求转发完成之后才执行。
+这是局域网低延迟环境下 VS Code Remote-SSH 能正确解析 "remote port" 的关键。
+
+## 与参考 sshproxy 的差异
+
+仅以下两处，其余转发算法完全一致：
+
+1. **`InitConf`**：参考仅 `NoClientAuth: true`（只支持内嵌密码），扩展为双认证
+2. **`HandleSshConn`**：参考用 `SplitN(":", 2)` 强制要求内嵌密码，扩展为双来源（内嵌优先，否则读 `Permissions.Extensions`）
+
+日志从 `logrus` 改为标准库 `slog`，去掉第三方依赖。

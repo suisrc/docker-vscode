@@ -1,5 +1,8 @@
 __*
 temp
-kin/kin
-kas/kas
-ssh/sshp
+tools/kas/kas
+tools/kss/kss
+
+tools/kvs/kvs
+tools/kvs/kvs.ini
+tools/kvs/kvs.sock

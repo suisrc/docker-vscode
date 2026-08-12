@@ -10,9 +10,10 @@ RUN apt update && DEBIAN_FRONTEND=noninteractive \
     rm -rf /tmp/* /var/tmp/* /var/lib/apt/lists/*
 
 COPY rootfs/ /
-RUN sed -i "1iexport \$(sudo cat /proc/1/environ |tr '\\\\0' '\\\\n' | xargs)\n" ${HOME}/.bashrc && \
+RUN sed -i 's/^# C.UTF-8/C.UTF-8/' /etc/locale.gen \
     sed -i "1iexport \$(sudo cat /proc/1/environ |tr '\\\\0' '\\\\n' | xargs)\n" ${HOME}/.zshrc && \
-    sed -i 's/^# C.UTF-8/C.UTF-8/' /etc/locale.gen
+    sed -i "1iexport \$(sudo cat /proc/1/environ |tr '\\\\0' '\\\\n' | xargs)\n" ${HOME}/.bashrc
+    
 
 ENV LANGUAGE="zh_CN:zh" \
     LANG="zh_CN.UTF-8" \
