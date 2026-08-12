@@ -68,9 +68,11 @@ ENV LANGUAGE="zh_CN:zh" \
     LC_CTYPE="zh_CN.UTF-8"
 
 # 将默认 locale 写入 /etc/default/locale，避免 setlocale 警告
-RUN echo 'LANG=zh_CN.UTF-8\nLC_ALL=zh_CN.UTF-8\nLC_CTYPE=zh_CN.UTF-8\nLANGUAGE=zh_CN:zh' > /etc/default/locale \
-    sed -i "1iexport \$(sudo cat /proc/1/environ |tr '\\\\0' '\\\\n' | xargs)\n" ${HOME}/.zshrc && \
-    sed -i "1iexport \$(sudo cat /proc/1/environ |tr '\\\\0' '\\\\n' | xargs)\n" ${HOME}/.bashrc
+RUN echo 'LANG=zh_CN.UTF-8\nLC_ALL=zh_CN.UTF-8\nLC_CTYPE=zh_CN.UTF-8\nLANGUAGE=zh_CN:zh' > /etc/default/locale
+
+# 推荐使用 fix-sysenv 脚本处理， 这里由于不知道 用户是 root 还是 ???? 所以无法处理
+# sed -i "1iexport \$(sudo cat /proc/1/environ |tr '\\\\0' '\\\\n' | xargs)\n" ~/.zshrc && \
+# sed -i "1iexport \$(sudo cat /proc/1/environ |tr '\\\\0' '\\\\n' | xargs)\n" ~/.bashrc
 
 # vux python https://github.com/astral-sh/uv
 # nvm nodejs https://github.com/nvm-sh/nvm

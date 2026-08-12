@@ -111,8 +111,8 @@ download = {SVC_VERSION_BASE_URL}/{KVS_VSCODE_DOWNLOAD_PATH:-commit:SVC_VERSION_
 # download_proxy = socks5://127.0.0.1:1080
 
 # 解压目录 (非空且非空目录则跳过下载)
-# 缓存1：{CACHE_DIR}/cache/version/{SVC_VERSION}_{SVC_VERSION_HASH}.{SVC_PACKAGE_EXT}
-# 缓存2：{CACHE_DIR}/cache/ccproxy/{domain}/{path}[.{version}].xxx
+# 缓存1：{CACHE_DIR}/version/{SVC_VERSION}_{SVC_VERSION_HASH}.{SVC_PACKAGE_EXT}
+# 缓存2：{CACHE_DIR}/ccproxy/{domain}/{path}[.{version}].xxx
 cache_dir = {SVC_HOME}/cache
 
 # /__cache/ 外部资源代理缓存路径前缀；留空禁用缓存代理 (默认空)

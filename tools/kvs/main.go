@@ -875,7 +875,7 @@ func serveLoadingPage(w http.ResponseWriter, status string) {
 //  2. If bin_home exists and is non-empty → skip (already extracted)
 //  3. Resolve download URL (download has priority; otherwise download_info + field)
 //  4. Follow redirects to get .ext → SVC_PACKAGE_EXT
-//  5. Download to cache_dir/cache/version/{SVC_VERSION}_{SVC_VERSION_HASH}.{ext}
+//  5. Download to cache_dir/version/{SVC_VERSION}_{SVC_VERSION_HASH}.{ext}
 //  6. Extract tarball to bin_home
 //  7. Run init_shell
 //
@@ -950,7 +950,7 @@ func prepareService(cfg Config, srvState *serviceState) (bool, error) {
 	if cfg.SvcVersionHash != "" {
 		verName = cfg.SvcVersion + "_" + cfg.SvcVersionHash
 	}
-	cachePath := filepath.Join(cfg.SvcCacheDir, "cache", "version", verName+"."+ext)
+	cachePath := filepath.Join(cfg.SvcCacheDir, "version", verName+"."+ext)
 
 	if _, err := os.Stat(cachePath); err != nil {
 		srvState.setPreparing("Downloading Application: " + downloadURL)
@@ -1447,7 +1447,7 @@ func main() {
 	// and isPublicAuthPath won't accidentally treat every path as public
 	// (empty prefix matches all).
 	if cfg.SvcCacheDir != "" {
-		cacheOverride = filepath.Join(cfg.SvcCacheDir, "cache", "ccproxy")
+		cacheOverride = filepath.Join(cfg.SvcCacheDir, "ccproxy")
 		proxyPathPrefix = normalizeProxyPath(cfg.SvcProxyPath)
 	}
 
@@ -2906,7 +2906,7 @@ func mirrorCommand(args []string) {
 	// Step 2: Download the tarball (use cache_dir if configured).
 	var tarballPath string
 	if mc.CacheDir != "" {
-		tarballPath = filepath.Join(mc.CacheDir, "cache", "version", metaName+"_"+metaVersion+".tar.gz")
+		tarballPath = filepath.Join(mc.CacheDir, "version", metaName+"_"+metaVersion+".tar.gz")
 		if _, err := os.Stat(tarballPath); err == nil {
 			log.Printf("[mirror] tarball cached: %s", tarballPath)
 		} else {

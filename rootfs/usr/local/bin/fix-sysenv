@@ -1,4 +1,4 @@
 #!/usr/bin/bash
 
-sed -i "1iexport \$(sudo cat /proc/1/environ |tr '\\\\0' '\\\\n' | xargs)\n" ${HOME}/.bashrc
-sed -i "1iexport \$(sudo cat /proc/1/environ |tr '\\\\0' '\\\\n' | xargs)\n" ${HOME}/.zshrc
+sed -i "1iexport \$(sudo cat /proc/1/environ |tr '\\\\0' '\\\\n' | xargs)\n" ~/.bashrc
+sed -i "1iexport \$(sudo cat /proc/1/environ |tr '\\\\0' '\\\\n' | xargs)\n" ~/.zshrc
