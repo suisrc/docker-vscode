@@ -1,9 +1,9 @@
 FROM golang:1.26-trixie as builder
 
 RUN apt-get update && apt-get install -y git
-COPY kvs/ /kvs/
+COPY tools/kvs/ /kvs/
 RUN cd /kvs/ && CGO_ENABLED=0 go build -ldflags="-s -w" -o kvs .
-COPY kas/ /kas/
+COPY tools/kas/ /kas/
 RUN cd /kas/ && CGO_ENABLED=0 go build -ldflags="-s -w" -o kas .
 RUN mkdir /app/ && mv /kvs/kvs /kas/kas /app/
 
