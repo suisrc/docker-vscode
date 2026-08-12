@@ -2,11 +2,11 @@
 # Dockerfile - 基于当前系统构建 webtop 桌面环境
 #
 # 镜像链:
-#   base:     ghcr.io/suisrc/webtop:base-3.2.1
+#   base:     ghcr.io/suisrc/webtop:base-3.5.3
 #   xfce:     base + X11/XFCE + selkies(from linuxserver/webtop:debian-xfce)
 # ============================================================================
 
-FROM ghcr.io/suisrc/webtop:base-3.5.0
+FROM ghcr.io/suisrc/webtop:base-3.5.3
 
 # ========================================================================
 # 1. 安装 X11/XFCE/桌面栈（base 中不包含）

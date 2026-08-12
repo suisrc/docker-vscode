@@ -11,7 +11,7 @@ RUN mkdir /app/ && mv /kvs/kvs /kas/kas /app/
 
 
 # FROM ghcr.io/suisrc/webtop:${BASE_IMAGE_TAG}
-FROM ghcr.io/suisrc/webtop:xfce-3.5.0
+FROM ghcr.io/suisrc/webtop:xfce-3.5.3
 # ================================================================
 
 ENV DEBIAN_FRONTEND=noninteractive \
