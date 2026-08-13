@@ -1483,7 +1483,10 @@ func main() {
 	// serviceCmd holds the backend subprocess; started either eagerly (no
 	// service backend) or lazily after preparation completes (service backend).
 	// Uses a pointer so the /__restart handler can set it to nil after killing.
-	serviceCmd := (*exec.Cmd)(nil)
+	// serviceCmdMu protects serviceCmd across the /__restart handler goroutine,
+	// the lazy-prepare goroutine, and the shutdown path.
+	serviceCmd := (*backendProc)(nil)
+	var serviceCmdMu sync.Mutex
 
 	// setCookie writes a cookie with the given value and MaxAge.
 	setCookie := func(w http.ResponseWriter, value string, maxAge int) {
@@ -1536,6 +1539,21 @@ func main() {
 		_, _ = w.Write([]byte(`{"success":true,"message":"logout success"}`))
 	})
 
+	// /__version – returns the resolved service application version as plain
+	// text. Falls back to "0.0.0" when no version is resolved (e.g. no service
+	// backend, version resolution failed, or version not yet loaded).
+	mux.HandleFunc("/__version", func(w http.ResponseWriter, r *http.Request) {
+		v := cfg.SvcVersion
+		if v == "" {
+			v = "0.0.0"
+		}
+		// if vh := cfg.SvcVersionHash; vh != "" {
+		// 	v = v + ", " + vh
+		// }
+		w.Header().Set("Content-Type", "text/plain; charset=utf-8")
+		_, _ = io.WriteString(w, v)
+	})
+
 	// /__restart – kills the backend subprocess and resets the service state so
 	// the next request re-triggers version detection, download, extract, and
 	// start. Requires authentication (not in isPublicAuthPath). Only works when
@@ -1544,11 +1562,9 @@ func main() {
 	// /__restart?v=1.32.1 → restart with a specific version override
 	// /__restart/1.32.1 → same, path-style
 	restartHandler := func(w http.ResponseWriter, r *http.Request) {
-		// Extract optional version: path value (/__restart/1.32.1) or query (?v=1.32.1)
-		overrideVersion := r.PathValue("v")
-		if overrideVersion == "" {
-			overrideVersion = r.URL.Query().Get("v")
-		}
+		// Extract optional version: query (?v=1.32.1) is the primary method.
+		// overrideVersion := r.PathValue("v")
+		overrideVersion := r.URL.Query().Get("v")
 
 		if servicePrefix == "" {
 			w.Header().Set("Content-Type", "text/html; charset=utf-8")
@@ -1580,9 +1596,11 @@ func main() {
 		cfg = newCfg // always update cfg so InitError (if any) is visible to prepareService
 
 		// Kill the running backend (if any) and reset state.
-		if serviceCmd != nil && serviceCmd.Process != nil {
+		serviceCmdMu.Lock()
+		defer serviceCmdMu.Unlock()
+		if serviceCmd != nil && serviceCmd.cmd.Process != nil {
 			log.Printf("[restart] killing backend process group")
-			killProcessGroup(serviceCmd)
+			terminateProcessGroup(serviceCmd)
 			// Run stop_shell if configured.
 			if cfg.SvcStopShell != "" {
 				log.Printf("[restart] running stop_shell: %s", cfg.SvcStopShell)
@@ -1617,7 +1635,7 @@ func main() {
 		http.Redirect(w, r, "/", http.StatusSeeOther)
 	}
 	mux.HandleFunc("/__restart", restartHandler)
-	mux.HandleFunc("/__restart/{v}", restartHandler)
+	// mux.HandleFunc("/__restart/{v}", restartHandler)
 
 	// /favicon.ico – a minimal inline SVG favicon (blue rounded square with "C")
 	// so browsers don't log 404s for it. Modern browsers accept image/svg+xml.
@@ -1771,11 +1789,13 @@ func main() {
 	for _, srv := range servers {
 		_ = srv.server.Shutdown(shutdownCtx)
 	}
+	serviceCmdMu.Lock()
+	defer serviceCmdMu.Unlock()
 	if serviceCmd != nil {
 		// Only kvs-managed backends (started via startBackend) are cleaned up.
 		// External/system services (detected via check, serviceCmd stays nil)
 		// are never killed or touched by kvs on shutdown.
-		killProcessGroup(serviceCmd)
+		terminateProcessGroup(serviceCmd)
 		// Run stop_shell if configured (kvs-managed backend only).
 		if cfg.SvcStopShell != "" {
 			log.Printf("[shutdown] running stop_shell: %s", cfg.SvcStopShell)
@@ -2546,9 +2566,20 @@ func generateSelfSignedCert() (tls.Certificate, error) {
 	return tls.X509KeyPair(certPEM, keyPEM)
 }
 
-// startBackend runs a command directly as a subprocess in its own process group.
+// backendProc bundles a started backend subprocess with a channel that is
+// closed once the process has exited and been reaped by cmd.Wait. The channel
+// lets restart/shutdown wait for a graceful exit without double-calling Wait.
+type backendProc struct {
+	cmd  *exec.Cmd
+	done chan struct{}
+}
+
+// startBackend runs a command directly as a subprocess in its own process group
+// and starts a reaper goroutine that calls cmd.Wait when the process exits.
+// Reaping is essential: without it the child lingers as a zombie after SIGTERM
+// (e.g. on /__restart) or after it crashes on its own.
 // Note: command is split with strings.Fields, so arguments cannot contain spaces.
-func startBackend(cmdStr string) *exec.Cmd {
+func startBackend(cmdStr string) *backendProc {
 	parts := strings.Fields(cmdStr)
 	if len(parts) == 0 {
 		return nil
@@ -2561,23 +2592,57 @@ func startBackend(cmdStr string) *exec.Cmd {
 		log.Fatalf("start backend command: %v", err)
 	}
 	log.Printf("backend command started (pid %d)", cmd.Process.Pid)
-	return cmd
+
+	proc := &backendProc{cmd: cmd, done: make(chan struct{})}
+	go func() {
+		defer close(proc.done)
+		if err := cmd.Wait(); err != nil {
+			log.Printf("backend command (pid %d) exited: %v", cmd.Process.Pid, err)
+		} else {
+			log.Printf("backend command (pid %d) exited", cmd.Process.Pid)
+		}
+	}()
+	return proc
 }
 
-// killProcessGroup sends SIGTERM to the process group of the given command.
-func killProcessGroup(cmd *exec.Cmd) {
-	if cmd == nil || cmd.Process == nil {
+// terminateTimeout is how long terminateProcessGroup waits for a graceful
+// SIGTERM exit before escalating to SIGKILL.
+const terminateTimeout = 10 * time.Second
+
+// terminateProcessGroup sends SIGTERM to the backend's process group, waits up
+// to terminateTimeout for a graceful exit, then escalates to SIGKILL. The
+// reaper goroutine started by startBackend reaps the child, so no zombie is
+// left behind.
+func terminateProcessGroup(proc *backendProc) {
+	if proc == nil || proc.cmd == nil || proc.cmd.Process == nil {
 		return
 	}
-	pgid, err := syscall.Getpgid(cmd.Process.Pid)
-	if err != nil {
-		log.Printf("get pgid: %v", err)
-		return
-	}
-	if err := syscall.Kill(-pgid, syscall.SIGTERM); err != nil {
-		log.Printf("kill backend pgid %d: %v", pgid, err)
+	pid := proc.cmd.Process.Pid
+	pgid, err := syscall.Getpgid(pid)
+	if err == nil {
+		if err := syscall.Kill(-pgid, syscall.SIGTERM); err != nil {
+			log.Printf("kill backend pgid %d: %v", pgid, err)
+		} else {
+			log.Printf("sent SIGTERM to backend process group %d", pgid)
+		}
 	} else {
-		log.Printf("sent SIGTERM to backend process group %d", pgid)
+		log.Printf("get pgid %d: %v", pid, err)
+	}
+
+	select {
+	case <-proc.done:
+		log.Printf("backend process %d exited cleanly", pid)
+	case <-time.After(terminateTimeout):
+		log.Printf("backend process %d did not exit after SIGTERM, sending SIGKILL", pid)
+		if err == nil {
+			if err := syscall.Kill(-pgid, syscall.SIGKILL); err != nil {
+				log.Printf("kill -9 backend pgid %d: %v", pgid, err)
+			}
+			// Only wait when we actually sent a signal; if Getpgid failed
+			// (err != nil) no signal was sent so the process may never exit
+			// and waiting here would block forever.
+			<-proc.done
+		}
 	}
 }
 

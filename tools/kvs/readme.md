@@ -1,6 +1,6 @@
 # kvs — 反向代理网关
 
-轻量级 Go 反向代理。提供 **Cookie 认证**、**多后端路由（前缀/正则）**、**服务自动部署**、**外部资源代理（带缓存）**、**退出按钮注入**、**S3 镜像同步**。
+轻量级 Go 反向代理。提供 **Cookie 认证**、**多后端路由（前缀/正则）**、**服务自动部署**、**外部资源代理（带缓存）**、**退出按钮 + Update 菜单注入（VS Code专有）**、**S3 镜像同步（VS Code专有）**。
 
 仅依赖 Go 标准库 + `embed`，无第三方依赖。**完全通过 `kvs.ini` 配置文件驱动**。
 
@@ -165,7 +165,7 @@ X-Real-IP = ${REMOTE_ADDR}
 
 ### `[mirror]` 段
 
-S3 镜像同步配置，供 `kvs mirror` 命令使用。
+S3 镜像同步配置 **（VS Code专有）**，供 `kvs mirror` 命令使用。
 
 | 键 | 说明 |
 |---|---|
@@ -183,7 +183,7 @@ S3 镜像同步配置，供 `kvs mirror` 命令使用。
 
 ### 1. 请求阶段拦截（`login_token` 非空时生效）
 
-设置 `login_token` 后，所有非 `/__` 前缀路径校验 Cookie。`/__login`、`/__logout`、`/__cache/` 等始终放行。常数时间比较防时序攻击。
+设置 `login_token` 后，所有非 `/__` 前缀路径校验 Cookie。`/__login`、`/__logout`、`/__version`、`/__restart` 等内置端点、`/__cache/` 等始终放行。常数时间比较防时序攻击。
 
 `login_timeout` 控制两种模式：
 
@@ -201,6 +201,45 @@ S3 镜像同步配置，供 `kvs mirror` 命令使用。
 后端返回 401/403 → 替换为登录页。`/__logout` 清除 Cookie。
 
 > **注意**：`login_token` 为空时请求阶段无拦截，`login_authz` 仅在后端自身返回 401/403 时生效。
+
+---
+
+## 内置端点
+
+kvs 暴露以下 `/__` 前缀的内部控制端点：
+
+| 端点 | 认证 | 说明 |
+|---|---|---|
+| `/__login` | 公开 | 登录页（GET）/ 处理登录表单（POST） |
+| `/__logout` | 公开 | 清除 Cookie，返回 JSON |
+| `/__version` | 需认证 | 返回 service 应用版本（纯文本，无版本返回 `0.0.0`） |
+| `/__restart` | 需认证 | 重启后端服务，见下文 |
+| `/__logout.vsc.js` | 公开 | 退出按钮 + Update 菜单注入脚本 |
+| `/favicon.ico` | 公开 | 内联 SVG 图标 |
+
+> “需认证”的端点仅在 `login_token` 非空时被拦截；否则直接放行。
+
+### `/__version`
+
+返回已解析的 service 应用版本（即 `[service]` 段的 `SVC_VERSION`，含 `/__restart?v=` 覆盖后的值），`Content-Type: text/plain`。未配置或解析失败时返回 `0.0.0`。
+
+### `/__restart`
+
+杀掉后端子进程并重置服务状态，下一次请求会重新触发版本解析、下载、解压与启动。仅当存在 kvs 托管的 service 后端时有效。
+
+- `/__restart` → 简单重启，清除之前的版本覆盖
+- `/__restart?v=1.133.0` → 指定版本重启（写入版本覆盖，优先于 `version` / `version_latest_url`）
+
+---
+
+## Update 菜单注入（VS Code Web）
+
+当 `login_authz = true` 且代理的 VS Code Server 页面被识别时，kvs 会注入 `/__logout.vsc.js` 脚本，在界面中注入两处 UI：
+
+1. **活动栏退出按钮**（`Logout`）：点击后 `fetch /__logout` 清除 Cookie 并刷新页面。
+2. **Help 菜单「Update」项**（位于 `About` 之后）：点击弹出对话框，展示当前版本（`/__version`），输入框默认为空（= 保持当前版本），可手动输入指定版本号；确定后跳转 `/__restart`（空）或 `/__restart?v=<版本>`，完成应用升级/重启。
+
+对话框使用自定义模态框（VS Code Web 不支持原生 `window.prompt`），颜色实时读取当前主题变量，跟随深浅色主题切换。
 
 ---
 
