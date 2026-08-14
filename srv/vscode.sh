@@ -13,22 +13,120 @@ fi
 # 判断 "${VSCODE_WSC:-/wsc}/.vsc/data/Machine/settings.json" 是否存在，如果不存在则创建一个默认的 settings.json 文件
 if [ ! -f "${VSCODE_WSC:-/wsc}/.vsc/data/Machine/settings.json" ]; then
     mkdir -p "${VSCODE_WSC:-/wsc}/.vsc/data/Machine"
-    cat <<EOF > "${VSCODE_WSC:-/wsc}/.vsc/data/Machine/settings.json"
+    # 使用带引号的定界符 <<'EOF'，防止 heredoc 内的 ${input:...} 被 shell 当作变量展开
+    cat <<'EOF' > "${VSCODE_WSC:-/wsc}/.vsc/data/Machine/settings.json"
 {
-    "chat.allowAnonymousAccess": true,
-    "terminal.integrated.scrollback": 10000,
-    "terminal.integrated.defaultProfile.linux": "zsh",
-    "git.ignoreLegacyWarning": true,
-    "git.enableSmartCommit": true,
-    "files.autoSave": "off",
-    "editor.renderWhitespace": "all",
-    "editor.suggestSelection": "first",
-    "editor.fontSize": 16,
-    "editor.fontLigatures": false,
-    "explorer.confirmDelete": false,
-    "extensions.autoUpdate": "off",
-    "extensions.autoCheckUpdates": false,
-    "workbench.colorTheme": "Dark+"
+  "chat.allowAnonymousAccess": true,
+  "terminal.integrated.scrollback": 10000,
+  "terminal.integrated.defaultProfile.linux": "zsh",
+  "git.ignoreLegacyWarning": true,
+  "git.enableSmartCommit": true,
+  "files.autoSave": "off",
+  "editor.renderWhitespace": "all",
+  "editor.suggestSelection": "first",
+  "editor.fontSize": 16,
+  "editor.fontLigatures": false,
+  "explorer.confirmDelete": false,
+  "extensions.autoUpdate": "off",
+  "extensions.autoCheckUpdates": false,
+  "workbench.colorTheme": "Dark+",
+  "workbench.experimental.modernUI": false,
+  "github.copilot.enable": { "*": false },
+  "kaicustomendpoint.inlineCompletion": {
+    "model": {
+      "apiKey": "${input:chat.lm.secret.deepleek}",
+      "id": "deepseek-v4-flash",
+      "name": "fim-deepseek-v4",
+      "url": "https://api.deepseek.com//beta/completions",
+      "defaultReasoningEffort": ""
+    }
+  },
+  "kaicustomendpoint.models": [
+    {
+      "name": "alibaba",
+      "vendor": "customendpoint",
+      "apiKey": "${input:chat.lm.secret.alibaba}",
+      "apiType": "messages",
+      "models": [
+        {
+          "id": "qwen3.7-plus",
+          "name": "kai-qwen3.7-plus",
+          "url": "https://dashscope.aliyuncs.com/apps/anthropic",
+          "toolCalling": true,
+          "vision": true,
+          "maxInputTokens": 256000,
+          "maxOutputTokens": 16000,
+          "supportsReasoningEffort": ["low", "medium", "high", "xhigh"]
+        }
+      ]
+    },
+    {
+      "name": "deepseek",
+      "vendor": "customendpoint",
+      "apiKey": "${input:chat.lm.secret.deepseek}",
+      "apiType": "messages",
+      "models": [
+        {
+          "id": "deepseek-v4-flash",
+          "name": "kai-deepseek-v4-flash",
+          "url": "https://api.deepseek.com/anthropic",
+          "toolCalling": true,
+          "vision": false,
+          "maxInputTokens": 1000000,
+          "maxOutputTokens": 100000,
+          "supportsReasoningEffort": ["low", "medium", "high", "xhigh"]
+        },
+        {
+          "id": "deepseek-v4-pro",
+          "name": "kai-deepseek-v4-pro",
+          "url": "https://api.deepseek.com/anthropic",
+          "toolCalling": true,
+          "vision": false,
+          "maxInputTokens": 1000000,
+          "maxOutputTokens": 100000,
+          "supportsReasoningEffort": ["low", "medium", "high", "xhigh"]
+        }
+      ]
+    },
+    {
+      "name": "bigmodel",
+      "vendor": "customendpoint",
+      "apiKey": "${input:chat.lm.secret.bigmodel}",
+      "apiType": "messages",
+      "models": [
+        {
+          "id": "glm-5.3",
+          "name": "kai-glm-5.3",
+          "url": "https://open.bigmodel.cn/api/anthropic",
+          "toolCalling": true,
+          "vision": false,
+          "maxInputTokens": 1000000,
+          "maxOutputTokens": 100000,
+          "supportsReasoningEffort": ["low", "medium", "high", "xhigh"]
+        },
+        {
+          "id": "glm-5.2",
+          "name": "kai-glm-5.2",
+          "url": "https://open.bigmodel.cn/api/anthropic",
+          "toolCalling": true,
+          "vision": false,
+          "maxInputTokens": 1000000,
+          "maxOutputTokens": 100000,
+          "supportsReasoningEffort": ["low", "medium", "high", "xhigh"]
+        },
+        {
+          "id": "glm-5v-turbo",
+          "name": "kai-glm-5v-turbo",
+          "url": "https://open.bigmodel.cn/api/anthropic",
+          "toolCalling": true,
+          "vision": true,
+          "maxInputTokens": 200000,
+          "maxOutputTokens": 32000,
+          "supportsReasoningEffort": ["low", "medium", "high", "xhigh"]
+        }
+      ]
+    }
+  ]
 }
 
 EOF

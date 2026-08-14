@@ -5,15 +5,17 @@
 ## Dockerfile
 
 基础组件  
-Dockerfile.ssh(proxyssh-3.0.0)(ssh代理)  
-Dockerfile.ngx(ssh-3.0.0)(vsc代理)  
+Dockerfile.ssh(ssh-3.0.0)(ssh代理)  
+Dockerfile.ngx(ngx-3.0.0)(vsc代理)  
   
-开发环境  
+应用环境  
+Dockerfile.lite -> 轻量镜像（测试用，不建议直接使用）
 Dockerfile.base -> 基础镜像  
 Dockerfile.code -> 基于 base 构建的 kas/kvs/kss 镜像  
 Dockerfile.xfce -> 桌面镜像， 基于 base  
 Dockerfile.desk -> 基于 base 构建的 kas/kvs/kss 镜像  
-  
+
+开发环境
 Dockerfile.dev-code -> node 14, 24; java 8, 25
 Dockerfile.dev-desk -> node 14, 24; java 8, 25
 Dockerfile.pwright ->  安装 playwirght 环境  
@@ -37,9 +39,9 @@ https://github.com/linuxserver/docker-baseimage-ubuntu
 
 ```sh
 
-docker pull ghcr.io/suisrc/webtop:vsc-3.0.0
-docker pull docker.io/suisrc/webtop:vsc-3.0.0
-docker pull hkccr.ccs.tencentyun.com/suisrc/webtop:vsc-3.0.0
+docker pull ghcr.io/suisrc/webtop:code-3.0.0
+docker pull docker.io/suisrc/webtop:code-3.0.0
+docker pull hkccr.ccs.tencentyun.com/suisrc/webtop:code-3.0.0
 
 docker customendpoint ddd 
 ```

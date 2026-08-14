@@ -11,4 +11,9 @@ RUN mkdir /app/ && mv /kvs/kvs /kas/kas /app/
 
 FROM ghcr.io/suisrc/webtop:${BASE_IMAGE_TAG}
 
+
 COPY --from=builder  /app/  /usr/bin/
+COPY rootfs/ /
+
+COPY srv/*   /usr/srv/
+# COPY srv/init.sh srv/vscode.sh /usr/srv/

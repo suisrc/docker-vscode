@@ -53,6 +53,27 @@ if [ ! -f '/etc/ssh/_init' ]; then
     fi
 fi
 
+# fix-sysenv
+# 将 Go 环境变量写入 /etc/zsh/zshenv，所有 zsh 登录即生效
+ZSHENV="/etc/zsh/zshenv"
+mkdir -p /etc/zsh
+
+# 仅当 /usr/local/golang 存在时才写入，避免无 Go 环境时污染 PATH
+if [ -d /usr/local/golang ]; then
+    # 避免重复写入
+    if ! grep -q 'GOROOT' "${ZSHENV}" 2>/dev/null; then
+        cat >> "${ZSHENV}" <<'EOF'
+
+if [ -z "$GOROOT" ]
+then
+	export GOROOT=/usr/local/golang
+	export GOPATH=~/.go
+	export PATH="$PATH:$GOROOT/bin:$GOPATH/bin"
+fi
+EOF
+    fi
+fi
+
 ## =======================================================================
 
 echo "======== end for init script."

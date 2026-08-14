@@ -275,6 +275,17 @@
     background: var(--accent-glow);
     border-color: var(--accent);
   }
+
+  .error {
+    font-size: 13px;
+    color: #ef4444;
+    text-align: center;
+    margin-bottom: 16px;
+    padding: 8px 12px;
+    background: rgba(239,68,68,0.1);
+    border: 1px solid rgba(239,68,68,0.2);
+    border-radius: 8px;
+  }
 </style>
 </head>
 <body>
@@ -292,6 +303,7 @@
       </div>
       <h1 class="title">登录</h1>
       <p class="subtitle">请输入您的访问令牌以继续</p>
+      <p id="error" class="error" style="display:none">{{ERROR}}</p>
       <form method="POST" action="/__login" autocomplete="off">
         <div class="form-group">
           <div class="input-wrap">
@@ -312,6 +324,16 @@
     </div>
   </div>
 <script>
+  // If the address bar is at /__login (e.g. after a failed POST), restore it
+  // to the original page via document.referrer so the next form submission
+  // sends the correct Referer header (preserving ?folder=… etc).
+  (function() {
+    var err = document.getElementById('error');
+    if (err && err.textContent.trim()) err.style.display = 'block';
+    if (location.pathname === '/__login' && document.referrer) {
+      try { history.replaceState(null, '', document.referrer); } catch(e) {}
+    }
+  })();
   (function() {
     const html = document.documentElement, btn = document.getElementById('themeToggle'), K = 'proxy-theme';
     const STATES = ['system', 'light', 'dark'];

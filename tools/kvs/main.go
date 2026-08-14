@@ -1505,7 +1505,7 @@ func main() {
 	// /__login – serves login page (GET) or processes form (POST).
 	mux.HandleFunc("/__login", func(w http.ResponseWriter, r *http.Request) {
 		if r.Method != http.MethodPost {
-			serveStaticAsset(w, "login.html")
+			serveLoginAsset(w, "")
 			return
 		}
 		if err := r.ParseForm(); err != nil {
@@ -1514,7 +1514,12 @@ func main() {
 		}
 		tkn := strings.TrimSpace(r.PostFormValue("token"))
 		if tkn == "" || subtle.ConstantTimeCompare([]byte(tkn), []byte(cfg.LoginToken)) != 1 {
-			serveStaticAsset(w, "login.html")
+			// Wrong password: re-render the login page with an error message.
+			// We do NOT redirect — the browser address bar stays at /__login
+			// (the form action), but the login page JS restores it to the
+			// original URL via history.replaceState(document.referrer) so the
+			// next correct submission has a valid Referer.
+			serveLoginAsset(w, "输入的访问令牌错误，请重试")
 			return
 		}
 		// Generate cookie value based on login_timeout mode.
@@ -2407,8 +2412,8 @@ func authRedirectModifier() func(*http.Response) error {
 		r.StatusCode = http.StatusOK
 		r.Header = make(http.Header)
 		r.Header.Set("Content-Type", "text/html; charset=utf-8")
-		body := mustAsset("login.html")
-		r.Body = io.NopCloser(bytes.NewReader(body))
+		body := strings.Replace(string(mustAsset("login.html")), "{{ERROR}}", "", 1)
+		r.Body = io.NopCloser(bytes.NewReader([]byte(body)))
 		r.ContentLength = int64(len(body))
 		return nil
 	}
@@ -2652,6 +2657,26 @@ func serveStaticAsset(w http.ResponseWriter, name string) {
 	_, _ = w.Write(mustAsset(name))
 }
 
+// serveLoginAsset renders login.html with an optional error message.
+// The {{ERROR}} placeholder in login.html is replaced with the message
+// (HTML-escaped). When msg is empty the placeholder becomes empty too.
+func serveLoginAsset(w http.ResponseWriter, msg string) {
+	html := string(mustAsset("login.html"))
+	escaped := htmlEscape(msg)
+	html = strings.Replace(html, "{{ERROR}}", escaped, 1)
+	w.Header().Set("Content-Type", "text/html; charset=utf-8")
+	_, _ = w.Write([]byte(html))
+}
+
+// htmlEscape escapes a string for safe inclusion in HTML text content.
+func htmlEscape(s string) string {
+	s = strings.ReplaceAll(s, "&", "&amp;")
+	s = strings.ReplaceAll(s, "<", "&lt;")
+	s = strings.ReplaceAll(s, ">", "&gt;")
+	s = strings.ReplaceAll(s, `"`, "&#34;")
+	return s
+}
+
 // generateCookieValue builds the cookie value for a successful login.
 //
 // login_timeout == 0: cookie value = loginToken (plain, session lifetime).
@@ -2703,14 +2728,14 @@ func authMiddleware(next http.Handler, cfg Config, setCookie func(http.ResponseW
 		}
 		c, err := r.Cookie(cfg.CookieName)
 		if err != nil || c.Value == "" {
-			serveStaticAsset(w, "login.html")
+			serveLoginAsset(w, "")
 			return
 		}
 
 		if cfg.LoginTimeout <= 0 {
 			// Plain mode: direct comparison.
 			if subtle.ConstantTimeCompare([]byte(c.Value), []byte(cfg.LoginToken)) != 1 {
-				serveStaticAsset(w, "login.html")
+				serveLoginAsset(w, "")
 				return
 			}
 			next.ServeHTTP(w, r)
@@ -2721,7 +2746,7 @@ func authMiddleware(next http.Handler, cfg Config, setCookie func(http.ResponseW
 		ok, refresh := validateHashedCookie(c.Value, cfg.LoginToken, cfg.LoginTimeout)
 		if !ok {
 			log.Printf("[authz] cookie validation failed: %q", c.Value)
-			serveStaticAsset(w, "login.html")
+			serveLoginAsset(w, "")
 			return
 		}
 		if refresh {
