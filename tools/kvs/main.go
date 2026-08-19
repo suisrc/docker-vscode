@@ -47,10 +47,23 @@ var staticFS embed.FS
 // backend subprocess and cause unexpected behavior.
 var gOverrideVersion string
 
+// gDebug is flag app is running by debug mode
+var gDebug = os.Getenv("KVS_DEBUG") == "1"
+
 // mustAsset reads an embedded asset by name, failing fast at startup if missing.
 // embed.FS is an in-memory read-only map; ReadFile just returns a slice over it,
 // so there is no I/O and no benefit to pre-caching assets into package vars.
+//
+// When DEBUG=1 is set in the environment, assets are read from the current
+// working directory instead of the embed. This allows live-editing assets
+// (e.g. logout.vsc.js, login.html) without recompiling.
 func mustAsset(name string) []byte {
+	if gDebug {
+		if b, err := os.ReadFile(name); err == nil {
+			return b
+		}
+		// Fall through to embed on error (e.g. file not found).
+	}
 	b, err := staticFS.ReadFile(name)
 	if err != nil {
 		log.Fatalf("embed asset %q: %v", name, err)
@@ -630,6 +643,11 @@ func loadInitConfig() Config {
 		svcVersionBaseURL := expandValue(svcStr(ini, "version_base_url", ""), svcVars)
 		svcVars["SVC_VERSION_BASE_URL"] = svcVersionBaseURL
 		_ = os.Setenv("SVC_VERSION_BASE_URL", svcVersionBaseURL)
+
+		// 1c. （SVC_VSCODE_NLS_URL:-/__cache/vscode/nls/}
+		if _, exist := os.LookupEnv("SVC_VSCODE_NLS_URL"); !exist {
+			os.Setenv("SVC_VSCODE_NLS_URL", "/__cache/vscode/nls/")
+		}
 
 		// 2. version / version_latest_url / version_hash_url → SVC_VERSION, SVC_VERHASH
 		cfg.SvcVersion = expandValue(svcStr(ini, "version", ""), svcVars)
@@ -2816,6 +2834,10 @@ func isPublicAuthPath(path string) bool {
 // ------------------------------------------------------------------------------
 // Custom VSCode feature
 // handling the NLS garbled text issue from https://github.com/microsoft/vscode/issues/299425
+
+// https://marketplace.visualstudio.com/_apis/public/gallery/vscode/ms-ceintl/vscode-language-pack-zh-hans/latest
+// https://MS-CEINTL.vscode-unpkg.net/MS-CEINTL/vscode-language-pack-zh-hans/1.131.2026072717/extension/translations/main.i18n.json
+// Compared with fetching via ms-ceintl, using main.vscode-cdn.net is more direct — no extra access requests, just data assembly.
 
 // A. https://main.vscode-cdn.net/stable/a5b500951314efd502d07465bd138dfbd714a960/out/nls.keys.json
 // B. https://www.vscode-unpkg.net/nls/a5b500951314efd502d07465bd138dfbd714a960/1.133.0/zh-cn/nls.messages.js

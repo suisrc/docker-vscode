@@ -123,8 +123,150 @@
     var l = el('span', 'action-label', 'Update');
     at(l, { 'aria-label': 'Update' });
     a.appendChild(c); a.appendChild(l); li.appendChild(a);
+    a_hover(li);
     a.addEventListener('click', dialog);
     act(li, dialog);
+    return li;
+  }
+
+  var LANGS = [
+    ['',      'Default'],
+    ['cs',    'Čeština'],
+    ['de',    'Deutsch'],
+    ['en',    'English'],
+    ['es',    'Español'],
+    ['fr',    'Français'],
+    ['it',    'Italiano'],
+    ['ja',    '日本語'],
+    ['ko',    '한국어'],
+    ['pl',    'Polski'],
+    ['pt-br', 'Português'],
+    ['ru',    'Русский'],
+    ['tr',    'Türkçe'],
+    ['zh-cn', '简体中文'],
+    ['zh-tw', '繁體中文']
+  ];
+
+  function curLocale() {
+    return (document.cookie.match(/(?:^|;\s*)vscode\.nls\.locale=([^;]*)/) || [])[1] || '';
+  }
+
+  function a_hover(el) {
+    el.addEventListener('mouseenter', function () {
+      el.style.background = tv('--vscode-list-hoverBackground', '#2a2d2e');
+    });
+    el.addEventListener('mouseleave', function () {
+      el.style.background = 'transparent';
+    });
+  }
+
+  // Build the submenu DOM and attach it to document.body (NOT inside the <li>,
+  // because the <li>'s ancestors have overflow:hidden which would clip it).
+  function lsub(li) {
+    var sub = document.getElementById('__kvs_lsub');
+    if (sub) sub.remove();
+    var cur = curLocale();
+    sub = el('div', '__kvs_lsub');
+    sub.id = '__kvs_lsub';
+    at(sub, { role: 'presentation' });
+    sub.style.cssText =
+      'position:fixed;display:none;z-index:99999;max-height:80vh;overflow:auto' +
+      ';background:' + tv('--vscode-menu-background', '#252526') +
+      ';color:' + tv('--vscode-menu-foreground', '#ccc') +
+      ';border:1px solid ' + tv('--vscode-widget-border', '#454545') +
+      ';border-radius:' + tv('--vscode-corner-radius-large', '6px') +
+      ';box-shadow:0 8px 30px rgba(0,0,0,.5);font-size:13px;padding:4px 0';
+    var ac = el('div');
+    ac.style.cssText = 'padding:0';
+    for (var i = 0; i < LANGS.length; i++) {
+      (function (lc, ln) {
+        var row = el('div');
+        row.style.cssText = 'display:flex;align-items:center;gap:8px;padding:4px 14px;cursor:pointer;white-space:nowrap;color:' + tv('--vscode-menu-foreground', '#ccc');
+        var lbl = el('span', null, ln);
+        lbl.style.cssText = 'flex:1';
+        a_hover(row);
+        row.appendChild(lbl);
+        if (lc === cur) {
+          var chk = el('span', 'codicon codicon-check');
+          at(chk, { role: 'none' });
+          chk.style.cssText = 'color:' + tv('--vscode-menu-selectionForeground', tv('--vscode-list-activeSelectionForeground', '#fff'));
+          row.appendChild(chk);
+        }
+        function sel() {
+          if (lc === '') {
+            document.cookie = 'vscode.nls.locale=;expires=Thu, 01 Jan 1970 00:00:00 GMT;path=/';
+          } else {
+            document.cookie = 'vscode.nls.locale=' + encodeURIComponent(lc) + ';path=/';
+          }
+          location.reload();
+        }
+        row.addEventListener('click', function (e) { e.stopPropagation(); sel(); });
+        ac.appendChild(row);
+      })(LANGS[i][0], LANGS[i][1]);
+    }
+    sub.appendChild(ac);
+    document.body.appendChild(sub);
+
+    // Position the submenu to the right of the Language menu item
+    var r = li.getBoundingClientRect();
+    // Temporarily show to measure
+    sub.style.display = 'block';
+    var sr = sub.getBoundingClientRect();
+    var x = r.right;
+    var y = r.top;
+    if (x + sr.width > window.innerWidth) x = r.left - sr.width;
+    if (y + sr.height > window.innerHeight) y = Math.max(0, window.innerHeight - sr.height);
+    sub.style.left = x + 'px';
+    sub.style.top = y + 'px';
+
+    // Keep submenu alive when the mouse is over it (it's on body, not in li)
+    sub.addEventListener('mouseenter', function () {
+      clearTimeout(window.__kvs_lhover);
+      sub.style.display = 'block';
+    });
+    sub.addEventListener('mouseleave', function () {
+      window.__kvs_lhover = setTimeout(function () { sub.style.display = 'none'; }, 800);
+    });
+    return sub;
+  }
+
+  function lang() {
+    var li = el('li', 'action-item');
+    li.id = '__kvs_lang';
+    at(li, { role: 'presentation', tabindex: '-1' });
+    li.style.cursor = 'pointer';
+    var a = el('a', 'action-menu-item');
+    at(a, { role: 'menuitem', tabindex: '0' });
+    a.style.color = 'var(--vscode-menu-foreground)';
+    var c = el('span', 'menu-item-check codicon codicon-menu-selection');
+    at(c, { role: 'none' });
+    var l = el('span', 'action-label', 'Language');
+    at(l, { 'aria-label': 'Language' });
+    var ind = el('span', 'submenu-indicator codicon codicon-menu-submenu');
+    at(ind, { 'aria-hidden': 'true' });
+    a.appendChild(c); a.appendChild(l); a.appendChild(ind); li.appendChild(a);
+    a_hover(li);
+
+    var hoverTimer = null;
+    function open() {
+      clearTimeout(window.__kvs_lhover);
+      lsub(li);
+    }
+    function close() {
+      window.__kvs_lhover = setTimeout(function () {
+        var sub = document.getElementById('__kvs_lsub');
+        if (sub) sub.style.display = 'none';
+      }, 800);
+    }
+    li.addEventListener('mouseenter', open);
+    li.addEventListener('mouseleave', close);
+    a.addEventListener('click', function (e) {
+      e.preventDefault();
+      e.stopPropagation();
+      var sub = document.getElementById('__kvs_lsub');
+      if (sub && sub.style.display === 'block') { sub.style.display = 'none'; }
+      else open();
+    });
     return li;
   }
 
@@ -151,13 +293,28 @@
     var ab = null;
     if (items) {
       for (var i = items.length - 1; i >= 0; i--) {
-        if (items[i].id !== '__kvs_upd') { ab = items[i]; break; }
+        if (items[i].id !== '__kvs_upd' && items[i].id !== '__kvs_lang') { ab = items[i]; break; }
       }
     }
     if (!ab) return;
-    var n = ab.nextElementSibling;
-    if (n && n.id === '__kvs_upd') return;
-    ab.parentNode.insertBefore(upd(), ab.nextSibling);
+    // Insert language item right after the last real menu item
+    var nn = ab.nextElementSibling;
+    if (!(nn && nn.id === '__kvs_lang')) {
+      ab.parentNode.insertBefore(lang(), ab.nextSibling);
+    }
+    // Insert update item after the language item (if not already there)
+    var langEl = ab.parentNode.querySelector('#__kvs_lang');
+    if (langEl) {
+      var un = langEl.nextElementSibling;
+      if (!(un && un.id === '__kvs_upd')) {
+        langEl.parentNode.insertBefore(upd(), langEl.nextSibling);
+      }
+    } else {
+      var n2 = ab.nextElementSibling;
+      if (!(n2 && n2.id === '__kvs_upd')) {
+        ab.parentNode.insertBefore(upd(), ab.nextSibling);
+      }
+    }
   }
 
   function start() {
