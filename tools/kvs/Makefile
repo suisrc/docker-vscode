@@ -23,7 +23,7 @@ vscode:
 	KVS_PORT=7180 KVS_LOGIN_AUTHZ=true KVS_LOGIN_TOKEN=123456 \
 	KVS_VSCODE_DOWNLOAD_BASE=https://oss.vsc.sims-cn.com/vsc \
 	KVS_VSCODE_DOWNLOAD_PATH=stable/SVC_VERSION_HASH/vscode-server-linux-x64-web.tar.gz \
-	KVS_HOME=../../temp/.vsc \
+	KVS_HOME=../../temp/.vsc SVC_PROXY_PATH=/__cache/ \
 	go run main.go -c default
 
 # export K3S_MIRROR_VSCODE_S3_ACCESS=
@@ -38,3 +38,7 @@ mirror:
 proxyn:
 	KVS_PORT=7180 KVS_LOGIN_AUTHZ=true KVS_LOGIN_TOKEN=123456 KVS_LOGIN_TIMEOUT=7200 \
 	go run main.go -n "/healthz=text://OK:@now;/=unix:///var/run/vscode.sock"
+
+# replace /usr/bin/kvs
+deploy:
+	cp kvs /usr/bin/kvs

@@ -93,7 +93,9 @@
     function close() { o.remove(); }
     function go() {
       var v = i.value.trim();
-      location.href = v ? '/__restart?v=' + encodeURIComponent(v) : '/__restart';
+      fetch(v ? '/__restart?v=' + encodeURIComponent(v) : '/__restart', { credentials: 'include' })
+        .catch(function () {})
+        .then(function () { setTimeout(function () { location.reload(); }, 1000); });
     }
     k.addEventListener('click', go);
     c.addEventListener('click', close);
@@ -130,10 +132,27 @@
     var tb = document.querySelector('.activitybar ul.actions-container[role="toolbar"]');
     if (tb && !tb.querySelector('#__kvs_out')) tb.insertBefore(item(), tb.firstChild);
 
-    var xs = document.querySelectorAll('.monaco-menu .action-item'), ab = null;
-    for (var i = 0; i < xs.length; i++) {
-      var l = xs[i].querySelector('.action-label');
-      if (l && l.getAttribute('aria-label') === 'About') { ab = xs[i]; break; }
+    var btns = document.querySelectorAll('.menubar-menu-button');
+    var help = null;
+    for (var i = btns.length - 1; i >= 0; i--) {
+      if ((btns[i].textContent || '').trim()) { help = btns[i]; break; }
+    }
+    var open = document.querySelector('.menubar-menu-button.open');
+    var menu = open && open.querySelector('.monaco-menu');
+    var items = menu && menu.querySelectorAll(':scope > .monaco-action-bar > .actions-container > .action-item');
+    var last = items && items[items.length - 1];
+    var lasa = last && last.querySelector(':scope > a');
+    if (lasa && lasa.className.indexOf('monaco-submenu-item') !== -1) {
+      var sub = last.querySelector('.monaco-menu');
+      items = sub ? sub.querySelectorAll(':scope > .monaco-action-bar > .actions-container > .action-item') : null;
+    } else if (open !== help) {
+      items = null;
+    }
+    var ab = null;
+    if (items) {
+      for (var i = items.length - 1; i >= 0; i--) {
+        if (items[i].id !== '__kvs_upd') { ab = items[i]; break; }
+      }
     }
     if (!ab) return;
     var n = ab.nextElementSibling;

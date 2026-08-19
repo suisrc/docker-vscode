@@ -1342,64 +1342,64 @@ func normalizeProxyPath(p string) string {
 
 // helpCommand prints usage information for all kvs commands.
 func helpCommand() {
-	fmt.Print(`kvs — 反向代理网关 (VS Code Server 自动部署 + 鉴权 + 缓存)
+	fmt.Print(`kvs — reverse proxy gateway (VS Code Server auto-deploy + auth + cache)
 
-用法:
+Usage:
   kvs <subcommand> [options]
-  kvs -c <config> [options]        启动代理服务
-  kvs -n "<entries>" [options]     内联路由，自动补充 -c default
+  kvs -c <config> [options]        start the proxy service
+  kvs -n "<entries>" [options]     inline routes, auto-appends -c default
 
-子命令:
-  kvs help                          显示本帮助信息
-  kvs demo                          生成示例配置文件 kvs.ini
-  kvs mirror -c <config> [version]  同步 VS Code 版本到 S3 兼容存储
-  kvs mirror -c default             使用内置默认配置同步 latest 版本
-  kvs mirror -c default 1.130.0     同步指定版本
+Subcommands:
+  kvs help                          show this help
+  kvs demo                          generate a sample kvs.ini config
+  kvs mirror -c <config> [version]  sync VS Code versions to S3-compatible storage
+  kvs mirror -c default             sync the latest version with the built-in config
+  kvs mirror -c default 1.130.0     sync a specific version
 
-启动选项:
-  -c <path>                         指定配置文件 (必填)
-  -c default                        使用 embed 中的 kvs.ini.example
-  -n "prefix=url;prefix=url"        内联 [proxies] 路由，自动补充 -c default
-                                    用 ; 分割多条，每条格式: prefix=url
-                                    示例: -n "/healthz=text://OK:@now;/=http://127.0.0.1:8080"
+Startup options:
+  -c <path>                         config file path (required)
+  -c default                        use kvs.ini.example from embed
+  -n "prefix=url;prefix=url"        inline [proxies] routes, auto-appends -c default
+                                    separate entries with ';', each: prefix=url
+                                    example: -n "/healthz=text://OK:@now;/=http://127.0.0.1:8080"
 
-路由格式 ([proxies] 段 / -n 参数):
-  /=http://localhost:8080           HTTP 反向代理
-  /=unix:///var/run/app.sock        Unix socket 反向代理
-  /=file:///var/www/html            静态文件服务
-  /=text://Hello World              纯文本响应 (@now 替换为当前时间)
-  &/=unix:///var/run/app.sock       & 前缀: kvs 托管服务 (触发自动部署)
-  ^/api/\d+=http://localhost:8080   ^ 前缀: 正则匹配
-  /__healthz=text://OK:@now         健康检查端点
+Route formats ([proxies] section / -n argument):
+  /=http://localhost:8080           HTTP reverse proxy
+  /=unix:///var/run/app.sock        Unix socket reverse proxy
+  /=file:///var/www/html            static file server
+  /=text://Hello World              plain text response (@now replaced with current time)
+  &/=unix:///var/run/app.sock       & prefix: kvs-managed service (triggers auto-deploy)
+  ^/api/\d+=http://localhost:8080   ^ prefix: regex matching
+  /__healthz=text://OK:@now         health check endpoint
 
-配置文件段:
-  [proxies]         后端路由 (必填)
-  [headers]         请求头改写 (Xxx=Val 设置; Xxx= 删除)
-  [service]         服务自动部署 (download/extract/start)
-  [mirror]          S3 镜像同步配置
+Config file sections:
+  [proxies]          backend routes (required)
+  [headers]          request header rewrites (Xxx=Val sets; Xxx= removes)
+  [service]          service auto-deploy (download/extract/start)
+  [mirror]           S3 mirror sync config
 
-环境变量:
-  KVS_PORT                         监听端口 (默认 7080，SSL 时 HTTPS=port+1)
-  KVS_USESSL                       启用自签名 HTTPS (默认 false)
-  KVS_LOGIN_AUTHZ                  启用 401/403→登录页重定向 (默认 false)
-  KVS_LOGIN_TOKEN                  Cookie 校验值 (留空则不校验)
-  KVS_LOGIN_TIMEOUT                Cookie 有效期秒数 (0=session, >0=哈希+过期)
-  KVS_COOKIE                       Cookie 名 (默认 kvs)
-  KVS_HOME                         服务工作目录 (默认 /app/.vsc)
-  KVS_SVC_SOCK_FILE                后端 socket 路径 (默认 ./kvs.sock)
-  KVS_VSCODE_VERSION               VS Code 指定版本 (留空则获取最新版本)
-  KVS_VSCODE_DOWNLOAD_BASE         VS Code 下载基础 URL (默认 https://update.code.visualstudio.com)
-  KVS_VSCODE_DOWNLOAD_PATH         下载路径前缀 (默认 commit:，用于拼接URL， [BASE_URL]/commit:[hash]/~)
-  KVS_MIRROR_VSCODE_S3_PREFIX      mirror: S3 存储前缀 (如 https://oss.example.com/vsc)
-  KVS_MIRROR_VSCODE_S3_ACCESS      mirror: S3 access key ID
-  KVS_MIRROR_VSCODE_S3_SECRET      mirror: S3 secret access key
-  KVS_MIRROR_VSCODE_S3_REGION      mirror: S3 region (默认空)
+Environment variables:
+  KVS_PORT                          listen port (default 7080, HTTPS=port+1 when SSL)
+  KVS_USESSL                        enable self-signed HTTPS (default false)
+  KVS_LOGIN_AUTHZ                   enable 401/403→login-page redirect (default false)
+  KVS_LOGIN_TOKEN                   cookie validation value (empty disables validation)
+  KVS_LOGIN_TIMEOUT                 cookie lifetime seconds (0=session, >0=hash+expiry)
+  KVS_COOKIE                        cookie name (default kvs)
+  KVS_HOME                          service working directory (default /app/.vsc)
+  KVS_SVC_SOCK_FILE                 backend socket path (default ./kvs.sock)
+  KVS_VSCODE_VERSION                VS Code version to use (empty fetches the latest)
+  KVS_VSCODE_DOWNLOAD_BASE          VS Code download base URL (default https://update.code.visualstudio.com)
+  KVS_VSCODE_DOWNLOAD_PATH          download path prefix (default commit:, used to build the URL, [BASE_URL]/commit:[hash]/~)
+  KVS_MIRROR_VSCODE_S3_PREFIX       mirror: S3 storage prefix (e.g. https://oss.example.com/vsc)
+  KVS_MIRROR_VSCODE_S3_ACCESS       mirror: S3 access key ID
+  KVS_MIRROR_VSCODE_S3_SECRET       mirror: S3 secret access key
+  KVS_MIRROR_VSCODE_S3_REGION       mirror: S3 region (default empty)
 
-示例:
-  kvs -c kvs.ini                    用配置文件启动
-  kvs -c default                    用内置默认配置启动
-  kvs -n "/=http://127.0.0.1:8080"  简单代理，自动补充 -c default
-  KVS_LOGIN_TOKEN=secret kvs -c default 带鉴权的默认配置启动
+Examples:
+  kvs -c kvs.ini                    start with a config file
+  kvs -c default                    start with the built-in default config
+  kvs -n "/=http://127.0.0.1:8080"  simple proxy, auto-appends -c default
+  KVS_LOGIN_TOKEN=secret kvs -c default  start with the default config and auth
 `)
 }
 
@@ -1519,7 +1519,7 @@ func main() {
 			// (the form action), but the login page JS restores it to the
 			// original URL via history.replaceState(document.referrer) so the
 			// next correct submission has a valid Referer.
-			serveLoginAsset(w, "输入的访问令牌错误，请重试")
+			serveLoginAsset(w, "Invalid access token, please try again")
 			return
 		}
 		// Generate cookie value based on login_timeout mode.
@@ -2058,6 +2058,14 @@ func handleCache(w http.ResponseWriter, r *http.Request) {
 	if p == "" || p == "/" {
 		http.Error(w, "missing domain/path", http.StatusBadRequest)
 		return
+	}
+
+	// Intercept VS Code NLS requests for translation remapping.
+	if strings.HasPrefix(p, "vscode/nls/") {
+		if binHome := os.Getenv("SVC_BIN_HOME"); binHome != "" {
+			vscodeNlsHandle(w, r, binHome)
+			return
+		}
 	}
 
 	// Detect cc~ cache prefix.
@@ -2805,7 +2813,332 @@ func isPublicAuthPath(path string) bool {
 }
 
 // ------------------------------------------------------------------------------
-// 将应用镜像同步s3服务器上， 这个是为 vscode 定制的功能
+// Custom VSCode feature
+// handling the NLS garbled text issue from https://github.com/microsoft/vscode/issues/299425
+
+// A. https://main.vscode-cdn.net/stable/a5b500951314efd502d07465bd138dfbd714a960/out/nls.keys.json
+// B. https://www.vscode-unpkg.net/nls/a5b500951314efd502d07465bd138dfbd714a960/1.133.0/zh-cn/nls.messages.js
+// C. __cache/vscode/nls/a5b500951314efd502d07465bd138dfbd714a960/1.133.0/zh-cn/nls.messages.js
+// D. .vsc/cache/ccproxy/__cache/vscode/nls/a5b500951314efd502d07465bd138dfbd714a960/1.133.0/zh-cn
+// E. {home}/out/nls.keys.json # the local app's nls.keys.json order differs from the CDN's nls.keys.json order
+// commit = a5b500951314efd502d07465bd138dfbd714a960, version = 1.133.0, lang = zh-cn
+//
+// Processing logic:
+//  1. Check the local cache directory (.vsc/cache/ccproxy/__cache/vscode/nls/{commit}/{version}/{lang} under the service dir) for existing nls.messages.js and nls.keys.json
+//  2. On hit, return nls.messages.js directly. Although the file name is nls.message.js, it is gzip-compressed, and the response headers are stored in nls.message.js_.json
+//  3. On miss → download A and B in order
+//     A: https://main.vscode-cdn.net/stable/{commit}/out/nls.keys.json
+//     B: https://www.vscode-unpkg.net/nls/{commit}/{version}/{lang}/nls.messages.js
+//  4. Combine the nls.keys.json and nls.messages.js contents
+//  5. Read {home}/out/nls.keys.json and generate a new nls.message.js (mainly reordering)
+//  6. Return the processed result (a regenerated nls.messages.js with the new header "Content-Encoding: gzip")
+func vscodeNlsHandle(w http.ResponseWriter, r *http.Request, home string) {
+	// cacheOnce.Do(initCache) is already called by handleCache before dispatching here.
+
+	path := strings.TrimPrefix(r.URL.Path, proxyPathPrefix)
+	// 1. Parse URL: vscode/nls/{commit}/{version}/{lang}/nls.messages.js
+	//    path is the suffix after proxyPathPrefix, e.g. "vscode/nls/abc123/1.133.0/zh-cn/nls.messages.js"
+	parts := strings.Split(strings.TrimPrefix(path, "vscode/nls/"), "/")
+	if len(parts) < 4 || parts[3] != "nls.messages.js" {
+		http.Error(w, "invalid NLS path, expected /vscode/nls/{commit}/{version}/{lang}/nls.messages.js", http.StatusBadRequest)
+		return
+	}
+	commit := parts[0]
+	version := parts[1]
+	lang := parts[2]
+
+	// 2. Cache paths: {cacheRoot}/vscode/nls/{commit}/{version}/{lang}/
+	//    nls.messages.js      → gzip-compressed processed JS body
+	//    nls.messages.js_.json → cache metadata (headers)
+	nlsCacheDir := filepath.Join(cacheRoot, "vscode", "nls", commit, version, lang)
+	bodyPath := filepath.Join(nlsCacheDir, "nls.messages.js")
+	metaPath := bodyPath + "_.json"
+
+	// 3. Cache HIT → return cached gzip body with stored headers.
+	if meta, err := readCacheMeta(metaPath); err == nil {
+		if body, err := os.ReadFile(bodyPath); err == nil {
+			w.Header().Set("X-Cache", "HIT")
+			for k, vs := range meta.Headers {
+				for _, v := range vs {
+					w.Header().Add(k, v)
+				}
+			}
+			w.WriteHeader(meta.Status)
+			_, _ = w.Write(body)
+			return
+		}
+	}
+
+	// 4. Cache MISS → download A (CDN nls.keys.json) and B (nls.messages.js)
+	//    A: https://main.vscode-cdn.net/stable/{commit}/out/nls.keys.json
+	//    B: https://www.vscode-unpkg.net/nls/{commit}/{version}/{lang}/nls.messages.js
+	keysData, err := vscodeNlsFetchBytes("https://main.vscode-cdn.net/stable/" + commit + "/out/nls.keys.json")
+	if err != nil {
+		http.Error(w, "failed to fetch nls.keys.json: "+err.Error(), http.StatusBadGateway)
+		return
+	}
+	msgsData, err := vscodeNlsFetchBytes("https://www.vscode-unpkg.net/nls/" + commit + "/" + version + "/" + lang + "/nls.messages.js")
+	if err != nil {
+		http.Error(w, "failed to fetch nls.messages.js: "+err.Error(), http.StatusBadGateway)
+		return
+	}
+
+	// 5. Parse CDN nls.keys.json → flat key list in CDN order.
+	//    cdnFlatKeys[i] corresponds to cdnMessages[i] (both flat, same order).
+	var cdnKeys [][2]json.RawMessage
+	if err := json.Unmarshal(keysData, &cdnKeys); err != nil {
+		http.Error(w, "failed to parse cdn nls.keys.json: "+err.Error(), http.StatusInternalServerError)
+		return
+	}
+	cdnFlatKeys := vscodeNlsKeysToIDs(cdnKeys)
+
+	// 6. Extract _VSCODE_NLS_MESSAGES array from B (nls.messages.js).
+	//    B is a JS file: globalThis._VSCODE_NLS_MESSAGES = [ ... ];
+	//    We extract the JSON array between "= " and ";\n" (or end).
+	cdnMessages, err := vscodeNlsMessagesArray(msgsData)
+	if err != nil {
+		http.Error(w, "failed to extract _VSCODE_NLS_MESSAGES: "+err.Error(), http.StatusInternalServerError)
+		return
+	}
+
+	// 7. Read the local nls.keys.json — its key order may differ from the CDN's.
+	localKeysData, err := os.ReadFile(filepath.Join(home, "out", "nls.keys.json"))
+	if err != nil {
+		http.Error(w, "failed to read local nls.keys.json: "+err.Error(), http.StatusInternalServerError)
+		return
+	}
+	var localKeys [][2]json.RawMessage
+	if err := json.Unmarshal(localKeysData, &localKeys); err != nil {
+		http.Error(w, "failed to parse local nls.keys.json: "+err.Error(), http.StatusInternalServerError)
+		return
+	}
+	localFlatKeys := vscodeNlsKeysToIDs(localKeys)
+
+	// 8. Map each CDN (module, key) → index in cdnMessages.
+	cdnIndex := make(map[keyID]int, len(cdnFlatKeys))
+	for i, k := range cdnFlatKeys {
+		cdnIndex[k] = i
+	}
+
+	// 9. Rebuild messages array in local key order; unknown keys → "".
+	result := make([]string, 0, len(localFlatKeys))
+	for _, k := range localFlatKeys {
+		if i, ok := cdnIndex[k]; ok && i < len(cdnMessages) {
+			result = append(result, cdnMessages[i])
+		} else {
+			result = append(result, "")
+		}
+	}
+
+	// 10. Generate new nls.messages.js with the remapped array.
+	resultJSON, err := json.Marshal(result)
+	if err != nil {
+		http.Error(w, "failed to marshal result: "+err.Error(), http.StatusInternalServerError)
+		return
+	}
+	jsContent := []byte("/*---------------------------------------------------------\n" +
+		" * Copyright (C) Microsoft Corporation. All rights reserved.\n" +
+		" *--------------------------------------------------------*/\n" +
+		"globalThis._VSCODE_NLS_MESSAGES=" + string(resultJSON) + ";\n" +
+		"globalThis._VSCODE_NLS_LANGUAGE=" + strconv.Quote(lang) + ";\n")
+
+	// 11. Gzip compress the JS content for caching and response.
+	var gzBuf bytes.Buffer
+	gzw := gzip.NewWriter(&gzBuf)
+	if _, err := gzw.Write(jsContent); err != nil {
+		http.Error(w, "gzip compression failed: "+err.Error(), http.StatusInternalServerError)
+		return
+	}
+	if err := gzw.Close(); err != nil {
+		http.Error(w, "gzip close failed: "+err.Error(), http.StatusInternalServerError)
+		return
+	}
+	gzBody := gzBuf.Bytes()
+
+	// 12. Write to cache (atomic).
+	if err := os.MkdirAll(nlsCacheDir, 0o755); err == nil {
+		_ = atomicWriteFile(bodyPath, gzBody, 0o644)
+		meta := &cacheMeta{
+			Status: http.StatusOK,
+			Headers: map[string][]string{
+				"Content-Type":     {"application/javascript; charset=utf-8"},
+				"Content-Encoding": {"gzip"},
+				"Cache-Control":    {"public, max-age=86400"},
+				"Vary":             {"Accept-Encoding"},
+			},
+		}
+		_ = writeCacheMeta(metaPath, meta)
+	}
+
+	// 13. Return the gzip response to the client.
+	w.Header().Set("Content-Type", "application/javascript; charset=utf-8")
+	w.Header().Set("Content-Encoding", "gzip")
+	w.Header().Set("Cache-Control", "public, max-age=86400")
+	w.Header().Set("Vary", "Accept-Encoding")
+	w.Header().Set("X-Cache", "MISS")
+	w.WriteHeader(http.StatusOK)
+	_, _ = w.Write(gzBody)
+}
+
+// keyID identifies a single NLS message key by its module and key name.
+type keyID struct {
+	module string
+	key    string
+}
+
+// vscodeNlsKeysToIDs flattens [[moduleId, [keys...]], ...] into a []keyID in file
+// order. Entries that fail to parse are skipped.
+func vscodeNlsKeysToIDs(entries [][2]json.RawMessage) []keyID {
+	var out []keyID
+	for _, entry := range entries {
+		var module string
+		if err := json.Unmarshal(entry[0], &module); err != nil {
+			continue
+		}
+		var keys []string
+		if err := json.Unmarshal(entry[1], &keys); err != nil {
+			continue
+		}
+		for _, k := range keys {
+			out = append(out, keyID{module, k})
+		}
+	}
+	return out
+}
+
+// vscodeNlsFetchBytes downloads a URL and returns the response body.
+func vscodeNlsFetchBytes(urlStr string) ([]byte, error) {
+	client := &http.Client{Timeout: 60 * time.Second}
+	req, err := http.NewRequest("GET", urlStr, nil)
+	if err != nil {
+		return nil, err
+	}
+	resp, err := client.Do(req)
+	if err != nil {
+		return nil, fmt.Errorf("fetch %s: %w", urlStr, err)
+	}
+	defer resp.Body.Close()
+	if resp.StatusCode != http.StatusOK {
+		return nil, fmt.Errorf("%s returned HTTP %d", urlStr, resp.StatusCode)
+	}
+	body, err := io.ReadAll(resp.Body)
+	if err != nil {
+		return nil, fmt.Errorf("read %s: %w", urlStr, err)
+	}
+	return body, nil
+}
+
+// vscodeNlsMessagesArray parses the _VSCODE_NLS_MESSAGES JS array from a
+// nls.messages.js file. The file format is:
+//
+//	/*---------------------------------------------------...
+//	 * Copyright ...
+//	 *----------------------------------------------------*/
+//	globalThis._VSCODE_NLS_MESSAGES=['...', "...",];
+//	globalThis._VSCODE_NLS_LANGUAGE="zh-cn";
+//
+// The array is JavaScript syntax, NOT strict JSON: elements are string
+// literals which may use single quotes, and a trailing comma is allowed.
+// It therefore cannot be decoded with json.Unmarshal. We locate the '['
+// after "_VSCODE_NLS_MESSAGES=" (no space) and manually walk the array,
+// decoding each string literal (handling \ escapes) into a plain string.
+func vscodeNlsMessagesArray(jsData []byte) ([]string, error) {
+	s := string(jsData)
+	// Find the assignment marker.
+	marker := "_VSCODE_NLS_MESSAGES="
+	idx := strings.Index(s, marker)
+	if idx < 0 {
+		return nil, fmt.Errorf("_VSCODE_NLS_MESSAGES assignment not found")
+	}
+	// The array starts at '[' (skip any whitespace).
+	start := idx + len(marker)
+	for start < len(s) && (s[start] == ' ' || s[start] == '\t') {
+		start++
+	}
+	if start >= len(s) || s[start] != '[' {
+		return nil, fmt.Errorf("expected '[' after _VSCODE_NLS_MESSAGES=")
+	}
+
+	var messages []string
+	i := start + 1
+	for {
+		// Skip whitespace, commas, and trailing commas.
+		for i < len(s) && (s[i] == ' ' || s[i] == '\t' || s[i] == '\n' || s[i] == '\r' || s[i] == ',') {
+			i++
+		}
+		if i >= len(s) {
+			break
+		}
+		if s[i] == ']' {
+			break
+		}
+		if s[i] != '\'' && s[i] != '"' {
+			return nil, fmt.Errorf("unexpected %q in _VSCODE_NLS_MESSAGES array", s[i])
+		}
+
+		// Parse one string literal, decoding escapes.
+		quote := s[i]
+		i++
+		var sb strings.Builder
+		closed := false
+		for i < len(s) {
+			c := s[i]
+			if c == quote {
+				i++
+				closed = true
+				break
+			}
+			if c == '\\' {
+				i++
+				if i >= len(s) {
+					return nil, fmt.Errorf("dangling escape in _VSCODE_NLS_MESSAGES array")
+				}
+				switch e := s[i]; e {
+				case 'n':
+					sb.WriteByte('\n')
+				case 't':
+					sb.WriteByte('\t')
+				case 'r':
+					sb.WriteByte('\r')
+				case 'b':
+					sb.WriteByte('\b')
+				case 'f':
+					sb.WriteByte('\f')
+				case '\\', '\'', '"':
+					sb.WriteByte(e)
+				case 'u':
+					if i+4 < len(s) {
+						if v, err := strconv.ParseUint(s[i+1:i+5], 16, 32); err == nil {
+							sb.WriteRune(rune(v))
+							i += 4
+						} else {
+							sb.WriteString(`\u`)
+						}
+					} else {
+						sb.WriteString(`\u`)
+					}
+				default:
+					// Unknown escape: keep verbatim.
+					sb.WriteByte('\\')
+					sb.WriteByte(e)
+				}
+				i++
+				continue
+			}
+			sb.WriteByte(c)
+			i++
+		}
+		if !closed {
+			return nil, fmt.Errorf("unterminated string in _VSCODE_NLS_MESSAGES array")
+		}
+		messages = append(messages, sb.String())
+	}
+	return messages, nil
+}
+
+// ------------------------------------------------------------------------------
+// Custom VSCode feature
+// sync application image mirror to custom s3 server
 
 // mirrorConfig holds the [mirror] section settings.
 type mirrorConfig struct {

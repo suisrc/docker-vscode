@@ -116,7 +116,7 @@ download = {SVC_VERSION_BASE_URL}/{KVS_VSCODE_DOWNLOAD_PATH:-commit:SVC_VERSION_
 cache_dir = {SVC_HOME}/cache
 
 # /__cache/ 外部资源代理缓存路径前缀；留空禁用缓存代理 (默认空)
-# proxy_path = /__cache/
+proxy_path = {SVC_PROXY_PATH}
 
 # ----------------------------------------------------------------------------
 
@@ -125,7 +125,7 @@ bin_home = {SVC_HOME}/serve/{SVC_VERSION_HASH}
 
 # 启动前脚本 (每次部署执行一次；file:// 走 shebang；否则 sh -c 执行)
 init_shell = sed -i \
-    -e "s|https://www.vscode-unpkg.net/nls/||g" \
+    -e "s|https://www.vscode-unpkg.net/nls/|/__cache/vscode/nls/|g" \
     -e "s|https://www.vscode-unpkg.net/_lp/||g" \
     -e "s|https://main.vscode-cdn.net/extensions/marketplace.json||g" \
     -e "s|https://main.vscode-cdn.net/mcp/servers.json||g" \

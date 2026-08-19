@@ -52,11 +52,11 @@ if [ ! -f "${VSCODE_WSC:-/wsc}/.vsc/data/Machine/settings.json" ]; then
           "id": "qwen3.7-plus",
           "name": "kai-qwen3.7-plus",
           "url": "https://dashscope.aliyuncs.com/apps/anthropic",
-          "toolCalling": true,
           "vision": true,
           "maxInputTokens": 256000,
           "maxOutputTokens": 16000,
-          "supportsReasoningEffort": ["low", "medium", "high", "xhigh"]
+          "defaultReasoningEffort": "high",
+          "supportsReasoningEffort": ["none", "low", "medium", "high", "xhigh", "max"]
         }
       ]
     },
@@ -70,21 +70,21 @@ if [ ! -f "${VSCODE_WSC:-/wsc}/.vsc/data/Machine/settings.json" ]; then
           "id": "deepseek-v4-flash",
           "name": "kai-deepseek-v4-flash",
           "url": "https://api.deepseek.com/anthropic",
-          "toolCalling": true,
           "vision": false,
           "maxInputTokens": 1000000,
           "maxOutputTokens": 100000,
-          "supportsReasoningEffort": ["low", "medium", "high", "xhigh"]
+          "defaultReasoningEffort": "high",
+          "supportsReasoningEffort": ["none", "low", "high", "max", "high-op"]
         },
         {
           "id": "deepseek-v4-pro",
           "name": "kai-deepseek-v4-pro",
           "url": "https://api.deepseek.com/anthropic",
-          "toolCalling": true,
           "vision": false,
           "maxInputTokens": 1000000,
           "maxOutputTokens": 100000,
-          "supportsReasoningEffort": ["low", "medium", "high", "xhigh"]
+          "defaultReasoningEffort": "high",
+          "supportsReasoningEffort": ["none", "low", "high", "max"]
         }
       ]
     },
@@ -95,34 +95,33 @@ if [ ! -f "${VSCODE_WSC:-/wsc}/.vsc/data/Machine/settings.json" ]; then
       "apiType": "messages",
       "models": [
         {
-          "id": "glm-5.3",
-          "name": "kai-glm-5.3",
-          "url": "https://open.bigmodel.cn/api/anthropic",
-          "toolCalling": true,
-          "vision": false,
-          "maxInputTokens": 1000000,
-          "maxOutputTokens": 100000,
-          "supportsReasoningEffort": ["low", "medium", "high", "xhigh"]
-        },
-        {
           "id": "glm-5.2",
           "name": "kai-glm-5.2",
           "url": "https://open.bigmodel.cn/api/anthropic",
-          "toolCalling": true,
           "vision": false,
           "maxInputTokens": 1000000,
           "maxOutputTokens": 100000,
-          "supportsReasoningEffort": ["low", "medium", "high", "xhigh"]
-        },
+          "defaultReasoningEffort": "high",
+          "supportsReasoningEffort": ["none", "low", "medium", "high", "xhigh", "max"]
+        }
+      ]
+    },
+    {
+      "name": "deepseek-openai",
+      "vendor": "customendpoint",
+      "apiKey": "${input:chat.lm.secret.deepseek}",
+      "apiType": "chat-completions",
+      "models": [
         {
-          "id": "glm-5v-turbo",
-          "name": "kai-glm-5v-turbo",
-          "url": "https://open.bigmodel.cn/api/anthropic",
-          "toolCalling": true,
-          "vision": true,
-          "maxInputTokens": 200000,
-          "maxOutputTokens": 32000,
-          "supportsReasoningEffort": ["low", "medium", "high", "xhigh"]
+          "id": "deepseek-v4-flash",
+          "name": "kai-deepseek-v4-openai",
+          "url": "https://api.deepseek.com",
+          "vision": false,
+          "maxInputTokens": 1000000,
+          "maxOutputTokens": 100000,
+          "defaultReasoningEffort": "high",
+          "supportsReasoningEffort": ["none", "low", "high", "max", "high-op"],
+          "metadata": {"user_id": "user-0001"}
         }
       ]
     }
