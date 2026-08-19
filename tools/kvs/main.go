@@ -1650,6 +1650,13 @@ func main() {
 		serveStaticAsset(w, "favicon.ico")
 	})
 
+	// Intercept VS Code NLS requests for translation remapping.
+	if nlsPathPrefix := os.Getenv("SVC_VSCODE_NLS_URL"); strings.HasPrefix(nlsPathPrefix, "/__") {
+		mux.HandleFunc(nlsPathPrefix, func(w http.ResponseWriter, r *http.Request) {
+			vscodeNlsHandle(w, r, nlsPathPrefix, cfg.SvcBinHome)
+		})
+	}
+
 	// cache proxy – {proxy_path}/{scheme}:{host}/path → {scheme}://{host}/path
 	// Only registered when both cache_dir (disk storage) and proxy_path (route
 	// prefix) are configured. Either one empty disables the cache proxy route.
@@ -2060,14 +2067,6 @@ func handleCache(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
-	// Intercept VS Code NLS requests for translation remapping.
-	if strings.HasPrefix(p, "vscode/nls/") {
-		if binHome := os.Getenv("SVC_BIN_HOME"); binHome != "" {
-			vscodeNlsHandle(w, r, binHome)
-			return
-		}
-	}
-
 	// Detect cc~ cache prefix.
 	cacheable := strings.HasPrefix(p, "cc~")
 	if cacheable {
@@ -2197,8 +2196,10 @@ func handleCachedCache(w http.ResponseWriter, r *http.Request, targetURL, bodyPa
 	}
 	defer resp.Body.Close()
 
-	// Non-2xx: stream through without caching.
-	if resp.StatusCode < 200 || resp.StatusCode >= 300 {
+	// Only 2xx (200-299) and 404 responses are cached; all other status codes
+	// (3xx, 5xx, etc.) stream through without caching so transient errors are
+	// not stuck in cache.
+	if !((resp.StatusCode >= 200 && resp.StatusCode < 300) || resp.StatusCode == 404) {
 		log.Printf("[cache] upstream returned %d, not caching", resp.StatusCode)
 		for k, vs := range resp.Header {
 			for _, v := range vs {
@@ -2832,13 +2833,12 @@ func isPublicAuthPath(path string) bool {
 //  4. Combine the nls.keys.json and nls.messages.js contents
 //  5. Read {home}/out/nls.keys.json and generate a new nls.message.js (mainly reordering)
 //  6. Return the processed result (a regenerated nls.messages.js with the new header "Content-Encoding: gzip")
-func vscodeNlsHandle(w http.ResponseWriter, r *http.Request, home string) {
-	// cacheOnce.Do(initCache) is already called by handleCache before dispatching here.
+func vscodeNlsHandle(w http.ResponseWriter, r *http.Request, prefix, home string) {
+	cacheOnce.Do(initCache)
 
-	path := strings.TrimPrefix(r.URL.Path, proxyPathPrefix)
 	// 1. Parse URL: vscode/nls/{commit}/{version}/{lang}/nls.messages.js
 	//    path is the suffix after proxyPathPrefix, e.g. "vscode/nls/abc123/1.133.0/zh-cn/nls.messages.js"
-	parts := strings.Split(strings.TrimPrefix(path, "vscode/nls/"), "/")
+	parts := strings.Split(strings.TrimPrefix(r.URL.Path, prefix), "/")
 	if len(parts) < 4 || parts[3] != "nls.messages.js" {
 		http.Error(w, "invalid NLS path, expected /vscode/nls/{commit}/{version}/{lang}/nls.messages.js", http.StatusBadRequest)
 		return

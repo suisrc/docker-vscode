@@ -124,9 +124,11 @@ proxy_path = {SVC_PROXY_PATH}
 bin_home = {SVC_HOME}/serve/{SVC_VERSION_HASH}
 
 # 启动前脚本 (每次部署执行一次；file:// 走 shebang；否则 sh -c 执行)
+# SVC_VSCODE_NLS_URL 可以是 /__cache/vscode/nls/ 形式， 必须以 /__ 开头; 以 / 结尾
+# SVC_VSCODE__LP_URL 必须是 https://xxx/_cache/cc~www.vscode-unpkg.net/_lp/ 或 /stable/web-extension-resource/www.vscode-unpkg.net/_lp/
 init_shell = sed -i \
-    -e "s|https://www.vscode-unpkg.net/nls/|/__cache/vscode/nls/|g" \
-    -e "s|https://www.vscode-unpkg.net/_lp/||g" \
+    -e "s|https://www.vscode-unpkg.net/nls/|{SVC_VSCODE_NLS_URL:-/__cache/vscode/nls/}|g" \
+    -e "s|https://www.vscode-unpkg.net/_lp/|{SVC_VSCODE__LP_URL}|g" \
     -e "s|https://main.vscode-cdn.net/extensions/marketplace.json||g" \
     -e "s|https://main.vscode-cdn.net/mcp/servers.json||g" \
     -e "s|https://main.vscode-cdn.net/extensions/chat.json||g" \
