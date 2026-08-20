@@ -31,9 +31,9 @@ ENV DEBIAN_FRONTEND=noninteractive \
 
 COPY --from=builder  /app/  /usr/bin/
 
-COPY rootfs/ /
-COPY srv/*   /usr/srv/
 COPY script/webtop.kas.ini /etc/kas.ini
+COPY rootfs/ /
+COPY usrsrv/ /usr/srv/
 
 ENTRYPOINT ["/usr/bin/kas", "-c"]
 
