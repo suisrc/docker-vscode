@@ -91,6 +91,8 @@ type Config struct {
 	SvcInitShell        string // init_shell — startup script (file:// or sh -c)
 	SvcStopShell        string // stop_shell — shutdown script (file:// or sh -c), kvs-managed only
 	SvcCommand          string // command — optional shell command to run as the backend subprocess
+
+	VscLanguage map[string]string // vsc_language — lang→langpack mapping (e.g. zh-cn→zh-hans)
 	// top-level
 	Port         string
 	CookieName   string            // cookie, default "kvs"
@@ -517,7 +519,7 @@ func fetchJSONField(rawURL string) (string, error) {
 	}
 
 	// Extract the named field from JSON.
-	var result map[string]interface{}
+	var result map[string]any
 	if err := json.Unmarshal(body, &result); err != nil {
 		return "", fmt.Errorf("decode JSON from %s: %w", urlStr, err)
 	}
@@ -690,6 +692,18 @@ func loadInitConfig() Config {
 		cfg.SvcInitShell = expandValue(svcStr(ini, "init_shell", ""), svcVars)
 		cfg.SvcStopShell = expandValue(svcStr(ini, "stop_shell", ""), svcVars)
 		cfg.SvcCommand = expandValue(svcStr(ini, "command", ""), svcVars)
+
+		// 7b. vsc_language — lang→langpack JSON map (e.g. {"zh-cn":"zh-hans"}).
+		//     NOT expanded via expandValue: the {…} JSON braces would be
+		//     mistaken for {VAR} placeholders and destroyed.
+		if raw := ini.get("service.vsc_language"); raw != "" {
+			var m map[string]string
+			if err := json.Unmarshal([]byte(raw), &m); err != nil {
+				log.Printf("WARNING: invalid vsc_language JSON: %v", err)
+			} else {
+				cfg.VscLanguage = m
+			}
+		}
 	}
 
 	// 8. Expand [proxies] and [headers] now that all SVC_* vars are set.
@@ -1070,7 +1084,7 @@ func resolveDownloadInfo(client *http.Client, infoURL, field string) (string, er
 	if resp.StatusCode != http.StatusOK {
 		return "", fmt.Errorf("HTTP %d", resp.StatusCode)
 	}
-	var result map[string]interface{}
+	var result map[string]any
 	if err := json.NewDecoder(resp.Body).Decode(&result); err != nil {
 		return "", fmt.Errorf("decode JSON: %w", err)
 	}
@@ -1671,7 +1685,7 @@ func main() {
 	// Intercept VS Code NLS requests for translation remapping.
 	if nlsPathPrefix := os.Getenv("SVC_VSCODE_NLS_URL"); strings.HasPrefix(nlsPathPrefix, "/__") {
 		mux.HandleFunc(nlsPathPrefix, func(w http.ResponseWriter, r *http.Request) {
-			vscodeNlsHandle(w, r, nlsPathPrefix, cfg.SvcBinHome)
+			vscodeNlsHandle(w, r, nlsPathPrefix, cfg.SvcHome, cfg.SvcBinHome, cfg.VscLanguage)
 		})
 	}
 
@@ -1696,6 +1710,15 @@ func main() {
 	// loading page; once done (success), it proxies normally; on error, 500.
 	// Non-service backends are always reachable.
 	mux.HandleFunc("/", func(w http.ResponseWriter, r *http.Request) {
+		// Intercept VS Code web-extension-resource requests，SvcVersionHash change on restart
+		if cfg.SvcVersionHash != "" && cfg.SvcHome != "" {
+			prePath := "/stable-" + cfg.SvcVersionHash + "/web-extension-resource/"
+			if strings.HasPrefix(r.URL.Path, prePath) {
+				vscodeExtHandle(w, r, prePath, cfg.SvcHome)
+				return
+			}
+		}
+		// Dispatch to the first matching route.
 		for _, rt := range routes {
 			// Match: regex backends use regexp.Match; others use prefix match.
 			if rt.re != nil {
@@ -2835,46 +2858,105 @@ func isPublicAuthPath(path string) bool {
 // Custom VSCode feature
 // handling the NLS garbled text issue from https://github.com/microsoft/vscode/issues/299425
 
-// https://marketplace.visualstudio.com/_apis/public/gallery/vscode/ms-ceintl/vscode-language-pack-zh-hans/latest
-// https://MS-CEINTL.vscode-unpkg.net/MS-CEINTL/vscode-language-pack-zh-hans/1.131.2026072717/extension/translations/main.i18n.json
-// Compared with fetching via ms-ceintl, using main.vscode-cdn.net is more direct — no extra access requests, just data assembly.
-
-// A. https://main.vscode-cdn.net/stable/a5b500951314efd502d07465bd138dfbd714a960/out/nls.keys.json
-// B. https://www.vscode-unpkg.net/nls/a5b500951314efd502d07465bd138dfbd714a960/1.133.0/zh-cn/nls.messages.js
-// C. __cache/vscode/nls/a5b500951314efd502d07465bd138dfbd714a960/1.133.0/zh-cn/nls.messages.js
-// D. .vsc/cache/ccproxy/__cache/vscode/nls/a5b500951314efd502d07465bd138dfbd714a960/1.133.0/zh-cn
-// E. {home}/out/nls.keys.json # the local app's nls.keys.json order differs from the CDN's nls.keys.json order
-// commit = a5b500951314efd502d07465bd138dfbd714a960, version = 1.133.0, lang = zh-cn
-//
 // Processing logic:
-//  1. Check the local cache directory (.vsc/cache/ccproxy/__cache/vscode/nls/{commit}/{version}/{lang} under the service dir) for existing nls.messages.js and nls.keys.json
-//  2. On hit, return nls.messages.js directly. Although the file name is nls.message.js, it is gzip-compressed, and the response headers are stored in nls.message.js_.json
-//  3. On miss → download A and B in order
-//     A: https://main.vscode-cdn.net/stable/{commit}/out/nls.keys.json
-//     B: https://www.vscode-unpkg.net/nls/{commit}/{version}/{lang}/nls.messages.js
-//  4. Combine the nls.keys.json and nls.messages.js contents
-//  5. Read {home}/out/nls.keys.json and generate a new nls.message.js (mainly reordering)
-//  6. Return the processed result (a regenerated nls.messages.js with the new header "Content-Encoding: gzip")
-func vscodeNlsHandle(w http.ResponseWriter, r *http.Request, prefix, home string) {
+// /stable-{commit}/web-extension-resource/{publisher}.vscode-unpkg.net/{publisher}/{name}/{version}/{path}
+// prePath = /stable-{commit}/web-extension-resource/
+// file = {svcHome}/extensions/{publisher}.{name}-{version}/{path}
+func vscodeExtHandle(w http.ResponseWriter, r *http.Request, prePath, svcHome string) {
+	// Strip prePath to get the relative path, e.g.:
+	//   {publisher}.vscode-unpkg.net/{publisher}/{name}/{version}/{path}
+	rel := strings.TrimPrefix(r.URL.Path, prePath)
+	if rel == "" {
+		http.NotFound(w, r)
+		return
+	}
+
+	// Map URL path → local file path.
+	// URL:   {host}/{publisher}/{name}/{version}/{path...}
+	//        {host} = {publisher}.vscode-unpkg.net
+	// Local: {svcHome}/extensions/{publisher}.{name}-{version}/{path}
+	//
+	// Split into 6 parts: [host, publisher, name, version, "extension", path]
+	seg := strings.SplitN(rel, "/", 6)
+	if len(seg) < 6 {
+		http.NotFound(w, r)
+		return
+	}
+	publisher := seg[1] // {publisher}
+	name := seg[2]      // {name}
+	version := seg[3]   // {version}
+	rest := seg[5]      // {path...}
+
+	// Local file path: {svcHome}/{publisher}.{name}-{version}/{path}
+	filePath := filepath.Join(svcHome, "extensions", strings.ToLower(publisher+"."+name+"-"+version), rest)
+
+	// Security: ensure the resolved path stays within svcHome (path traversal guard).
+	if !isPathWithin(filePath, svcHome) {
+		log.Printf("[ext] WARNING: path traversal attempt: %s", rel)
+		http.NotFound(w, r)
+		return
+	}
+
+	// Serve the file directly from disk.
+	// log.Printf("[ext] serving: %s", filePath)
+	http.ServeFile(w, r, filePath)
+}
+
+// A. https://marketplace.visualstudio.com/_apis/public/gallery/vscode/ms-ceintl/vscode-language-pack-zh-hans/latest
+// B. https://marketplace.visualstudio.com/_apis/public/gallery/publishers/ms-ceintl/vsextensions/vscode-language-pack-zh-hans/latest/vspackage
+// C. https://MS-CEINTL.vscode-unpkg.net/MS-CEINTL/vscode-language-pack-zh-hans/1.131.2026072717/extension/translations/main.i18n.json
+// D. https://marketplace.visualstudio.com/_apis/public/gallery/publishers/ms-ceintl/vsextensions/vscode-language-pack-zh-hans/1.131.2026072717/vspackage
+// E. https://example.com/__cache/vscode/nls/a5b500951314efd502d07465bd138dfbd714a960/1.133.0/zh-cn/nls-messages.js
+// F. {svcHome}/cache/ccproxy/__cache/vscode/nls/a5b500951314efd502d07465bd138dfbd714a960/1.133.0/zh-cn/
+// G. {svcHome}/extensions/ms-ceintl.vscode-language-pack-zh-hans-1.131.2026072717/translations/
+// H. {binHome}/out/nls.keys.json + {binHome}/out/nls.messages.json
+//    # the local app's nls.keys.json order differs from the CDN's; nls.messages.json is the English fallback.
+
+// Processing logic:
+// 1. 通过 E 获取当前 commit, version, lang:
+//    commit = a5b500951314efd502d07465bd138dfbd714a960, version = 1.133.0, lang = zh-cn
+// 2. 检查本地缓存文件 F/nls.messages.js 是否存在， 如果存在，直接返回
+// 3. 命中 → 直接返回 nls.messages.js
+// 4. 未命中 → 下载 A, 通过 A 中的 versions[0].version 获取版本号
+//        判断 G/main.i18n.json 是否存在， 如果存在，跳到 6
+//        判断 F/ms-ceintl.vscode-language-pack-zh-hans-1.131.2026072717.vsix 是否存在, 如果存在，跳过
+//        如果不存在通过 D 下载 F/ms-ceintl.vscode-language-pack-zh-hans-1.131.2026072717.vsix
+// 5. 通过 {binHome}/bin/remote-cli/code 安装 (及时重复安装了， 也没有关系)
+//        安装完成后，确认 G/main.i18n.json 存在, 如果不存在，证明安装失败了, 报错
+// 6. H + G/main.i18n.json -> F/nls.messages.json -> F/nls.messages.js, 并进行 gzip 压缩并缓存， nls.messages.json（保留， 不缩进）
+//    遍历 nls.keys.json, 对每个 (module, key) 在 G/main.i18n.json 的 contents 中查找翻译，
+//    找不到则回退到 H/nls.messages.json 中的英文消息。
+
+func vscodeNlsHandle(w http.ResponseWriter, r *http.Request, prePath, svcHome, binHome string, langMap map[string]string) {
 	cacheOnce.Do(initCache)
 
-	// 1. Parse URL: vscode/nls/{commit}/{version}/{lang}/nls.messages.js
-	//    path is the suffix after proxyPathPrefix, e.g. "vscode/nls/abc123/1.133.0/zh-cn/nls.messages.js"
-	parts := strings.Split(strings.TrimPrefix(r.URL.Path, prefix), "/")
-	if len(parts) < 4 || parts[3] != "nls.messages.js" {
-		http.Error(w, "invalid NLS path, expected /vscode/nls/{commit}/{version}/{lang}/nls.messages.js", http.StatusBadRequest)
+	// 1. Parse URL: {prePath}{commit}/{version}/{lang}/nls-messages.js
+	//    prePath is SVC_VSCODE_NLS_URL, e.g. "/__cache/vscode/nls/"
+	//    After stripping prePath: "{commit}/{version}/{lang}/nls-messages.js"
+	parts := strings.Split(strings.TrimPrefix(r.URL.Path, prePath), "/")
+	if len(parts) < 4 || (parts[3] != "nls-messages.js" && parts[3] != "nls.messages.js") {
+		http.Error(w, "invalid NLS path, expected "+prePath+"{commit}/{version}/{lang}/nls-messages.js", http.StatusBadRequest)
 		return
 	}
 	commit := parts[0]
 	version := parts[1]
 	lang := parts[2]
 
+	// Resolve lang → langpack name via vsc_language map (e.g. zh-cn→zh-hans).
+	// Languages absent from the map default to lang itself (symmetric).
+	langPack := lang
+	if lp, ok := langMap[lang]; ok && lp != "" {
+		langPack = lp
+	}
+
 	// 2. Cache paths: {cacheRoot}/vscode/nls/{commit}/{version}/{lang}/
-	//    nls.messages.js      → gzip-compressed processed JS body
+	//    nls.messages.js       → gzip-compressed processed JS body
 	//    nls.messages.js_.json → cache metadata (headers)
+	//    nls.messages.json     → raw merged message array (kept, not indented)
 	nlsCacheDir := filepath.Join(cacheRoot, "vscode", "nls", commit, version, lang)
 	bodyPath := filepath.Join(nlsCacheDir, "nls.messages.js")
 	metaPath := bodyPath + "_.json"
+	jsonPath := filepath.Join(nlsCacheDir, "nls.messages.json")
 
 	// 3. Cache HIT → return cached gzip body with stored headers.
 	if meta, err := readCacheMeta(metaPath); err == nil {
@@ -2891,80 +2973,172 @@ func vscodeNlsHandle(w http.ResponseWriter, r *http.Request, prefix, home string
 		}
 	}
 
-	// 4. Cache MISS → download A (CDN nls.keys.json) and B (nls.messages.js)
-	//    A: https://main.vscode-cdn.net/stable/{commit}/out/nls.keys.json
-	//    B: https://www.vscode-unpkg.net/nls/{commit}/{version}/{lang}/nls.messages.js
-	keysData, err := vscodeNlsFetchBytes("https://main.vscode-cdn.net/stable/" + commit + "/out/nls.keys.json")
+	// 4. Cache MISS → download A (marketplace latest JSON) to get version.
+	//    A: https://marketplace.visualstudio.com/_apis/public/gallery/vscode/ms-ceintl/vscode-language-pack-{langPack}/latest
+	const mpBase = "https://marketplace.visualstudio.com/_apis/public/gallery"
+	latestURL := mpBase + "/vscode/ms-ceintl/vscode-language-pack-" + langPack + "/latest"
+	latestData, err := vscodeNlsFetchBytes(latestURL)
 	if err != nil {
-		http.Error(w, "failed to fetch nls.keys.json: "+err.Error(), http.StatusBadGateway)
+		http.Error(w, "failed to fetch language-pack latest: "+err.Error(), http.StatusBadGateway)
 		return
 	}
-	msgsData, err := vscodeNlsFetchBytes("https://www.vscode-unpkg.net/nls/" + commit + "/" + version + "/" + lang + "/nls.messages.js")
-	if err != nil {
-		http.Error(w, "failed to fetch nls.messages.js: "+err.Error(), http.StatusBadGateway)
+	var latestMeta map[string]any
+	if err := json.Unmarshal(latestData, &latestMeta); err != nil {
+		http.Error(w, "failed to parse language-pack latest JSON: "+err.Error(), http.StatusBadGateway)
 		return
+	}
+	// versions is an array; the first element is the latest version, e.g. "1.131.2026072717".
+	packVersion := ""
+	if versions, ok := latestMeta["versions"].([]any); ok && len(versions) > 0 {
+		if v0, ok := versions[0].(map[string]any); ok {
+			if v, ok := v0["version"].(string); ok {
+				packVersion = v
+			}
+		}
+	}
+	if packVersion == "" {
+		http.Error(w, "missing versions[0].version in language-pack latest JSON", http.StatusBadGateway)
+		return
+	}
+	log.Printf("[nls] language-pack %s version: %s", langPack, packVersion)
+
+	// G: {svcHome}/extensions/ms-ceintl.vscode-language-pack-{langPack}-{packVersion}/translations/
+	extDir := filepath.Join(svcHome, "extensions", "ms-ceintl.vscode-language-pack-"+langPack+"-"+packVersion)
+	i18nPath := filepath.Join(extDir, "translations", "main.i18n.json")
+
+	// If G/main.i18n.json already exists, skip download + install entirely
+	// (the extension was installed in a previous run; no need to re-download
+	// the vsix or re-install, which avoids "Please restart VS Code" errors).
+	if _, err := os.Stat(i18nPath); err == nil {
+		log.Printf("[nls] translations already exist, skipping download+install: %s", i18nPath)
+	} else {
+		// Determine vsix cache path: F/ms-ceintl.vscode-language-pack-{langPack}-{packVersion}.vsix
+		vsixName := "ms-ceintl.vscode-language-pack-" + langPack + "-" + packVersion + ".vsix"
+		vsixPath := filepath.Join(nlsCacheDir, vsixName)
+
+		// Download vsix via D if not cached.
+		// D: {mpBase}/publishers/ms-ceintl/vsextensions/vscode-language-pack-{langPack}/{packVersion}/vspackage
+		if _, err := os.Stat(vsixPath); err != nil {
+			downloadURL := mpBase + "/publishers/ms-ceintl/vsextensions/vscode-language-pack-" + langPack + "/" + packVersion + "/vspackage"
+			log.Printf("[nls] downloading vsix: %s → %s", downloadURL, vsixPath)
+			dlClient := buildDownloadClient("")
+			if err := os.MkdirAll(nlsCacheDir, 0o755); err != nil {
+				http.Error(w, "mkdir cache dir failed: "+err.Error(), http.StatusInternalServerError)
+				return
+			}
+			if err := downloadFile(dlClient, downloadURL, vsixPath, nil); err != nil {
+				http.Error(w, "failed to download vsix: "+err.Error(), http.StatusBadGateway)
+				return
+			}
+			log.Printf("[nls] vsix downloaded: %s", vsixPath)
+		} else {
+			log.Printf("[nls] vsix cached: %s", vsixPath)
+		}
+
+		// 5. Install language-pack extension via code-server.
+		codeServer := filepath.Join(binHome, "bin", "code-server")
+		installCmd := codeServer + " --install-extension " + vsixPath + " --server-data-dir " + svcHome + " --accept-server-license-terms"
+		log.Printf("[nls] installing extension: %s", installCmd)
+		if err := runServiceStartup(installCmd); err != nil {
+			http.Error(w, "failed to install language-pack: "+err.Error(), http.StatusInternalServerError)
+			return
+		}
+
+		// Confirm G/main.i18n.json exists after installation.
+		if _, err := os.Stat(i18nPath); err != nil {
+			http.Error(w, "language-pack installed but main.i18n.json not found at "+i18nPath+": "+err.Error(), http.StatusInternalServerError)
+			return
+		}
+		log.Printf("[nls] translations found: %s", i18nPath)
 	}
 
-	// 5. Parse CDN nls.keys.json → flat key list in CDN order.
-	//    cdnFlatKeys[i] corresponds to cdnMessages[i] (both flat, same order).
-	var cdnKeys [][2]json.RawMessage
-	if err := json.Unmarshal(keysData, &cdnKeys); err != nil {
-		http.Error(w, "failed to parse cdn nls.keys.json: "+err.Error(), http.StatusInternalServerError)
-		return
-	}
-	cdnFlatKeys := vscodeNlsKeysToIDs(cdnKeys)
-
-	// 6. Extract _VSCODE_NLS_MESSAGES array from B (nls.messages.js).
-	//    B is a JS file: globalThis._VSCODE_NLS_MESSAGES = [ ... ];
-	//    We extract the JSON array between "= " and ";\n" (or end).
-	cdnMessages, err := vscodeNlsMessagesArray(msgsData)
-	if err != nil {
-		http.Error(w, "failed to extract _VSCODE_NLS_MESSAGES: "+err.Error(), http.StatusInternalServerError)
-		return
-	}
-
-	// 7. Read the local nls.keys.json — its key order may differ from the CDN's.
-	localKeysData, err := os.ReadFile(filepath.Join(home, "out", "nls.keys.json"))
+	// 6. Merge H (local nls.keys.json + nls.messages.json) + G/main.i18n.json
+	//    → F/nls.messages.json (raw, not indented) → F/nls.messages.js (gzip)
+	//    H: {binHome}/out/nls.keys.json, {binHome}/out/nls.messages.json
+	keysData, err := os.ReadFile(filepath.Join(binHome, "out", "nls.keys.json"))
 	if err != nil {
 		http.Error(w, "failed to read local nls.keys.json: "+err.Error(), http.StatusInternalServerError)
 		return
 	}
-	var localKeys [][2]json.RawMessage
-	if err := json.Unmarshal(localKeysData, &localKeys); err != nil {
+	var nlsKeys [][2]json.RawMessage
+	if err := json.Unmarshal(keysData, &nlsKeys); err != nil {
 		http.Error(w, "failed to parse local nls.keys.json: "+err.Error(), http.StatusInternalServerError)
 		return
 	}
-	localFlatKeys := vscodeNlsKeysToIDs(localKeys)
 
-	// 8. Map each CDN (module, key) → index in cdnMessages.
-	cdnIndex := make(map[keyID]int, len(cdnFlatKeys))
-	for i, k := range cdnFlatKeys {
-		cdnIndex[k] = i
+	// English fallback messages (flat array, same order as nls.keys.json).
+	enMsgsData, err := os.ReadFile(filepath.Join(binHome, "out", "nls.messages.json"))
+	if err != nil {
+		http.Error(w, "failed to read local nls.messages.json: "+err.Error(), http.StatusInternalServerError)
+		return
+	}
+	var enMessages []string
+	if err := json.Unmarshal(enMsgsData, &enMessages); err != nil {
+		http.Error(w, "failed to parse local nls.messages.json: "+err.Error(), http.StatusInternalServerError)
+		return
 	}
 
-	// 9. Rebuild messages array in local key order; unknown keys → "".
-	result := make([]string, 0, len(localFlatKeys))
-	for _, k := range localFlatKeys {
-		if i, ok := cdnIndex[k]; ok && i < len(cdnMessages) {
-			result = append(result, cdnMessages[i])
-		} else {
-			result = append(result, "")
+	// Load translations: main.i18n.json → { "contents": { moduleId: { key: translated } } }
+	i18nData, err := os.ReadFile(i18nPath)
+	if err != nil {
+		http.Error(w, "failed to read main.i18n.json: "+err.Error(), http.StatusInternalServerError)
+		return
+	}
+	var i18n struct {
+		Contents map[string]map[string]string `json:"contents"`
+	}
+	if err := json.Unmarshal(i18nData, &i18n); err != nil {
+		http.Error(w, "failed to parse main.i18n.json: "+err.Error(), http.StatusInternalServerError)
+		return
+	}
+
+	// Merge: iterate nls.keys.json in order, look up each key in the
+	// language pack; fall back to the English message from nls.messages.json.
+	result := make([]string, 0, len(enMessages))
+	idx := 0
+	for _, entry := range nlsKeys {
+		var module string
+		if err := json.Unmarshal(entry[0], &module); err != nil {
+			continue
+		}
+		var keys []string
+		if err := json.Unmarshal(entry[1], &keys); err != nil {
+			continue
+		}
+		moduleTranslations := i18n.Contents[module]
+		for _, k := range keys {
+			var msg string
+			if moduleTranslations != nil {
+				if t, ok := moduleTranslations[k]; ok && t != "" {
+					msg = t
+				} else if idx < len(enMessages) {
+					msg = enMessages[idx]
+				}
+			} else if idx < len(enMessages) {
+				msg = enMessages[idx]
+			}
+			result = append(result, msg)
+			idx++
 		}
 	}
 
-	// 10. Generate new nls.messages.js with the remapped array.
-	resultJSON, err := json.Marshal(result)
+	// Write F/nls.messages.json (raw, not indented — compact JSON).
+	compactJSON, err := json.Marshal(result)
 	if err != nil {
-		http.Error(w, "failed to marshal result: "+err.Error(), http.StatusInternalServerError)
+		http.Error(w, "failed to marshal merged messages: "+err.Error(), http.StatusInternalServerError)
 		return
 	}
+	if err := os.MkdirAll(nlsCacheDir, 0o755); err == nil {
+		_ = atomicWriteFile(jsonPath, compactJSON, 0o644)
+	}
+	// Generate F/nls.messages.js (gzip-compressed JS).
 	jsContent := []byte("/*---------------------------------------------------------\n" +
 		" * Copyright (C) Microsoft Corporation. All rights reserved.\n" +
 		" *--------------------------------------------------------*/\n" +
-		"globalThis._VSCODE_NLS_MESSAGES=" + string(resultJSON) + ";\n" +
+		"globalThis._VSCODE_NLS_MESSAGES=" + string(compactJSON) + ";\n" +
 		"globalThis._VSCODE_NLS_LANGUAGE=" + strconv.Quote(lang) + ";\n")
 
-	// 11. Gzip compress the JS content for caching and response.
+	// Gzip compress the JS content for caching and response.
 	var gzBuf bytes.Buffer
 	gzw := gzip.NewWriter(&gzBuf)
 	if _, err := gzw.Write(jsContent); err != nil {
@@ -2977,7 +3151,7 @@ func vscodeNlsHandle(w http.ResponseWriter, r *http.Request, prefix, home string
 	}
 	gzBody := gzBuf.Bytes()
 
-	// 12. Write to cache (atomic).
+	// Write to cache (atomic): nls.messages.js + metadata.
 	if err := os.MkdirAll(nlsCacheDir, 0o755); err == nil {
 		_ = atomicWriteFile(bodyPath, gzBody, 0o644)
 		meta := &cacheMeta{
@@ -2992,7 +3166,7 @@ func vscodeNlsHandle(w http.ResponseWriter, r *http.Request, prefix, home string
 		_ = writeCacheMeta(metaPath, meta)
 	}
 
-	// 13. Return the gzip response to the client.
+	// Return the gzip response to the client.
 	w.Header().Set("Content-Type", "application/javascript; charset=utf-8")
 	w.Header().Set("Content-Encoding", "gzip")
 	w.Header().Set("Cache-Control", "public, max-age=86400")
@@ -3000,32 +3174,6 @@ func vscodeNlsHandle(w http.ResponseWriter, r *http.Request, prefix, home string
 	w.Header().Set("X-Cache", "MISS")
 	w.WriteHeader(http.StatusOK)
 	_, _ = w.Write(gzBody)
-}
-
-// keyID identifies a single NLS message key by its module and key name.
-type keyID struct {
-	module string
-	key    string
-}
-
-// vscodeNlsKeysToIDs flattens [[moduleId, [keys...]], ...] into a []keyID in file
-// order. Entries that fail to parse are skipped.
-func vscodeNlsKeysToIDs(entries [][2]json.RawMessage) []keyID {
-	var out []keyID
-	for _, entry := range entries {
-		var module string
-		if err := json.Unmarshal(entry[0], &module); err != nil {
-			continue
-		}
-		var keys []string
-		if err := json.Unmarshal(entry[1], &keys); err != nil {
-			continue
-		}
-		for _, k := range keys {
-			out = append(out, keyID{module, k})
-		}
-	}
-	return out
 }
 
 // vscodeNlsFetchBytes downloads a URL and returns the response body.
@@ -3048,114 +3196,6 @@ func vscodeNlsFetchBytes(urlStr string) ([]byte, error) {
 		return nil, fmt.Errorf("read %s: %w", urlStr, err)
 	}
 	return body, nil
-}
-
-// vscodeNlsMessagesArray parses the _VSCODE_NLS_MESSAGES JS array from a
-// nls.messages.js file. The file format is:
-//
-//	/*---------------------------------------------------...
-//	 * Copyright ...
-//	 *----------------------------------------------------*/
-//	globalThis._VSCODE_NLS_MESSAGES=['...', "...",];
-//	globalThis._VSCODE_NLS_LANGUAGE="zh-cn";
-//
-// The array is JavaScript syntax, NOT strict JSON: elements are string
-// literals which may use single quotes, and a trailing comma is allowed.
-// It therefore cannot be decoded with json.Unmarshal. We locate the '['
-// after "_VSCODE_NLS_MESSAGES=" (no space) and manually walk the array,
-// decoding each string literal (handling \ escapes) into a plain string.
-func vscodeNlsMessagesArray(jsData []byte) ([]string, error) {
-	s := string(jsData)
-	// Find the assignment marker.
-	marker := "_VSCODE_NLS_MESSAGES="
-	idx := strings.Index(s, marker)
-	if idx < 0 {
-		return nil, fmt.Errorf("_VSCODE_NLS_MESSAGES assignment not found")
-	}
-	// The array starts at '[' (skip any whitespace).
-	start := idx + len(marker)
-	for start < len(s) && (s[start] == ' ' || s[start] == '\t') {
-		start++
-	}
-	if start >= len(s) || s[start] != '[' {
-		return nil, fmt.Errorf("expected '[' after _VSCODE_NLS_MESSAGES=")
-	}
-
-	var messages []string
-	i := start + 1
-	for {
-		// Skip whitespace, commas, and trailing commas.
-		for i < len(s) && (s[i] == ' ' || s[i] == '\t' || s[i] == '\n' || s[i] == '\r' || s[i] == ',') {
-			i++
-		}
-		if i >= len(s) {
-			break
-		}
-		if s[i] == ']' {
-			break
-		}
-		if s[i] != '\'' && s[i] != '"' {
-			return nil, fmt.Errorf("unexpected %q in _VSCODE_NLS_MESSAGES array", s[i])
-		}
-
-		// Parse one string literal, decoding escapes.
-		quote := s[i]
-		i++
-		var sb strings.Builder
-		closed := false
-		for i < len(s) {
-			c := s[i]
-			if c == quote {
-				i++
-				closed = true
-				break
-			}
-			if c == '\\' {
-				i++
-				if i >= len(s) {
-					return nil, fmt.Errorf("dangling escape in _VSCODE_NLS_MESSAGES array")
-				}
-				switch e := s[i]; e {
-				case 'n':
-					sb.WriteByte('\n')
-				case 't':
-					sb.WriteByte('\t')
-				case 'r':
-					sb.WriteByte('\r')
-				case 'b':
-					sb.WriteByte('\b')
-				case 'f':
-					sb.WriteByte('\f')
-				case '\\', '\'', '"':
-					sb.WriteByte(e)
-				case 'u':
-					if i+4 < len(s) {
-						if v, err := strconv.ParseUint(s[i+1:i+5], 16, 32); err == nil {
-							sb.WriteRune(rune(v))
-							i += 4
-						} else {
-							sb.WriteString(`\u`)
-						}
-					} else {
-						sb.WriteString(`\u`)
-					}
-				default:
-					// Unknown escape: keep verbatim.
-					sb.WriteByte('\\')
-					sb.WriteByte(e)
-				}
-				i++
-				continue
-			}
-			sb.WriteByte(c)
-			i++
-		}
-		if !closed {
-			return nil, fmt.Errorf("unterminated string in _VSCODE_NLS_MESSAGES array")
-		}
-		messages = append(messages, sb.String())
-	}
-	return messages, nil
 }
 
 // ------------------------------------------------------------------------------
@@ -3297,7 +3337,7 @@ func mirrorCommand(args []string) {
 			log.Fatalf("[mirror] read latest: %v", err)
 		}
 		log.Printf("[mirror] latest response: %s", string(latestJSON))
-		var latestMeta map[string]interface{}
+		var latestMeta map[string]any
 		if err := json.Unmarshal(latestJSON, &latestMeta); err != nil {
 			log.Fatalf("[mirror] parse latest JSON: %v", err)
 		}
@@ -3327,7 +3367,7 @@ func mirrorCommand(args []string) {
 	log.Printf("[mirror] metadata: %s", string(metaJSON))
 
 	// Parse metadata JSON.
-	var meta map[string]interface{}
+	var meta map[string]any
 	if err := json.Unmarshal(metaJSON, &meta); err != nil {
 		log.Fatalf("[mirror] parse metadata JSON: %v", err)
 	}
