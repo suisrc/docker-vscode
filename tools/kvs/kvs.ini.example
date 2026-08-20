@@ -150,8 +150,16 @@ vsc_language = {"zh-cn":"zh-hans", "zh-tw":"zh-hant"}
 # ----------------------------------------------------------------------------
 # 将应用镜像同步s3服务器上， 这个是为 vscode 定制的功能
 # 支持命令：
-# kvs mirror -c kvs.ini 完成 latest 版本同步
-# kvs mirror -c default 使用默认配置，即 embed 中的 kvs.ini.example配置
+# export KVS_MIRROR_VSCODE_S3_PREFIX=
+# export KVS_MIRROR_VSCODE_S3_ACCESS=
+# export KVS_MIRROR_VSCODE_S3_SECRET=
+# export KVS_MIRROR_VSCODE_S3_REGION=
+# latest 版本同步, default: 使用默认配置，即 embed 中的 kvs.ini.example配置
+# kvs mirror -c kvs.ini 
+# kvs mirror -c default 
+# 指定版本同步， 执行：
+# kvs mirror -c kvs.ini 1.132.1
+# kvs mirror -c default 1.132.1
 # ----------------------------------------------------------------------------
 
 [mirror]
