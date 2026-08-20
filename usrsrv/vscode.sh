@@ -1,6 +1,7 @@
 #!/bin/bash
 
 ## 这是 ms 官方版本，并且在使用中自动加载最新版本
+## vscode - kvs 反向代理 (端口 KVS_VSCODE_PORT:7080, 目录 KVS_VSCODE_WSC:/wsc [KVS_HOME:/wsc/.vsc], PASSWORD:无需密码)
 
 # source /etc/profile
 
@@ -10,11 +11,11 @@ if [[ -z "${PASSWORD}" ]]; then
     echo "PASSWORD is empty, randomly generate a password: ${PASSWORD}"
 fi
 
-# 判断 "${VSCODE_WSC:-/wsc}/.vsc/data/Machine/settings.json" 是否存在，如果不存在则创建一个默认的 settings.json 文件
-if [ ! -f "${VSCODE_WSC:-/wsc}/.vsc/data/Machine/settings.json" ]; then
-    mkdir -p "${VSCODE_WSC:-/wsc}/.vsc/data/Machine"
+# 判断 "${KVS_VSCODE_WSC:-/wsc}/.vsc/data/Machine/settings.json" 是否存在，如果不存在则创建一个默认的 settings.json 文件
+if [ ! -f "${KVS_VSCODE_WSC:-/wsc}/.vsc/data/Machine/settings.json" ]; then
+    mkdir -p "${KVS_VSCODE_WSC:-/wsc}/.vsc/data/Machine"
     # 使用带引号的定界符 <<'EOF'，防止 heredoc 内的 ${input:...} 被 shell 当作变量展开
-    cat <<'EOF' > "${VSCODE_WSC:-/wsc}/.vsc/data/Machine/settings.json"
+    cat <<'EOF' > "${KVS_VSCODE_WSC:-/wsc}/.vsc/data/Machine/settings.json"
 {
   "chat.allowAnonymousAccess": true,
   "terminal.integrated.scrollback": 10000,
@@ -133,6 +134,6 @@ fi
 
 # kvs 是一个用于授权的工具，它会在启动 vscode server 前进行授权验证，确保只有通过验证的用户才能访问 vscode server
 echo 'start vscode server. wss need set env: KVS_SVC_HEADER_X_FORWARDED_PORT=443'
-KVS_SVC_SOCK_FILE=/var/run/vscode.sock KVS_HOME="${VSCODE_WSC:-/wsc}/.vsc" KVS_LOGIN_AUTHZ=true \
-KVS_PORT="${VSCODE_PORT:-7080}" KVS_COOKIE=vscode-tkn KVS_LOGIN_TOKEN="${PASSWORD}" \
+KVS_SVC_SOCK_FILE=/var/run/vscode.sock KVS_HOME="${KVS_VSCODE_WSC:-/wsc}/.vsc" KVS_LOGIN_AUTHZ=true \
+KVS_PORT="${KVS_VSCODE_PORT:-7080}" KVS_COOKIE=vscode-tkn KVS_LOGIN_TOKEN="${PASSWORD}" \
 exec kvs -c default

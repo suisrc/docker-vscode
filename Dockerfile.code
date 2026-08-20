@@ -15,8 +15,6 @@ FROM ghcr.io/suisrc/webtop:base-3.5.5
 # set environment variables
 ENV KAS_SSHD="0" \
     KAS_VSCODE="1" \
-    VSCODE_WSC="/wsc" \
-    VSCODE_PORT="7080" \
     PASSWORD="" \
     PASSROOT="" \
     GIT_USER_NAME="" \

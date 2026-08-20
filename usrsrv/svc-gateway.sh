@@ -1,6 +1,6 @@
 #!/bin/bash
 # ============================================================================
-# svc-gateway - Kin 反向代理 (端口 7090, 无需密码)
+# svc-gateway - Kin 反向代理 (端口 KVS_WEBTOP_PORT:7090, 无需密码)
 #
 # 路由：
 #   /websocket   -> http://127.0.0.1:8081  (^前缀标记为服务后端, 支持WebSocket)
@@ -26,5 +26,5 @@ echo "selkies 已就绪，启动 gateway 代理..."
 
 export BACKEND_URL="/websocket=http://127.0.0.1:8081;/files=file://${HOME_DIR}/Desktop/;/=file:///usr/share/selkies/web/"
 
-KVS_PORT=${WEBTOP_PORT:-7080} KVS_COOKIE=webtop-tkn KVS_LOGIN_TOKEN="${PASSWORD:-webtop}" \
+KVS_PORT=${KVS_WEBTOP_PORT:-7080} KVS_COOKIE=webtop-tkn KVS_LOGIN_TOKEN="${PASSWORD:-webtop}" \
 exec kvs -n "${BACKEND_URL}"

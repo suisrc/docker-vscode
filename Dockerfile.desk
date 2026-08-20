@@ -17,12 +17,9 @@ FROM ghcr.io/suisrc/webtop:xfce-3.5.5
 ENV DEBIAN_FRONTEND=noninteractive \
     DISPLAY=:1 \
     TITLE="webtop" \
-    WEBTOP_PORT="7090" \
     KAS_WEBTOP="1" \
     KAS_SSHD="0" \
     KAS_VSCODE="0" \
-    VSCODE_WSC="/wsc" \
-    VSCODE_PORT="7080" \
     PASSWORD="" \
     PASSROOT="" \
     GIT_USER_NAME="" \

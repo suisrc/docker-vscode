@@ -45,8 +45,6 @@ RUN echo 'LANG=zh_CN.UTF-8\nLC_ALL=zh_CN.UTF-8\nLC_CTYPE=zh_CN.UTF-8\nLANGUAGE=z
 # set environment variables
 ENV KAS_SSHD="0" \
     KAS_VSCODE="1" \
-    VSCODE_WSC="/wsc" \
-    VSCODE_PORT="7080" \
     PASSWORD="" \
     PASSROOT=""
 
