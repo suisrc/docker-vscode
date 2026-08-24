@@ -1,6 +1,6 @@
 #!/bin/bash
 # ============================================================================
-# svc-gateway - Kin 反向代理 (端口 KVS_WEBTOP_PORT:7090, 无需密码)
+# svc-gateway - kvs 反向代理 (端口 KVS_WEBTOP_PORT:7090, 无需密码)
 #
 # 路由：
 #   /websocket   -> http://127.0.0.1:8081  (^前缀标记为服务后端, 支持WebSocket)
