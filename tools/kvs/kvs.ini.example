@@ -139,7 +139,7 @@ init_shell = sed -i \
 stop_shell = rm {KVS_SVC_SOCK_FILE:-./kvs.sock}
 
 # 进程启动的后端命令 (按空白分割，不支持带空格的参数)
-command = {SVC_BIN_HOME}/bin/code-server --accept-server-license-terms --without-connection-token --server-data-dir ${SVC_HOME}/ --socket-path {KVS_SVC_SOCK_FILE:-./kvs.sock}
+command = {SVC_BIN_HOME}/bin/code-server --accept-server-license-terms --without-connection-token --server-data-dir ${SVC_HOME}/ --socket-path {KVS_SVC_SOCK_FILE:-./kvs.sock} {KVS_SVC_EXTARGS}
 
 
 # https://github.com/microsoft/vscode-loc/tree/main/i18n

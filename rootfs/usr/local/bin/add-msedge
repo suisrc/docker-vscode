@@ -7,10 +7,18 @@ if [ -z ${EDGE_VERSION+x} ]; then \
     EDGE_VERSION=$(curl -q https://packages.microsoft.com/repos/edge/pool/main/m/microsoft-edge-stable/ | grep href | grep .deb | sed 's/.*href="//g'  | cut -d '"' -f1 | sort --version-sort | tail -1); \
 fi &&\
 EDGE_URL="https://packages.microsoft.com/repos/edge/pool/main/m/microsoft-edge-stable/$EDGE_VERSION" &&\
-curl -o /tmp/msedge.deb -L "${EDGE_URL}" && apt update && apt install -y /tmp/msedge.deb && rm /tmp/msedge.deb
+# 直接下载 .deb 安装，不走 apt 仓库
+curl -o /tmp/msedge.deb -L "${EDGE_URL}" && apt install -y /tmp/msedge.deb && rm /tmp/msedge.deb
+# 清理安装包自动添加的 apt 源与密钥（不把 msedge 加入 apt 源）
+rm -f /etc/apt/sources.list.d/microsoft-edge*.list /etc/apt/sources.list.d/microsoft-edge*.sources
+rm -f /usr/share/keyrings/microsoft-edge*.gpg /etc/apt/trusted.gpg.d/microsoft-edge*.gpg
 # 快捷方式
 cp /usr/share/applications/microsoft-edge.desktop $HD/Desktop/msedge.desktop
 [ "$(id -u)" -ne 0 ] && chown ${USER:-root}:${USER:-root} $HD/Desktop/msedge.desktop
+# 设置默认浏览器为 msedge
+if command -v xdg-settings >/dev/null 2>&1; then
+    xdg-settings set default-browser microsoft-edge.desktop || true
+fi
 # 禁用沙盒 (避免重复添加)
 if [[ `cat /opt/microsoft/msedge/microsoft-edge | grep -c '--no-sandbox'` -eq 0 ]]; then
     sed -i 's|"\$@"| --no-sandbox  &|' /opt/microsoft/msedge/microsoft-edge

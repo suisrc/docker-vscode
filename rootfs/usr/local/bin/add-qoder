@@ -1,0 +1,39 @@
+#!/usr/bin/bash
+set -e
+eval HD=~${USER:-root}
+
+# 安装 qoder
+# 先卸载已安装的版本（包括残留目录）
+apt purge -y 'qoder*' >/dev/null 2>&1 || true
+rm -rf /opt/Qoder "/opt/Qoder CN" /usr/share/qoder-cn-ide /usr/share/qoder-ide
+# CN 版: https://qoder-ide-cn.oss-cn-hangzhou.aliyuncs.com/qoder/release/lastest/qoder-cn-ide_amd64.deb
+#        程序 /usr/share/qoder-cn-ide/qoder-cn-ide, 快捷方式 qoder-cn-ide.desktop
+# 国际版: https://download.qoder.com/release/latest/qoder-ide_amd64.deb
+#        程序 /usr/share/qoder-ide/qoder-ide, 快捷方式 qoder-ide.desktop
+read -r -p "是否安装 CN 版本? [Y/n] " ans
+if [[ -z "$ans" || "$ans" =~ ^[Yy]$ ]]; then
+    CODE_URL="https://qoder-ide-cn.oss-cn-hangzhou.aliyuncs.com/qoder/release/lastest/qoder-cn-ide_amd64.deb"
+    APP_NAME="qoder-cn-ide"
+    EXEC_PATH="/usr/share/qoder-cn-ide/qoder-cn-ide"
+else
+    CODE_URL="https://download.qoder.com/release/latest/qoder-ide_amd64.deb"
+    APP_NAME="qoder-ide"
+    EXEC_PATH="/usr/share/qoder-ide/qoder-ide"
+fi
+curl -o /tmp/qoder.deb -L "${CODE_URL}" && apt install -y /tmp/qoder.deb && rm /tmp/qoder.deb
+# 快捷方式
+cp /usr/share/applications/$APP_NAME.desktop $HD/Desktop/qoder.desktop
+[ "$(id -u)" -ne 0 ] && chown ${USER:-root}:${USER:-root} $HD/Desktop/qoder.desktop
+# 禁用沙盒 (避免重复添加)；--no-sandbox 需加在 Exec 的引号外面：
+#   Exec=/usr/share/qoder-cn-ide/qoder-cn-ide --no-sandbox %F
+for f in /usr/share/applications/$APP_NAME.desktop $HD/Desktop/qoder.desktop; do
+    [ -f "$f" ] || continue
+    grep -q '\--no-sandbox' "$f" 2>/dev/null && continue
+    if grep -q "\"$EXEC_PATH\"" "$f"; then
+        # Exec 带引号：把 --no-sandbox 插到引号外
+        sed -i "s#\"$EXEC_PATH\"#\"$EXEC_PATH\" --no-sandbox#" "$f"
+    else
+        # Exec 不带引号（国际版）：直接在路径后追加
+        sed -i "s#$EXEC_PATH#$EXEC_PATH --no-sandbox#" "$f"
+    fi
+done

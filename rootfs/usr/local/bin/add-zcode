@@ -2,14 +2,45 @@
 set -e
 eval HD=~${USER:-root}
 
-# # 安装 zcode
-CODE_URL="https://cdn-zcode.z.ai/zcode/electron/releases/3.3.4/ZCode-3.3.4-linux-x64.deb" &&\
+# 安装 zcode， https://zcode.z.ai/cn
+# https://cdn-zcode.z.ai/zcode/electron/releases/3.10.1/linux-x64/ZCode-3.10.1-linux-x64.deb
+
+# 从官网获取最新版本号作为默认值
+get_latest_version() {
+    curl -fsL "https://zcode.z.ai/cn" 2>/dev/null \
+        | grep -oE 'zcode/electron/releases/[0-9]+\.[0-9]+\.[0-9]+/linux-x64/' \
+        | head -n1 \
+        | grep -oE '[0-9]+\.[0-9]+\.[0-9]+'
+}
+
+LATEST=$(get_latest_version || true)
+
+if [ -n "$LATEST" ]; then
+    read -r -p "Enter the ZCode version to install [default: $LATEST]: " VERSION
+else
+    echo "Warning: failed to fetch the latest version from https://zcode.z.ai/cn"
+    read -r -p "Enter the ZCode version to install: " VERSION
+fi
+
+# 未输入版本号时采用默认值；若两者皆无，则取消安装
+VERSION="${VERSION:-$LATEST}"
+if [ -z "$VERSION" ]; then
+    echo "No version entered and no default available, aborting installation."
+    exit 1
+fi
+echo "Installing ZCode $VERSION"
+CODE_URL="https://cdn-zcode.z.ai/zcode/electron/releases/$VERSION/linux-x64/ZCode-$VERSION-linux-x64.deb"
 curl -o /tmp/zcode.deb -L "${CODE_URL}" && apt install -y /tmp/zcode.deb && rm /tmp/zcode.deb
 # 快捷方式
 cp /usr/share/applications/zcode.desktop $HD/Desktop/zcode.desktop
 [ "$(id -u)" -ne 0 ] && chown ${USER:-root}:${USER:-root} $HD/Desktop/zcode.desktop
-# 禁用沙盒 (避免重复添加)
+# 禁用沙盒 (避免重复添加)；--no-sandbox 需加在 Exec 的引号外面
 for f in /usr/share/applications/zcode.desktop $HD/Desktop/zcode.desktop; do
-    grep -q '\--no-sandbox' "$f" 2>/dev/null || \
-        sed -i 's#/opt/ZCode/zcode#& --no-sandbox##' "$f"
+    [ -f "$f" ] || continue
+    grep -q '\--no-sandbox' "$f" 2>/dev/null && continue
+    if grep -q '"/opt/ZCode/zcode"' "$f"; then
+        sed -i 's#"/opt/ZCode/zcode"#"/opt/ZCode/zcode" --no-sandbox#' "$f"
+    else
+        sed -i 's#/opt/ZCode/zcode#/opt/ZCode/zcode --no-sandbox#' "$f"
+    fi
 done
