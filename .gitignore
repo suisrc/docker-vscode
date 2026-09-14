@@ -6,3 +6,4 @@ tools/kss/kss
 tools/kvs/kvs
 tools/kvs/kvs.ini
 tools/kvs/kvs.sock
+tools/kvs/kvs.sock.json

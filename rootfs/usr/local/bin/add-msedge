@@ -9,9 +9,11 @@ fi &&\
 EDGE_URL="https://packages.microsoft.com/repos/edge/pool/main/m/microsoft-edge-stable/$EDGE_VERSION" &&\
 # 直接下载 .deb 安装，不走 apt 仓库
 curl -o /tmp/msedge.deb -L "${EDGE_URL}" && apt install -y /tmp/msedge.deb && rm /tmp/msedge.deb
-# 清理安装包自动添加的 apt 源与密钥（不把 msedge 加入 apt 源）
-rm -f /etc/apt/sources.list.d/microsoft-edge*.list /etc/apt/sources.list.d/microsoft-edge*.sources
-rm -f /usr/share/keyrings/microsoft-edge*.gpg /etc/apt/trusted.gpg.d/microsoft-edge*.gpg
+# 清理安装 deb 时自动添加的 microsoft apt 源与密钥（不把 microsoft 加入 apt 源）
+# 注意: deb 的 postinst 会执行 `apt-get update`，若不清理会导致后续 apt 报 "repository is not signed"
+rm -f /etc/apt/sources.list.d/microsoft*.sources /etc/apt/sources.list.d/microsoft*.list
+rm -f /etc/apt/sources.list.d/vscode*.sources /etc/apt/sources.list.d/vscode*.list
+rm -f /usr/share/keyrings/microsoft*.gpg /etc/apt/trusted.gpg.d/microsoft*.gpg
 # 快捷方式
 cp /usr/share/applications/microsoft-edge.desktop $HD/Desktop/msedge.desktop
 [ "$(id -u)" -ne 0 ] && chown ${USER:-root}:${USER:-root} $HD/Desktop/msedge.desktop

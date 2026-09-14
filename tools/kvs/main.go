@@ -88,7 +88,8 @@ type Config struct {
 	SvcCacheDir         string // cache_dir — cache directory
 	SvcProxyPath        string // proxy_path — /__cache/ path prefix
 	SvcBinHome          string // bin_home — extracted bin directory, → SVC_BIN_HOME
-	SvcInitShell        string // init_shell — startup script (file:// or sh -c)
+	SvcOnceShell        string // once_shell — one-time script (file:// or sh -c), runs once per deploy, guarded by {bin_home}/__once__
+	SvcInitShell        string // init_shell — startup script (file:// or sh -c), runs on every kvs startup
 	SvcStopShell        string // stop_shell — shutdown script (file:// or sh -c), kvs-managed only
 	SvcCommand          string // command — optional shell command to run as the backend subprocess
 
@@ -189,7 +190,26 @@ func resolveConfigPath(flagPath string) string {
 //	{KVS_PORT:-7080}   → env KVS_PORT, or "7080" if unset/empty
 //	{SVC_HOME}         → internal SVC_HOME variable
 //	${VAR} / $VAR      → standard os.ExpandEnv (legacy, still supported)
+//
+// A brace expression is only treated as a placeholder when the name is a
+// valid identifier (letters/digits/underscores). Anything else (e.g. JSON
+// like `{ "commit": "{SVC_VERSION_HASH}" }`) is emitted verbatim, though
+// inner valid placeholders are still expanded.
 func expandValue(v string, svcVars map[string]string) string {
+	// validPlaceholderName reports whether s is a bare identifier
+	// (letters, digits, underscores), required before/inside {VAR} and
+	// {VAR:-default} placeholders.
+	validPlaceholderName := func(s string) bool {
+		if s == "" {
+			return false
+		}
+		for _, c := range s {
+			if !(c == '_' || c >= 'a' && c <= 'z' || c >= 'A' && c <= 'Z' || c >= '0' && c <= '9') {
+				return false
+			}
+		}
+		return true
+	}
 	// First expand ${VAR} / $VAR via standard os.ExpandEnv.
 	v = os.ExpandEnv(v)
 	// Then expand {VAR} and {VAR:-default} placeholders.
@@ -204,15 +224,20 @@ func expandValue(v string, svcVars map[string]string) string {
 				continue
 			}
 			expr := v[i+1 : i+end]
-			i += end + 1
 			// Check for :- default separator.
-			var name, def string
+			name, def := expr, ""
 			if idx := strings.Index(expr, ":-"); idx >= 0 {
-				name = expr[:idx]
-				def = expr[idx+2:]
-			} else {
-				name = expr
+				name, def = expr[:idx], expr[idx+2:]
 			}
+			// Only treat as a placeholder when the name is a valid
+			// identifier; otherwise (e.g. JSON braces) emit '{' verbatim
+			// and keep scanning so inner placeholders still expand.
+			if !validPlaceholderName(name) {
+				sb.WriteByte(v[i])
+				i++
+				continue
+			}
+			i += end + 1
 			// Lookup: svcVars first (internal), then os env.
 			val, ok := svcVars[name]
 			if !ok {
@@ -689,6 +714,7 @@ func loadInitConfig() Config {
 		// 7. Other fields
 		cfg.SvcCheck = expandValue(svcStr(ini, "check", ""), svcVars)
 		cfg.SvcProxyPath = expandValue(svcStr(ini, "proxy_path", ""), svcVars)
+		cfg.SvcOnceShell = expandValue(svcStr(ini, "once_shell", ""), svcVars)
 		cfg.SvcInitShell = expandValue(svcStr(ini, "init_shell", ""), svcVars)
 		cfg.SvcStopShell = expandValue(svcStr(ini, "stop_shell", ""), svcVars)
 		cfg.SvcCommand = expandValue(svcStr(ini, "command", ""), svcVars)
@@ -904,12 +930,14 @@ func serveLoadingPage(w http.ResponseWriter, status string) {
 //
 // New flow:
 //  1. If check is set and the backend is already reachable → skip (already running)
-//  2. If bin_home exists and is non-empty → skip (already extracted)
+//  2. If bin_home exists and is non-empty → skip deploy; run init_shell, plus
+//     once_shell only when the {bin_home}/__once__ marker is absent
 //  3. Resolve download URL (download has priority; otherwise download_info + field)
 //  4. Follow redirects to get .ext → SVC_PACKAGE_EXT
 //  5. Download to cache_dir/version/{SVC_VERSION}_{SVC_VERSION_HASH}.{ext}
 //  6. Extract tarball to bin_home
-//  7. Run init_shell
+//  7. Run once_shell (once per deployment, guarded by {bin_home}/__once__),
+//     then init_shell (every startup)
 //
 // Returns (managed, error). managed=false means the backend is an external service
 // already alive (detected via check) — kvs must NOT start/stop it or touch its
@@ -937,12 +965,12 @@ func prepareService(cfg Config, srvState *serviceState) (bool, error) {
 		}
 	}
 
-	// 2. If bin_home exists and is non-empty → skip extraction.
+	// 2. If bin_home exists and is non-empty → already deployed, skip
+	// download/extract and just run the scripts.
 	if cfg.SvcBinHome != "" {
 		if installed, _ := isServiceInstalled(cfg.SvcBinHome); installed {
 			log.Printf("[prepare] bin_home already exists: %s", cfg.SvcBinHome)
-			// Still run init_shell? No — init_shell runs once per deploy.
-			return true, nil
+			return runShellScripts(cfg, srvState)
 		}
 	}
 
@@ -963,7 +991,8 @@ func prepareService(cfg Config, srvState *serviceState) (bool, error) {
 		}
 	}
 	if downloadURL == "" {
-		return true, nil // nothing to download → nothing to deploy (but kvs may still start command)
+		// nothing to download → nothing to deploy (but kvs may still start command)
+		return runShellScripts(cfg, srvState)
 	}
 	if cfg.SvcBinHome == "" {
 		return false, fmt.Errorf("bin_home is required when download is set")
@@ -1010,7 +1039,51 @@ func prepareService(cfg Config, srvState *serviceState) (bool, error) {
 	}
 	log.Printf("[prepare] extract complete: %s", cfg.SvcBinHome)
 
-	// 7. Run init_shell if set.
+	return runShellScripts(cfg, srvState)
+}
+
+// onceMarkerName is the sentinel file written into bin_home after once_shell has
+// run successfully for the current deployment. Its content is the RFC3339
+// timestamp of that first successful run. Its presence makes later kvs startups
+// (and /__restart cycles) skip once_shell — that is what turns once_shell into a
+// true one-shot script. Delete the file to force once_shell to run again.
+const onceMarkerName = "__once__"
+
+// runShellScripts runs once_shell and init_shell in order and returns
+// prepareService's result. once_shell runs only once per deployment, tracked by
+// the {bin_home}/__once__ sentinel file; init_shell runs on every kvs startup.
+// Both support "file://" prefix (script executed directly, shebang respected);
+// any other value is run via "sh -c". Empty values are skipped.
+func runShellScripts(cfg Config, srvState *serviceState) (bool, error) {
+	// Run once_shell only when it has not already succeeded for this
+	// deployment. The marker is written after a successful run only, so a
+	// failed run leaves no marker and is retried on the next preparation cycle.
+	if cfg.SvcOnceShell != "" {
+		markerPath := ""
+		if cfg.SvcBinHome != "" {
+			markerPath = filepath.Join(cfg.SvcBinHome, onceMarkerName)
+		}
+		if ts, done := readOnceMarker(markerPath); done {
+			log.Printf("[prepare] once script already ran at %s, skipping: %s", ts, cfg.SvcOnceShell)
+		} else {
+			srvState.setPreparing("Running once script: " + cfg.SvcOnceShell)
+			log.Printf("[prepare] running once script: %s", cfg.SvcOnceShell)
+			if err := runServiceStartup(cfg.SvcOnceShell); err != nil {
+				return false, fmt.Errorf("once_shell: %w", err)
+			}
+			log.Printf("[prepare] once script complete")
+			// Record completion; the content is the run timestamp (RFC3339).
+			if markerPath == "" {
+				log.Printf("[prepare] WARNING: bin_home not set, once_shell result cannot be recorded and may run again")
+			} else if err := os.WriteFile(markerPath, []byte(time.Now().Format(time.RFC3339)+"\n"), 0o644); err != nil {
+				log.Printf("[prepare] WARNING: failed to write once marker %s: %v", markerPath, err)
+			} else {
+				log.Printf("[prepare] once marker written: %s", markerPath)
+			}
+		}
+	}
+
+	// Run init_shell if set (every kvs startup).
 	if cfg.SvcInitShell != "" {
 		srvState.setPreparing("Running startup script: " + cfg.SvcInitShell)
 		log.Printf("[prepare] running startup script: %s", cfg.SvcInitShell)
@@ -1021,6 +1094,20 @@ func prepareService(cfg Config, srvState *serviceState) (bool, error) {
 	}
 
 	return true, nil
+}
+
+// readOnceMarker reports whether the once_shell sentinel file exists, returning
+// its recorded timestamp. An empty path, or an unreadable file, yields
+// ("", false) — meaning once_shell has not run yet.
+func readOnceMarker(path string) (string, bool) {
+	if path == "" {
+		return "", false
+	}
+	b, err := os.ReadFile(path)
+	if err != nil {
+		return "", false
+	}
+	return strings.TrimSpace(string(b)), true
 }
 
 // isBackendAlive checks if the backend at the given URL is reachable.
@@ -1335,9 +1422,10 @@ func isPathWithin(target, destDir string) bool {
 		strings.HasPrefix(cleanTarget, cleanDest+string(os.PathSeparator))
 }
 
-// runServiceStartup executes KVS_SVC_INITSHELL. If it starts with "file://", the
-// referenced file is made executable and run directly (the kernel reads its #!
-// shebang). Otherwise, the string is run via sh -c.
+// runServiceStartup executes a shell entry (once_shell/init_shell/stop_shell).
+// If it starts with "file://", the referenced file is made executable and run
+// directly (the kernel reads its #! shebang). Otherwise, the string is run via
+// sh -c.
 func runServiceStartup(cmd string) error {
 	var c *exec.Cmd
 	if filePath, ok := strings.CutPrefix(cmd, "file://"); ok {

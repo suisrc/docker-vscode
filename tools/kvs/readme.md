@@ -126,7 +126,8 @@ kvs -n "&/=unix:///var/run/app.sock"
 | `cache_dir` | | 缓存目录 |
 | `proxy_path` | | 外部资源代理缓存路径前缀；默认空（禁用），设为 `/__cache/` 启用 |
 | `bin_home` | `SVC_BIN_HOME` | 解压后 bin 目录 |
-| `init_shell` | | 启动前脚本（每次部署执行一次） |
+| `once_shell` | | 一次性脚本（每个部署只执行一次，由 `{bin_home}/__once__` 标记文件记录时间；`file://` 走脚本文件，否则 `sh -c`；留空跳过） |
+| `init_shell` | | 启动脚本（每次 kvs 启动执行；`file://` 走脚本文件，否则 `sh -c`；留空跳过） |
 | `stop_shell` | | 退出前脚本（每次终止执行一次，仅 kvs 管理的后端） |
 | `command` | | 后端子进程启动命令 |
 
