@@ -1,0 +1,148 @@
+#!/usr/bin/env bash
+
+# =============================================================================
+# patch-agents.sh
+#
+# 对 VS Code Stable 的 web bundle (workbench.js) 打两个补丁：
+#
+# Patch 1 (authz)：认证守卫短路
+#   `&&this._config.resolveAuthentication` → `&&!1/*patched: never agent auth*/&&…`
+#   恰好 2 处（_ensureRequiredAuthentication 预检查、_createAndSubscribe catch
+#   重试分支），插入 !1 后条件恒 false —— 不再拉起交互式 GitHub 登录。
+#
+# Patch 2 (retry)：解决 Claude 被强制要求登录
+#   `_sendRequest(E,T){return this._dispatchRequest(E,T)}`
+#   → 追加 catch：错误含 "Authentication is required" 时，先重推
+#     _dispatchRootConfig({allowSignedOutWhenUsable:!0})，700ms 后重试同一请求。
+#   原理：host 的 Claude transport 由 root config 的 allowSignedOutWhenUsable 决定，
+#   为 false 时走 proxy 且无 Copilot token → 抛 AUTH 错误、要求登录。重推 true 后
+#   host 切到 native transport，改用本地 Anthropic 凭据，登录要求即消失 —— 实测
+#   可解决 Claude 强制登录问题（失败的一跳会被自动补救，用户无需二次刷新）。
+#
+# ⚠️ 压缩产物：变量/形参/函数名随构建变化，故用捕获组 $1/$2 回填、不写字面量；
+#   补丁新引入的局部变量统一加 __rt 前缀防冲突。（Patch 1 匹配属性名，稳定，
+#   故直接字符串替换。）
+#
+# 幂等：各自有标记（AU_MARK / RT_MARK），重复执行自动跳过；两个补丁互不跳过。
+# 回滚：--revert 恢复 .bak3（首次执行时的快照，可能已含部分补丁，回滚后请核对验证段）。
+#
+# 适用版本: VS Code Stable, commit 7debcd0e2acdea1c52de81bf9ee1620444407dda
+#
+# 用法:
+#   ./patch-agents.sh            # 应用（幂等）
+#   ./patch-agents.sh --revert   # 回滚
+#
+# 输出示例:
+#   [patch1:authz] …workbench.js: 替换 2 处 → 语法 OK
+#   [patch2:retry] …workbench.js: 替换 1 处 → 语法 OK
+#   workbench.js : [patch1:authz] 2 处标记, [patch2:retry] 1 处标记
+# =============================================================================
+set -euo pipefail
+
+S="${SERVER_DIR:-/wsc/.vsc/cli/servers/Stable-7debcd0e2acdea1c52de81bf9ee1620444407dda/server}"
+
+# 目标 server 目录不存在（未部署 / 正在重装）时直接跳过
+if [[ ! -d "$S" ]]; then
+  echo "[skip] server 目录不存在，跳过: $S"
+  exit 0
+fi
+
+AU_TARGET='&&this._config.resolveAuthentication'
+AU_REPL='&&!1/*patched: never agent auth*/&&this._config.resolveAuthentication'
+AU_MARK='patched: never agent auth'
+AU_EXPECTED=2   # 每个 bundle 中该串应恰好出现 2 次（两个守卫）
+
+# Patch 2 (retry)：createSession 遇 AUTH 错误时重推配置 + 延时重试
+# ⚠️ E/T 均为压缩后可变形参名，用捕获组 $1/$2 + 反引用适配
+RT_MARK='patched: retry auth'
+RT_TARGET_RE='_sendRequest\((\w+),(\w+)\)\{return this\._dispatchRequest\(\1,\2\)\}'
+RT_REPL='_sendRequest($1,$2){let __rtp=this._dispatchRequest($1,$2);return $1!=="createSession"?__rtp:__rtp.catch(async __rte=>{if(__rte&&/Authentication is required/.test(String(__rte.message))){this._dispatchRootConfig({allowSignedOutWhenUsable:!0}),await new Promise(__rtr=>setTimeout(__rtr,700));return this._dispatchRequest($1,$2)}throw __rte})}/*patched: retry auth*/'
+RT_EXPECTED=1 # 每个 bundle 中 _sendRequest 定义应恰好出现 1 次
+
+FILES=(
+  #"$S/out/vs/workbench/workbench.web.main.internal.js"
+  "$S/out/vs/code/browser/workbench/workbench.js"
+)
+
+MODE="${1:-apply}"
+
+if [[ "$MODE" == "--revert" ]]; then
+  for f in "${FILES[@]}"; do
+    if [[ -f "$f.bak3" ]]; then
+      cp "$f.bak3" "$f"
+      node --check "$f" && echo "[revert] 恢复原始文件 + 语法 OK: $(basename "$f")"
+    else
+      echo "[revert] 无备份 (.bak3)，跳过: $(basename "$f")"
+    fi
+  done
+  echo "[revert] 完成"
+  exit 0
+fi
+
+# 用 node 做精确字符串替换：匹配数不等于预期则中止，避免误伤 minified 代码
+apply_patch() {
+  local file="$1" target="$2" repl="$3" expected="$4" tag="$5"
+  node - "$file" "$target" "$repl" "$expected" "$tag" <<'EOF'
+const fs = require('fs');
+const [file, target, replacement, expectedStr, tag] = process.argv.slice(2);
+const expected = Number(expectedStr);
+const s = fs.readFileSync(file, 'utf8');
+const n = s.split(target).length - 1;
+if (n !== expected) {
+  console.log(`${tag} ${file}: 匹配 ${n} 处，预期 ${expected}，中止`);
+  process.exit(1);
+}
+fs.writeFileSync(file, s.split(target).join(replacement));
+console.log(`${tag} ${file}: 替换 ${n} 处`);
+EOF
+}
+
+# 用 node 做正则替换：pattern 支持捕获组，replacement 支持 $1..$9 回填
+apply_patch_re() {
+  local file="$1" pattern="$2" repl="$3" expected="$4" tag="$5"
+  node - "$file" "$pattern" "$repl" "$expected" "$tag" <<'EOF'
+const fs = require('fs');
+const [file, pattern, replacement, expectedStr, tag] = process.argv.slice(2);
+const expected = Number(expectedStr);
+const s = fs.readFileSync(file, 'utf8');
+const re = new RegExp(pattern, 'g');
+const n = (s.match(re) || []).length;
+if (n !== expected) {
+  console.log(`${tag} ${file}: 正则匹配 ${n} 处，预期 ${expected}，中止`);
+  process.exit(1);
+}
+fs.writeFileSync(file, s.replace(re, replacement));
+console.log(`${tag} ${file}: 替换 ${n} 处`);
+EOF
+}
+
+for f in "${FILES[@]}"; do
+  [[ -f "$f" ]] || { echo "[skip] 文件不存在，跳过: $f"; continue; }
+  base="$(basename "$f")"
+  cp -n "$f" "$f.bak3" || true
+
+  # ---- Patch 1: authz 认证守卫短路 ----
+  if grep -q "$AU_MARK" "$f"; then
+    echo "[patch1:authz] 已打补丁，跳过: $base"
+  else
+    apply_patch "$f" "$AU_TARGET" "$AU_REPL" "$AU_EXPECTED" "[patch1:authz]"
+  fi
+  node --check "$f" && echo "[patch1:authz] 语法 OK: $base"
+
+  # ---- Patch 2: retry createSession 遇 AUTH 错误自动重推配置 + 重试 ----
+  if grep -q "$RT_MARK" "$f"; then
+    echo "[patch2:retry] 已打补丁，跳过: $base"
+  else
+    apply_patch_re "$f" "$RT_TARGET_RE" "$RT_REPL" "$RT_EXPECTED" "[patch2:retry]"
+  fi
+  node --check "$f" && echo "[patch2:retry] 语法 OK: $base"
+done
+
+echo '---- 验证 ----'
+for f in "${FILES[@]}"; do
+  [[ -f "$f" ]] || continue
+  printf '%s : [patch1:authz] %s 处标记, [patch2:retry] %s 处标记\n' \
+    "$(basename "$f")" \
+    "$(grep -o "$AU_MARK" "$f" | wc -l)" \
+    "$(grep -o "$RT_MARK" "$f" | wc -l)"
+done

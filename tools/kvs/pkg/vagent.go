@@ -8,6 +8,7 @@ import (
 	"sort"
 	"strconv"
 	"strings"
+	"sync"
 	"time"
 )
 
@@ -68,13 +69,32 @@ func AgentBridgeArgsFromFile(file string) string {
 	} else if ep.Port > 0 {
 		b.WriteString(" --agent-host-bridge-port ")
 		b.WriteString(strconv.Itoa(ep.Port))
-		b.WriteString("--agent-host-bridge-host 127.0.0.1")
+		b.WriteString(" --agent-host-bridge-host 127.0.0.1")
 	}
 	if ep.Token != "" {
 		b.WriteString(" --agent-host-bridge-connection-token ")
 		b.WriteString(ep.Token)
 	}
 	return b.String()
+}
+
+// agentActionMu serializes RunAgentAction so two actions can never overlap.
+// It lives here rather than at the call site so any caller gets the guarantee.
+var agentActionMu sync.Mutex
+
+// RunAgentAction executes one action command, with the same dispatch as
+// once_shell/init_shell/stop_shell: a file:// prefix runs the script via its
+// shebang, anything else goes through sh -c. Output is inherited so it
+// interleaves with the kvs log. kvs does not interpret the command.
+//
+// The call blocks until the command exits. Concurrent calls are serialized by
+// agentActionMu, so a slow action delays other actions rather than running
+// alongside them.
+func RunAgentAction(name, cmd string) error {
+	log.Printf("[agents] action %s: running %s", name, cmd)
+	agentActionMu.Lock()
+	defer agentActionMu.Unlock()
+	return RunServiceStartup(cmd)
 }
 
 // ListAgentEntries scans the vsc_agents_dir directory and returns {file, name}

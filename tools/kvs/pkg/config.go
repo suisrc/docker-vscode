@@ -43,11 +43,12 @@ type Config struct {
 	SvcStopShell        string // stop_shell — shutdown script (file:// or sh -c), kvs-managed only
 	SvcCommand          string // command — optional shell command to run as the backend subprocess
 
-	VscAgentsCmd string // vsc_agents_cmd — agent host command (env assignments + argv), kvs-managed subprocess
-	VscAgentsDir string // vsc_agents_dir — directory scanned for *.json agent endpoint entries
-	VscAgentArgs string // SvcCommnand suffix, vscode agents connect config
+	VscAgentsCmd string            // vsc_agents_cmd — agent host command (env assignments + argv), kvs-managed subprocess
+	VscAgentsDir string            // vsc_agents_dir — directory scanned for *.json agent endpoint entries
+	VscAgentArgs string            // SvcCommnand suffix, vscode agents connect config
+	VscLanguage  map[string]string // vsc_language — lang→langpack mapping (e.g. zh-cn→zh-hans)
 
-	VscLanguage map[string]string // vsc_language — lang→langpack mapping (e.g. zh-cn→zh-hans)
+	Actions map[string]string // Actions maps the [actions] section: action name → one-shot command
 	// top-level
 	Port         string
 	CookieName   string            // cookie, default "kvs"
@@ -688,6 +689,15 @@ func LoadInitConfig() Config {
 		cfg.VscAgentsCmd = expandValue(svcStr(ini, "vsc_agents_cmd", ""), svcVars)
 		cfg.VscAgentsDir = expandValue(svcStr(ini, "vsc_agents_dir", ""), svcVars)
 		cfg.VscAgentArgs = expandValue(svcStr(ini, "vsc_agent_args", ""), svcVars)
+
+		// 7c. [actions] — named one-shot commands (name → command). Loaded
+		//     generically: kvs has no idea what any action does, it just runs
+		//     the command. Placed after bin_home so {SVC_BIN_HOME} expands.
+		cfg.Actions = make(map[string]string)
+		for _, kv := range ini.hasPrefix("actions.") {
+			name := strings.TrimPrefix(kv[0], "actions.")
+			cfg.Actions[name] = strings.TrimSpace(expandValue(kv[1], svcVars))
+		}
 	}
 
 	// 8. Expand [proxies] and [headers] now that all SVC_* vars are set.

@@ -170,6 +170,17 @@ vsc_agents_dir = ${SVC_HOME}/data/agent-host/local-endpoint/entries/
 vsc_agent_args = ${KVS_VSC_AGENT_ARGS}
 
 # ----------------------------------------------------------------------------
+# 通用 action 指令表： key = 指令名， value = 要执行的命令
+# kvs 不关心命令内容，只负责调用： 访问 /__agents/action/<key> 即执行对应命令
+# 支持 file:// 前缀 (直接执行脚本，走 shebang)， 否则用 sh -c 执行
+# 目前 logout.vsc.js 中定义了 Patch -> patch_cmd, Revert -> patch_rev
+[actions]
+# 执行补丁 vscode agent 强制登录补丁， 在不登录的情况下使用 agent host 三件套， copilot, claude, codex
+patch_cmd = SERVER_DIR={SVC_BIN_HOME} patch-vscode
+# 卸载补丁
+patch_rev = SERVER_DIR={SVC_BIN_HOME} patch-vscode --revert
+
+# ----------------------------------------------------------------------------
 # 将应用镜像同步s3服务器上， 这个是为 vscode 定制的功能
 # 支持命令：
 # export KVS_MIRROR_VSCODE_S3_PREFIX=

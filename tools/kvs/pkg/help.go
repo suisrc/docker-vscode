@@ -41,6 +41,7 @@ Config file sections:
   [proxies]          backend routes (required)
   [headers]          request header rewrites (Xxx=Val sets; Xxx= removes)
   [service]          service auto-deploy (download/extract/start)
+  [actions]          named one-shot commands, run via /__agents/action/<name>
   [mirror]           S3 mirror sync config
 
 Environment variables:

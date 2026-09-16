@@ -200,9 +200,14 @@
     var r1 = el('div');
     r1.style.cssText = 'display:flex;justify-content:flex-end;gap:8px';
     var bStart = btn('Start'), bRestart = btn('Restart'), bStop = btn('Stop');
+    var actions = [['Patch', 'patch_cmd'], ['Revert', 'patch_rev']];
     var bUpdate = btn('Update');
-    bUpdate.style.cssText += ';margin-right:auto';
-    r1.appendChild(bUpdate);
+    var actBtns = actions.map(function (a) { return btn(a[0]); });
+    var leftBtns = [bUpdate].concat(actBtns);
+    leftBtns.forEach(function (x, k) {
+      if (k === leftBtns.length - 1) x.style.cssText += ';margin-right:auto';
+      r1.appendChild(x);
+    });
     r1.appendChild(bStart); r1.appendChild(bRestart); r1.appendChild(bStop);
     var spin = el('span');
     spin.style.cssText =
@@ -235,11 +240,13 @@
     }
     function lockAll() {
       dis(bStart, true); dis(bRestart, true); dis(bStop, true);
+      dis(bUpdate, true);
+      actBtns.forEach(function (x) { dis(x, true); });
     }
-    function post(url, body, okLabel, errPrefix) {
+    function req(method, url, body, okLabel, errPrefix) {
       lockAll();
       setSpin(true);
-      var opt = { method: 'POST', credentials: 'include' };
+      var opt = { method: method, credentials: 'include' };
       if (body !== undefined && body !== null) {
         opt.headers = { 'Content-Type': 'application/json' };
         opt.body = JSON.stringify(body);
@@ -250,6 +257,9 @@
         .catch(function (e) { setResult(errPrefix + (e && e.message ? e.message : '')); })
         .then(function () { setSpin(false); refresh(); });
     }
+    function post(url, body, okLabel, errPrefix) {
+      req('POST', url, body, okLabel, errPrefix);
+    }
     bStart.addEventListener('click', function () {
       post('/__agents/start', { command: i.value.trim() }, 'Start Success', 'Start Error: ');
     });
@@ -258,6 +268,11 @@
     });
     bStop.addEventListener('click', function () {
       post('/__agents/stop', undefined, 'Stop Success', 'Stop Error: ');
+    });
+    actions.forEach(function (a, k) {
+      actBtns[k].addEventListener('click', function () {
+        req('GET', '/__agents/action/' + a[1], undefined, a[0] + ' Success', a[0] + ' Error: ');
+      });
     });
     bUpdate.addEventListener('click', function () {
       lockAll();
@@ -288,8 +303,14 @@
           dis(bStart, !!d.running);
           dis(bRestart, !d.running);
           dis(bStop, !d.running);
+          dis(bUpdate, false);
+          actBtns.forEach(function (x) { dis(x, false); });
         })
-        .catch(function () { setStatus('Status: unknown'); });
+        .catch(function () {
+          setStatus('Status: unknown');
+          dis(bUpdate, false);
+          actBtns.forEach(function (x) { dis(x, false); });
+        });
     }
     b.appendChild(t); b.appendChild(st); b.appendChild(lbl);
     b.appendChild(i); b.appendChild(hint); b.appendChild(r1);

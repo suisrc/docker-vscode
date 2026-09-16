@@ -352,8 +352,38 @@ func main() {
 		_, _ = io.WriteString(w, `{"success":true}`)
 	})
 
-	//======================================================================================
+	// /__agents/action/<name> — run the [actions] entry <name> from kvs.ini.
+	// kvs stays generic: pkg.RunAgentAction executes the value (file:// via
+	// shebang, otherwise sh -c) and blocks until it exits. Any method works, so
+	// a browser URL or plain curl triggers it. An unknown name returns 404
+	// without revealing the configured actions.
+	mux.HandleFunc("/__agents/action/", func(w http.ResponseWriter, r *http.Request) {
+		name := strings.TrimPrefix(r.URL.Path, "/__agents/action/")
+		if name == "" || strings.Contains(name, "/") {
+			http.Error(w, "action name required", http.StatusBadRequest)
+			return
+		}
+		cmd, known := cfg.Actions[name]
+		if !known {
+			// Deliberately does not echo the configured action names: the
+			// action table is server-side only.
+			http.Error(w, "unknown action", http.StatusNotFound)
+			return
+		}
+		if cmd == "" {
+			http.Error(w, "action "+name+" has no command", http.StatusBadRequest)
+			return
+		}
+		if err := pkg.RunAgentAction(name, cmd); err != nil {
+			log.Printf("[agents] action %s failed: %s: %v", name, cmd, err)
+			http.Error(w, "action failed: "+err.Error(), http.StatusInternalServerError)
+			return
+		}
+		w.WriteHeader(http.StatusOK)
+		fmt.Fprintf(w, `{"success":true,"action":%q}`, name)
+	})
 
+	//======================================================================================
 	// /favicon.ico – a minimal inline SVG favicon (blue rounded square with "C")
 	// so browsers don't log 404s for it. Modern browsers accept image/svg+xml.
 	mux.HandleFunc("/favicon.ico", func(w http.ResponseWriter, r *http.Request) {
