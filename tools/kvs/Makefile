@@ -1,6 +1,6 @@
 .PHONY: build clean
 
-kvs: main.go login.html logout.vsc.js loading.html favicon.ico kvs.ini.example go.mod
+kvs:
 	CGO_ENABLED=0 go build -ldflags="-s -w" -o kvs .
 
 build: kvs

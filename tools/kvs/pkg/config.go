@@ -45,7 +45,7 @@ type Config struct {
 
 	VscAgentsCmd string // vsc_agents_cmd — agent host command (env assignments + argv), kvs-managed subprocess
 	VscAgentsDir string // vsc_agents_dir — directory scanned for *.json agent endpoint entries
-	VscAgentsSvc string // SvcCommnand suffix, vscode agents connect config
+	VscAgentArgs string // SvcCommnand suffix, vscode agents connect config
 
 	VscLanguage map[string]string // vsc_language — lang→langpack mapping (e.g. zh-cn→zh-hans)
 	// top-level
@@ -567,7 +567,7 @@ func loadIni() (*iniFile, string) {
 
 	if cfgPath == "default" {
 		log.Printf("loading config: default (embedded kvs.ini.example)")
-		ini, err := parseIniData(mustAsset("kvs.ini.example"), "kvs.ini.example")
+		ini, err := parseIniData(MustAsset("kvs.ini.example"), "kvs.ini.example")
 		if err != nil {
 			log.Fatalf("parse embedded config: %v", err)
 		}
@@ -687,7 +687,7 @@ func LoadInitConfig() Config {
 		}
 		cfg.VscAgentsCmd = expandValue(svcStr(ini, "vsc_agents_cmd", ""), svcVars)
 		cfg.VscAgentsDir = expandValue(svcStr(ini, "vsc_agents_dir", ""), svcVars)
-		cfg.VscAgentsSvc = expandValue(svcStr(ini, "vsc_agents_svc", ""), svcVars)
+		cfg.VscAgentArgs = expandValue(svcStr(ini, "vsc_agent_args", ""), svcVars)
 	}
 
 	// 8. Expand [proxies] and [headers] now that all SVC_* vars are set.

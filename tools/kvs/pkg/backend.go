@@ -27,17 +27,14 @@ import (
 //go:embed favicon.ico loading.html login.html logout.vsc.js kvs.ini.example
 var staticFS embed.FS
 
-// mustAsset reads an embedded asset by name, failing fast at startup if missing.
+// MustAsset reads an embedded asset by name, failing fast at startup if missing.
 // embed.FS is an in-memory read-only map; ReadFile just returns a slice over it,
 // so there is no I/O and no benefit to pre-caching assets into package vars.
 //
 // When DEBUG=1 is set in the environment, assets are read from the current
 // working directory instead of the embed. This allows live-editing assets
 // (e.g. logout.vsc.js, login.html) without recompiling.
-// MustAsset reads an embedded asset by name (KVS_DEBUG=1 reads from cwd).
-func MustAsset(name string) []byte { return mustAsset(name) }
-
-func mustAsset(name string) []byte {
+func MustAsset(name string) []byte {
 	if gDebug {
 		if b, err := os.ReadFile(name); err == nil {
 			return b
@@ -120,14 +117,9 @@ func newBackend(prefix, rawURL string) *Backend {
 // Backend Handlers — createBackendHandler dispatches to the right handler type.
 // =============================================================================
 
-// createBackendHandler builds an http.Handler for the given backend.
+// CreateBackendHandler builds an http.Handler for the given backend.
 // Supported schemes: http, https, unix (reverse proxy), file (directory), text (literal).
-// CreateBackendHandler builds the proxy http.Handler for one backend.
 func CreateBackendHandler(b Backend, cacheHeaders map[string]string, loginAuthz bool) http.Handler {
-	return createBackendHandler(b, cacheHeaders, loginAuthz)
-}
-
-func createBackendHandler(b Backend, cacheHeaders map[string]string, loginAuthz bool) http.Handler {
 	switch b.Scheme {
 	case "http", "https":
 		targetURL, err := url.Parse(b.RawURL)
@@ -223,7 +215,7 @@ func authRedirectModifier() func(*http.Response) error {
 		r.StatusCode = http.StatusOK
 		r.Header = make(http.Header)
 		r.Header.Set("Content-Type", "text/html; charset=utf-8")
-		body := strings.Replace(string(mustAsset("login.html")), "{{ERROR}}", "", 1)
+		body := strings.Replace(string(MustAsset("login.html")), "{{ERROR}}", "", 1)
 		r.Body = io.NopCloser(bytes.NewReader([]byte(body)))
 		r.ContentLength = int64(len(body))
 		return nil

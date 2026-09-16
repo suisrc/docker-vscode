@@ -14,7 +14,16 @@ import (
 
 // terminateTimeout is how long terminateLocked waits after each signal
 // (SIGTERM, then SIGKILL) before giving up and abandoning the child.
-const terminateTimeout = 5 * time.Second
+const terminateTimeout = 10 * time.Second
+
+// supervisorHeadstart is a heuristic grace window between the wrapper's own
+// SIGTERM and the forced termination of its process group. Expiry does NOT
+// prove that respawn has stopped - it only means the wrapper was still
+// alive (or its fate unknown) when the window closed, so the group is
+// force-terminated either way. Instant-exiting wrappers do not wait it out:
+// termination continues as soon as the wrapper is reaped or the group is
+// empty.
+const supervisorHeadstart = 2 * time.Second
 
 // proc.go manages one kvs-managed backend subprocess (Process).
 //
@@ -22,8 +31,9 @@ const terminateTimeout = 5 * time.Second
 //   - Each child is launched in its own process group (Setpgid), so Stop
 //     kills the whole backend tree, not just the top process.
 //   - A reaper goroutine calls cmd.Wait (no zombie) and closes proc.done
-//     exactly once; that channel is the liveness signal for both
-//     terminateLocked and Running().
+//     once. done = "wrapper reaped" (liveness for Running()); group
+//     liveness during termination is probed with kill(-pgid, 0), since
+//     the wrapper usually dies before its children.
 //   - All state transitions hold e.lock.
 //
 // Command syntax: split with strings.Fields (no quoting, no arguments
@@ -170,13 +180,12 @@ func (e *Process) Stop() {
 	e.terminateLocked()
 }
 
-// terminateLocked terminates the current child (SIGTERM to the process
-// group, then SIGKILL after terminateTimeout) and forgets it. Callers
-// must hold e.lock, which stays held for the full escalation, so
-// concurrent Running()/Start() calls block until the child is gone.
-// An already-dead child is dropped without signaling; one that survives
-// even SIGKILL (D state) is abandoned after terminateTimeout to keep the
-// lock responsive - its reaper still collects it later (no zombie).
+// terminateLocked terminates the current child and forgets it; callers
+// hold e.lock for the whole escalation. The wrapper gets SIGTERM first
+// (bare pid) so it stops respawning before its children die - signaling
+// the group at once let it re-launch dying children, which was the
+// "stop triggers a start" bug. Waiting is group-based (kill(-pgid, 0)),
+// not done-based, since the wrapper usually dies first.
 func (e *Process) terminateLocked() {
 	if e.proc == nil || e.proc.cmd == nil || e.proc.cmd.Process == nil {
 		return
@@ -189,38 +198,86 @@ func (e *Process) terminateLocked() {
 		return
 	default:
 	}
-	// Children are always launched with Setpgid, so pgid == pid; on a
-	// reap race fall back to the bare pid so a live child is still signaled.
 	pgid, err := syscall.Getpgid(pid)
 	if err != nil {
 		log.Printf("get pgid %d: %v, falling back to pid", pid, err)
 		pgid = pid
 	}
-	if err := syscall.Kill(-pgid, syscall.SIGTERM); err != nil {
-		log.Printf("kill [%s] pgid %d: %v", e.Name, pgid, err)
+	// Step 1: SIGTERM the wrapper (bare pid) to stop its respawn logic
+	// before its children start dying.
+	if err := syscall.Kill(pid, syscall.SIGTERM); err != nil {
+		log.Printf("kill [%s] pid %d: %v", e.Name, pid, err)
 	} else {
-		log.Printf("sent SIGTERM to [%s] process group %d", e.Name, pgid)
+		log.Printf("sent SIGTERM to [%s] main pid %d (supervisor first)", e.Name, pid)
 	}
-
-	log.Printf("[%s] process %d stopping", e.Name, pid)
-	select {
-	case <-e.proc.done:
-		log.Printf("[%s] process %d exited cleanly", e.Name, pid)
-	case <-time.After(terminateTimeout):
-		log.Printf("[%s] process %d did not exit after SIGTERM, sending SIGKILL", e.Name, pid)
-		if err := syscall.Kill(-pgid, syscall.SIGKILL); err != nil {
-			log.Printf("kill -9 [%s] pgid %d: %v", e.Name, pgid, err)
+	// Step 2: bounded grace window, polled every 50ms, with the two exit
+	// conditions checked in a fixed order. Empty group first: it is the
+	// decisive state - nothing left to signal and no respawn possible,
+	// whatever the wrapper's own fate (a childless backend reaches it in
+	// one tick, and so does a wrapper that took its children along).
+	// Then wrapper death: respawn has stopped, so fall through and clean
+	// up whatever children are still in the group.
+	wrapperDead := false
+	deadline := time.Now().Add(supervisorHeadstart)
+	for time.Now().Before(deadline) {
+		if err := syscall.Kill(-pgid, 0); err != nil {
+			log.Printf("[%s] process group %d exited gracefully", e.Name, pgid)
+			e.proc = nil
+			return
 		}
-		// Bound the post-SIGKILL wait: a D-state child survives SIGKILL,
-		// and waiting forever would wedge e.lock (and all its callers).
 		select {
 		case <-e.proc.done:
-			log.Printf("[%s] process %d exited after SIGKILL", e.Name, pid)
-		case <-time.After(terminateTimeout):
-			log.Printf("ERROR: [%s] process %d still alive %v after SIGKILL, abandoning it", e.Name, pid, terminateTimeout)
+			wrapperDead = true
+		default:
+		}
+		if wrapperDead {
+			break
+		}
+		time.Sleep(50 * time.Millisecond)
+	}
+	if wrapperDead {
+		log.Printf("[%s] wrapper %d exited, cleaning up its group", e.Name, pid)
+	}
+	// Step 3: SIGTERM the remaining group members. ESRCH = already empty.
+	if err := syscall.Kill(-pgid, syscall.SIGTERM); err == nil {
+		log.Printf("sent SIGTERM to [%s] process group %d", e.Name, pgid)
+	}
+	if !waitGroupEmpty(pgid, terminateTimeout) {
+		// Step 4: SIGKILL the group. The wrapper is the group leader
+		// (Setpgid), so -pgid reaches it as well and respawn cannot
+		// survive - no separate bare-pid kill is needed, and after the
+		// wrapper was reaped its pid may already be recycled, so
+		// signaling it could hit an unrelated process. A group surviving
+		// SIGKILL holds D-state members no signal can reach; the group is
+		// abandoned (e.proc cleared) to keep the lock responsive - the
+		// parent reaps them when it exits, so no zombie or pid leak.
+		log.Printf("[%s] group %d did not exit after SIGTERM, sending SIGKILL", e.Name, pgid)
+		_ = syscall.Kill(-pgid, syscall.SIGKILL)
+		if !waitGroupEmpty(pgid, terminateTimeout) {
+			log.Printf("ERROR: [%s] group %d still alive %v after SIGKILL (D state?), abandoning it", e.Name, pgid, terminateTimeout)
 		}
 	}
 	e.proc = nil
+}
+
+// waitGroupEmpty polls the group with signal 0 until empty (ESRCH) or
+// timeout. Zombies count as present until reaped (the wrapper's by this
+// reaper's cmd.Wait, orphaned children by init), which normally costs a
+// few poll rounds; a zombie left unreaped long enough consumes the whole
+// timeout, and the caller then escalates to SIGKILL - harmless for a
+// zombie, but it does make the "did not exit after SIGTERM" path
+// reachable without any real straggler.
+func waitGroupEmpty(pgid int, timeout time.Duration) bool {
+	deadline := time.Now().Add(timeout)
+	for {
+		if err := syscall.Kill(-pgid, 0); err != nil {
+			return true // ESRCH: no process left in the group
+		}
+		if !time.Now().Before(deadline) {
+			return false
+		}
+		time.Sleep(100 * time.Millisecond)
+	}
 }
 
 // Running reports whether the tracked child is still alive (proc.done

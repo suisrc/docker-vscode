@@ -79,6 +79,7 @@ func main() {
 
 	service := &pkg.Process{Name: "service"}
 	vagents := &pkg.Process{Name: "vagents"}
+	// vmodels := &pkg.Process{Name: "vmodels"}
 
 	// setCookie writes a cookie with the given value and MaxAge.
 	setCookie := func(w http.ResponseWriter, value string, maxAge int) {
@@ -185,35 +186,29 @@ func main() {
 			}
 		}
 
-		// Agent branch: /__restart?agent=<file> — restart the SERVICE backend
-		// (command) with bridge args appended to it, derived from the agent
-		// entry file. The agent host (vsc_agents_cmd) is NOT touched here;
-		// it is managed only by /__agents/start|stop|restart. Requires POST.
-		if agentFile := r.URL.Query().Get("agent"); agentFile != "" {
-			if r.Method != http.MethodPost {
-				http.Error(w, "POST required", http.StatusMethodNotAllowed)
-				return
-			}
-			if cfg.SvcCommand == "" {
-				http.Error(w, "command not configured", http.StatusBadRequest)
-				return
-			}
-			if agentFile == "" {
-				cfg.VscAgentsSvc = ""
-			} else if args := pkg.AgentBridgeArgsFromFile(filepath.Join(cfg.VscAgentsDir, agentFile, ".json")); args == "" {
-				http.Error(w, "agent entry not found or invalid: "+agentFile, http.StatusNotFound)
-				return
-			} else {
-				cfg.VscAgentsSvc = args
-			}
-			return
-		}
-
 		// Reload config so download/bin_home are re-expanded with the new (or
 		// cleared) version. If version resolve fails (e.g. 404), LoadInitConfig
 		// stores the error in cfg.InitError instead of crashing. PrepareService
 		// will surface it on the loading page as a download failure.
 		newCfg := pkg.LoadInitConfig()
+
+		// Agent branch: /__restart?agent=<file> — restart the SERVICE backend
+		// (command) with bridge args appended to it, derived from the agent entry file.
+		if agentFile := r.URL.Query().Get("agent"); agentFile != "" {
+			if cfg.SvcCommand == "" {
+				http.Error(w, "command not configured", http.StatusBadRequest)
+				return
+			}
+			if agentFile == "" {
+				newCfg.VscAgentArgs = ""
+			} else if args := pkg.AgentBridgeArgsFromFile(filepath.Join(cfg.VscAgentsDir, agentFile+".json")); args == "" {
+				http.Error(w, "agent entry not found or invalid: "+agentFile, http.StatusNotFound)
+				return
+			} else {
+				newCfg.VscAgentArgs = args
+			}
+		}
+
 		cfg = newCfg // always update cfg so InitError (if any) is visible to prepareService
 
 		// Kill the running backend (if any) and reset state.
@@ -257,8 +252,8 @@ func main() {
 
 	//======================================================================================
 
-	// /__agents — returns { running, command, entries: [...] }.
-	// entries are parsed from vsc_agents_dir (*.json with json.endpoint).
+	// /__agents/status — returns { running, command } for the Agents dialog.
+	// command reflects the current (possibly body-replaced) vsc_agents_cmd.
 	mux.HandleFunc("/__agents/status", func(w http.ResponseWriter, r *http.Request) {
 		w.Header().Set("Content-Type", "application/json; charset=utf-8")
 		resp := map[string]any{
@@ -275,6 +270,9 @@ func main() {
 	})
 
 	// /__agents/start — launch the agent host (409 if already running).
+	// Optional JSON body {"command": "..."} REPLACES cfg.VscAgentsCmd (the
+	// new value is kept for subsequent status/start/restart); an empty or
+	// missing body starts the currently configured command.
 	mux.HandleFunc("/__agents/start", func(w http.ResponseWriter, r *http.Request) {
 		if r.Method != http.MethodPost {
 			http.Error(w, "POST required", http.StatusMethodNotAllowed)
@@ -284,12 +282,23 @@ func main() {
 			http.Error(w, "agents already running", http.StatusConflict)
 			return
 		}
+		if r.Body != nil {
+			var req struct {
+				Command string `json:"command"`
+			}
+			if err := json.NewDecoder(io.LimitReader(r.Body, 64*1024)).Decode(&req); err == nil {
+				if c := strings.TrimSpace(req.Command); c != "" && c != cfg.VscAgentsCmd {
+					log.Printf("[agents] command replaced: %s", c)
+					cfg.VscAgentsCmd = c
+				}
+			}
+		}
 		if cfg.VscAgentsCmd == "" {
 			http.Error(w, "vsc_agents_cmd not configured", http.StatusBadRequest)
 			return
 		}
-		if vagents.Start("", cfg.VscAgentsCmd) == nil {
-			http.Error(w, "failed to start agents", http.StatusInternalServerError)
+		if err := vagents.Start("", cfg.VscAgentsCmd); err != nil {
+			http.Error(w, "failed to start agents: "+err.Error(), http.StatusInternalServerError)
 			return
 		}
 		w.WriteHeader(http.StatusOK)
@@ -311,12 +320,25 @@ func main() {
 		_, _ = io.WriteString(w, `{"success":true}`)
 	})
 
-	// /__agents/restart — restart agent host WITHOUT bridge args (the clear action;
-	// to reload with a specific entry use POST /__restart?agent=<file>).
+	// /__agents/restart — restart the agent host (without bridge args; to
+	// reload with a specific entry use POST /__restart?agent=<file>).
+	// Optional JSON body {"command": "..."} REPLACES cfg.VscAgentsCmd, same
+	// as /__agents/start.
 	mux.HandleFunc("/__agents/restart", func(w http.ResponseWriter, r *http.Request) {
 		if r.Method != http.MethodPost {
 			http.Error(w, "POST required", http.StatusMethodNotAllowed)
 			return
+		}
+		if r.Body != nil {
+			var req struct {
+				Command string `json:"command"`
+			}
+			if err := json.NewDecoder(io.LimitReader(r.Body, 64*1024)).Decode(&req); err == nil {
+				if c := strings.TrimSpace(req.Command); c != "" && c != cfg.VscAgentsCmd {
+					log.Printf("[agents] command replaced: %s", c)
+					cfg.VscAgentsCmd = c
+				}
+			}
 		}
 		if cfg.VscAgentsCmd == "" {
 			http.Error(w, "vsc_agents_cmd not configured", http.StatusBadRequest)
@@ -372,8 +394,7 @@ func main() {
 		if cfg.SvcVersionHash != "" && cfg.SvcHome != "" {
 			prePath := "/stable-" + cfg.SvcVersionHash + "/web-extension-resource/"
 			if strings.HasPrefix(r.URL.Path, prePath) {
-				vscodeExtHandle := pkg.VscodeExtHandle // local alias for readability
-				vscodeExtHandle(w, r, prePath, cfg.SvcHome)
+				pkg.VscodeExtHandle(w, r, prePath, cfg.SvcHome)
 				return
 			}
 		}
@@ -402,7 +423,7 @@ func main() {
 								}
 							}
 							// Start the backend subprocess after a successful prepare.
-							service.Start("", cfg.SvcCommand+cfg.VscAgentsSvc)
+							service.Start("", cfg.SvcCommand+cfg.VscAgentArgs)
 						}
 						srvState.Finish(err)
 						if err != nil {
@@ -490,7 +511,7 @@ func main() {
 	// backend exists, the subprocess is started lazily after preparation
 	// completes (see the service route handler above); otherwise it starts now.
 	if cfg.SvcCommand != "" && servicePrefix == "" {
-		service.Start("", cfg.SvcCommand+cfg.VscAgentsSvc)
+		service.Start("", cfg.SvcCommand+cfg.VscAgentArgs)
 	}
 
 	<-sigCh

@@ -40,7 +40,7 @@ if [ ! -f "${KVS_VSCODE_HOME}/data/Machine/settings.json" ]; then
   "editor.suggestSelection": "first",
   "editor.fontSize": 16,
   "editor.fontLigatures": false,
-  "explorer.confirmDelete": false,
+  "explorer.confirmDelete": true,
   "extensions.autoUpdate": "off",
   "extensions.autoCheckUpdates": false,
   "workbench.colorTheme": "Dark+",

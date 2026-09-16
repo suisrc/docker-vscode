@@ -21,14 +21,9 @@ type ServerInstance struct {
 	IsTLS  bool
 }
 
-// buildServers constructs one (plain HTTP) or two (HTTP + HTTPS) servers with
+// BuildServers constructs one (plain HTTP) or two (HTTP + HTTPS) servers with
 // sensible timeouts and the self-signed cert when SSL is enabled.
-// BuildServers builds the HTTP/HTTPS servers for the configured port.
 func BuildServers(port string, useSSL bool, mux http.Handler) []ServerInstance {
-	return buildServers(port, useSSL, mux)
-}
-
-func buildServers(port string, useSSL bool, mux http.Handler) []ServerInstance {
 	base := newCacheServer(":"+port, mux, nil)
 	if !useSSL {
 		return []ServerInstance{{Server: base, IsTLS: false}}
@@ -81,16 +76,13 @@ func ServerAddrs(servers []ServerInstance) string {
 	return strings.Join(out, ", ")
 }
 
-// safeReferer returns a same-origin redirect target, falling back to "/".
+// SafeReferer returns a same-origin redirect target, falling back to "/".
 // It accepts both relative paths and absolute URLs: when the referer is an
 // absolute URL on the same host (r.Host), only the path+query is returned so
 // the redirect stays same-origin. Cross-origin or unparseable referers fall
 // back to "/". This preserves query strings (e.g. ?folder=/wsc) that would
 // otherwise be lost.
-// SafeReferer sanitizes the Referer header for post-login redirect.
-func SafeReferer(ref, host string) string { return safeReferer(ref, host) }
-
-func safeReferer(ref, host string) string {
+func SafeReferer(ref, host string) string {
 	if ref == "" {
 		return "/"
 	}
@@ -119,23 +111,17 @@ func safeReferer(ref, host string) string {
 	return path
 }
 
-// serveStaticAsset writes an embedded asset with the given content type.
-// ServeStaticAsset writes an embedded asset with its content type.
-func ServeStaticAsset(w http.ResponseWriter, name string) { serveStaticAsset(w, name) }
-
-func serveStaticAsset(w http.ResponseWriter, name string) {
+// ServeStaticAsset writes an embedded asset with the given content type.
+func ServeStaticAsset(w http.ResponseWriter, name string) {
 	w.Header().Set("Content-Type", "text/html; charset=utf-8")
-	_, _ = w.Write(mustAsset(name))
+	_, _ = w.Write(MustAsset(name))
 }
 
-// serveLoginAsset renders login.html with an optional error message.
+// ServeLoginAsset renders login.html with an optional error message.
 // The {{ERROR}} placeholder in login.html is replaced with the message
 // (HTML-escaped). When msg is empty the placeholder becomes empty too.
-// ServeLoginAsset writes the login page with an optional error message.
-func ServeLoginAsset(w http.ResponseWriter, msg string) { serveLoginAsset(w, msg) }
-
-func serveLoginAsset(w http.ResponseWriter, msg string) {
-	html := string(mustAsset("login.html"))
+func ServeLoginAsset(w http.ResponseWriter, msg string) {
+	html := string(MustAsset("login.html"))
 	escaped := htmlEscape(msg)
 	html = strings.Replace(html, "{{ERROR}}", escaped, 1)
 	w.Header().Set("Content-Type", "text/html; charset=utf-8")
@@ -151,7 +137,7 @@ func htmlEscape(s string) string {
 	return s
 }
 
-// generateCookieValue builds the cookie value for a successful login.
+// GenerateCookieValue builds the cookie value for a successful login.
 //
 // login_timeout == 0: cookie value = loginToken (plain, session lifetime).
 // login_timeout > 0:  cookie value = "<hash>.<ts>.<salt>" where
@@ -161,12 +147,7 @@ func htmlEscape(s string) string {
 //
 // The ts and salt are embedded so the gateway can re-derive the hash and
 // check expiry without keeping server-side state.
-// GenerateCookieValue builds the cookie value for the configured login mode.
 func GenerateCookieValue(loginToken string, loginTimeout int) string {
-	return generateCookieValue(loginToken, loginTimeout)
-}
-
-func generateCookieValue(loginToken string, loginTimeout int) string {
 	if loginTimeout <= 0 {
 		return loginToken
 	}
@@ -189,7 +170,7 @@ func randomHex(n int) string {
 	return hex.EncodeToString(b)
 }
 
-// authMiddleware wraps next with cookie-based authentication.
+// AuthMiddleware wraps next with cookie-based authentication.
 //
 // When login_timeout == 0: cookie value must equal loginToken (plain compare).
 // When login_timeout > 0:  cookie value is "<hash>.<ts>.<salt>"; the middleware
@@ -199,12 +180,7 @@ func randomHex(n int) string {
 //
 // Public paths (/__login, /__logout, /favicon.ico, /__logout.vsc.js, cache)
 // are always exempt.
-// AuthMiddleware wraps next with the cookie/token check.
 func AuthMiddleware(next http.Handler, cfg Config, setCookie func(http.ResponseWriter, string, int)) http.Handler {
-	return authMiddleware(next, cfg, setCookie)
-}
-
-func authMiddleware(next http.Handler, cfg Config, setCookie func(http.ResponseWriter, string, int)) http.Handler {
 	return http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 		if isPublicAuthPath(r.URL.Path) {
 			next.ServeHTTP(w, r)
@@ -212,14 +188,14 @@ func authMiddleware(next http.Handler, cfg Config, setCookie func(http.ResponseW
 		}
 		c, err := r.Cookie(cfg.CookieName)
 		if err != nil || c.Value == "" {
-			serveLoginAsset(w, "")
+			ServeLoginAsset(w, "")
 			return
 		}
 
 		if cfg.LoginTimeout <= 0 {
 			// Plain mode: direct comparison.
 			if subtle.ConstantTimeCompare([]byte(c.Value), []byte(cfg.LoginToken)) != 1 {
-				serveLoginAsset(w, "")
+				ServeLoginAsset(w, "")
 				return
 			}
 			next.ServeHTTP(w, r)
@@ -230,11 +206,11 @@ func authMiddleware(next http.Handler, cfg Config, setCookie func(http.ResponseW
 		ok, refresh := validateHashedCookie(c.Value, cfg.LoginToken, cfg.LoginTimeout)
 		if !ok {
 			log.Printf("[authz] cookie validation failed: %q", c.Value)
-			serveLoginAsset(w, "")
+			ServeLoginAsset(w, "")
 			return
 		}
 		if refresh {
-			newVal := generateCookieValue(cfg.LoginToken, cfg.LoginTimeout)
+			newVal := GenerateCookieValue(cfg.LoginToken, cfg.LoginTimeout)
 			setCookie(w, newVal, cfg.LoginTimeout)
 		}
 		next.ServeHTTP(w, r)

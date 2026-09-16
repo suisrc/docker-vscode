@@ -29,10 +29,6 @@ import (
 // file = {svcHome}/extensions/{publisher}.{name}-{version}/{path}
 // VscodeExtHandle serves VS Code web-extension-resource requests.
 func VscodeExtHandle(w http.ResponseWriter, r *http.Request, prePath, svcHome string) {
-	vscodeExtHandle(w, r, prePath, svcHome)
-}
-
-func vscodeExtHandle(w http.ResponseWriter, r *http.Request, prePath, svcHome string) {
 	// Strip prePath to get the relative path, e.g.:
 	//   {publisher}.vscode-unpkg.net/{publisher}/{name}/{version}/{path}
 	rel := strings.TrimPrefix(r.URL.Path, prePath)
@@ -99,10 +95,6 @@ func vscodeExtHandle(w http.ResponseWriter, r *http.Request, prePath, svcHome st
 
 // VscodeNlsHandle intercepts VS Code NLS requests for translation remapping.
 func VscodeNlsHandle(w http.ResponseWriter, r *http.Request, prePath, svcHome, binHome string, langMap map[string]string) {
-	vscodeNlsHandle(w, r, prePath, svcHome, binHome, langMap)
-}
-
-func vscodeNlsHandle(w http.ResponseWriter, r *http.Request, prePath, svcHome, binHome string, langMap map[string]string) {
 	cacheOnce.Do(initCache)
 
 	// 1. Parse URL: {prePath}{commit}/{version}/{lang}/nls-messages.js
@@ -413,7 +405,7 @@ func loadMirrorConfig() mirrorConfig {
 	if cfgPath == "default" {
 		log.Printf("mirror: loading config: default (embedded kvs.ini.example)")
 		var err error
-		ini, err = parseIniData(mustAsset("kvs.ini.example"), "kvs.ini.example")
+		ini, err = parseIniData(MustAsset("kvs.ini.example"), "kvs.ini.example")
 		if err != nil {
 			log.Fatalf("mirror: parse embedded config: %v", err)
 		}
@@ -464,9 +456,7 @@ func loadMirrorConfig() mirrorConfig {
 //   - {s3_prefix}/api/versions/{name}/server-linux-x64-web/stable   → version JSON
 //
 // MirrorCommand syncs vscode versions to S3-compatible storage.
-func MirrorCommand(args []string) { mirrorCommand(args) }
-
-func mirrorCommand(args []string) {
+func MirrorCommand(args []string) {
 	if len(args) == 0 {
 		fmt.Fprintf(os.Stderr, "usage: kvs mirror -c <config> [version]\n")
 		os.Exit(1)

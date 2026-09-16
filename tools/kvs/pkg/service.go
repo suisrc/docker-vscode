@@ -111,7 +111,7 @@ func ServeLoadingPage(w http.ResponseWriter, status string) {
 	if msg == "" {
 		msg = "Preparing Application"
 	}
-	html := strings.Replace(string(mustAsset("loading.html")), "__STATUS__", msg, 1)
+	html := strings.Replace(string(MustAsset("loading.html")), "__STATUS__", msg, 1)
 	_, _ = w.Write([]byte(html))
 }
 
@@ -135,11 +135,11 @@ func ServeLoadingPage(w http.ResponseWriter, status string) {
 // socket. managed=true means kvs owns the backend lifecycle.
 
 // PrepareService downloads/extracts/fixes the service backend.
+//
+// Returns (managed, error). managed=false means the backend is an external service
+// already alive (detected via check) — kvs must NOT start/stop it or touch its
+// socket. managed=true means kvs owns the backend lifecycle.
 func PrepareService(cfg Config, srvState *ServiceState) (bool, error) {
-	return prepareService(cfg, srvState)
-}
-
-func prepareService(cfg Config, srvState *ServiceState) (bool, error) {
 	// 0. If config init failed (e.g. version resolve error), fail fast so the
 	// loading page shows the error instead of crashing the whole program.
 	if cfg.InitError != "" {

@@ -77,7 +77,7 @@ func DemoCommand() {
 		fmt.Fprintf(os.Stderr, "error: %s already exists in the current directory\n", dest)
 		os.Exit(1)
 	}
-	data := mustAsset("kvs.ini.example")
+	data := MustAsset("kvs.ini.example")
 	if err := os.WriteFile(dest, data, 0o644); err != nil {
 		fmt.Fprintf(os.Stderr, "error: write %s: %v\n", dest, err)
 		os.Exit(1)

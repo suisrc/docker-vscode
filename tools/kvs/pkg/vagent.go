@@ -5,8 +5,10 @@ import (
 	"log"
 	"os"
 	"path/filepath"
+	"sort"
 	"strconv"
 	"strings"
+	"time"
 )
 
 // agentEndpoint describes the usable endpoint fields parsed from one
@@ -48,16 +50,13 @@ func parseAgentEndpoint(file string) (ep agentEndpoint, ok bool) {
 	return ep, ep.Path != "" || ep.Port > 0
 }
 
-// agentBridgeArgsFromFile builds the bridge suffix arguments for the agent host
+// AgentBridgeArgsFromFile builds the bridge suffix arguments for the agent host
 // command by re-reading the endpoint JSON file named by the ?agent= parameter:
 //   - socket: --agent-host-bridge-path {path} --agent-host-bridge-connection-token {token}
 //   - tcp:    --agent-host-bridge-port {port} --agent-host-bridge-connection-token {token}
 //
 // Returns "" when the file cannot be read/parsed or has no usable endpoint.
-// AgentBridgeArgsFromFile derives bridge args from an agent entry file.
-func AgentBridgeArgsFromFile(file string) string { return agentBridgeArgsFromFile(file) }
-
-func agentBridgeArgsFromFile(file string) string {
+func AgentBridgeArgsFromFile(file string) string {
 	ep, ok := parseAgentEndpoint(file)
 	if !ok {
 		return ""
@@ -78,14 +77,11 @@ func agentBridgeArgsFromFile(file string) string {
 	return b.String()
 }
 
-// listAgentEntries scans the vsc_agents_dir directory and returns {file, name}
+// ListAgentEntries scans the vsc_agents_dir directory and returns {file, name}
 // pairs for every *.json file with a usable endpoint (path or port). name is
 // the socket path, or 127.0.0.1:{port} for tcp endpoints. Unreadable/unparseable
 // files are skipped with a warning; nil if the directory is unset or unreadable.
-// ListAgentEntries lists parsed agent endpoint entries in dir.
-func ListAgentEntries(dir string) []map[string]string { return listAgentEntries(dir) }
-
-func listAgentEntries(dir string) []map[string]string {
+func ListAgentEntries(dir string) []map[string]string {
 	if dir == "" {
 		return nil
 	}
@@ -95,6 +91,11 @@ func listAgentEntries(dir string) []map[string]string {
 		return nil
 	}
 	var out []map[string]string
+	type entry struct {
+		file, name string
+		mod        time.Time
+	}
+	var list []entry
 	for _, f := range files {
 		if f.IsDir() || !strings.HasSuffix(strings.ToLower(f.Name()), ".json") {
 			continue
@@ -107,7 +108,21 @@ func listAgentEntries(dir string) []map[string]string {
 		if name == "" && ep.Port > 0 {
 			name = "127.0.0.1:" + strconv.Itoa(ep.Port)
 		}
-		out = append(out, map[string]string{"file": f.Name()[:len(f.Name())-5], "name": name})
+		info, err := f.Info()
+		var mod time.Time
+		if err == nil && info != nil {
+			mod = info.ModTime()
+		}
+		list = append(list, entry{file: f.Name()[:len(f.Name())-5], name: name, mod: mod})
+	}
+	// Newest first.
+	sort.Slice(list, func(i, j int) bool { return list[i].mod.After(list[j].mod) })
+	for _, it := range list {
+		out = append(out, map[string]string{
+			"file": it.file,
+			"name": it.name,
+			"time": it.mod.Format("01-02 15:04"),
+		})
 	}
 	return out
 }

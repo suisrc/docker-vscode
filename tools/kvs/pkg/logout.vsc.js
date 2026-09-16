@@ -1,7 +1,6 @@
 (function () {
   if (window.__kvs) return;
   window.__kvs = 1;
-
   function el(t, c, s) {
     var e = document.createElement(t);
     if (c) e.className = c;
@@ -14,22 +13,17 @@
       if (ev.key === 'Enter' || ev.key === ' ') { ev.preventDefault(); f(); }
     });
   }
-  // Read a --vscode-* theme variable from .monaco-workbench (the variables are
-  // scoped there, not on body), falling back to d. Re-read each time so the
-  // dialog follows theme changes.
   function tv(n, d) {
     var w = document.querySelector('.monaco-workbench');
     if (!w) return d;
     var v = getComputedStyle(w).getPropertyValue(n).trim();
     return v || d;
   }
-
   function logout() {
     fetch('/__logout', { credentials: 'include' })
       .then(function () { location.reload(); })
       .catch(function () { location.reload(); });
   }
-
   function item() {
     var li = el('li', 'action-item icon');
     li.id = '__kvs_out';
@@ -43,26 +37,21 @@
     act(li, logout);
     return li;
   }
-
   function dialog() {
     if (document.getElementById('__kvs_dlg')) return;
     var o = el('div');
     o.id = '__kvs_dlg';
     o.style.cssText = 'position:fixed;inset:0;z-index:99999;background:rgba(0,0,0,.5);display:flex;align-items:center;justify-content:center';
-
     var b = el('div');
     b.style.cssText =
       'background:' + tv('--vscode-editorWidget-background', '#252526') +
       ';color:' + tv('--vscode-editorWidget-foreground', '#ccc') +
       ';border:1px solid ' + tv('--vscode-widget-border', '#454545') +
       ';border-radius:6px;padding:20px;min-width:380px;max-width:90vw;box-shadow:0 8px 30px rgba(0,0,0,.5);font-size:13px';
-
     var t = el('div', null, 'Update');
     t.style.cssText = 'font-size:15px;font-weight:600;margin-bottom:12px';
-
     var h = el('div', null, 'Current version: ...');
     h.style.cssText = 'color:' + tv('--vscode-descriptionForeground', '#9d9d9d') + ';margin-bottom:10px';
-
     var i = el('input');
     i.type = 'text';
     i.placeholder = 'Leave empty for current or latest version';
@@ -72,7 +61,6 @@
       ';color:' + tv('--vscode-input-foreground', '#ccc') +
       ';border:1px solid ' + tv('--vscode-input-border', '#3c3c3c') +
       ';border-radius:2px;padding:6px 8px;font-size:13px;outline:none';
-
     function btn(s, p) {
       var x = el('button', null, s);
       x.style.cssText = 'padding:5px 12px;border-radius:2px;border:0;font-size:13px;cursor:pointer;' +
@@ -80,65 +68,76 @@
            : 'background:' + tv('--vscode-button-secondaryBackground', '#3a3d41') + ';color:' + tv('--vscode-button-secondaryForeground', '#fff'));
       return x;
     }
-
     var r = el('div');
     r.style.cssText = 'display:flex;justify-content:flex-end;gap:8px;margin-top:16px';
     var c = btn('Cancel'), k = btn('Update & Restart', 1);
     r.appendChild(c); r.appendChild(k);
-
-    // Agent restart: dropdown of agent entries + Refresh. Optional — picking
-    // an entry and clicking Go restarts the agent host with its bridge args.
     var agnLbl = el('div', null, 'Agents (optional restart target)');
     agnLbl.style.cssText = 'color:' + tv('--vscode-descriptionForeground', '#9d9d9d') + ';margin:12px 0 4px;font-size:12px';
+    var agnRow = el('div');
+    agnRow.style.cssText = 'display:flex;gap:6px;align-items:stretch';
     var agnSel = el('select');
     agnSel.style.cssText =
-      'width:100%;box-sizing:border-box;padding:6px 8px;font-size:13px;border-radius:2px' +
+      'flex:1;min-width:0;box-sizing:border-box;padding:6px 8px;font-size:13px;border-radius:2px' +
       ';background:' + tv('--vscode-input-background', '#3c3c3c') +
       ';color:' + tv('--vscode-input-foreground', '#ccc') +
       ';border:1px solid ' + tv('--vscode-input-border', '#3c3c3c') + ';outline:none';
-    var agnEmpty = el('option', null, '(none)'); agnEmpty.value = '';
+    agnSel.title = 'Select an agent entry';
+    var agnEmpty = el('option', null, ''); agnEmpty.value = '';
     agnSel.appendChild(agnEmpty);
+    function fitText(s, n) {
+      s = String(s == null ? '' : s);
+      if (s.length > n) s = s.slice(0, Math.max(0, n - 3)) + '...';
+      return s;
+    }
     function fillAgents(entries) {
+      var cur = agnSel.value;
       agnSel.innerHTML = '';
-      var e0 = el('option', null, '(none)'); e0.value = '';
+      var e0 = el('option', null, ''); e0.value = '';
       agnSel.appendChild(e0);
       (entries || []).forEach(function (e) {
-        var op = el('option', null, e.name);
+        var full = (e.time ? '[' + e.time + '] ' : '') + e.file;
+        var op = el('option', null, fitText(full, 36));
         op.value = e.file;
+        op.title = full;
         agnSel.appendChild(op);
       });
+      agnSel.value = cur;
+      agnSel.title = agnSel.value || 'Select an agent entry';
     }
-    fetch('/__agents', { credentials: 'include', signal: AbortSignal.timeout(5000) })
-      .then(function (r) { return r.json(); })
-      .then(function (d) { fillAgents(d.entries); })
-      .catch(function () {});
-
-    var r2 = el('div');
-    r2.style.cssText = 'display:flex;justify-content:flex-end;gap:8px;margin-top:8px';
-    var agnRef = btn('Refresh'), agnGo = btn('Go');
-    r2.appendChild(agnRef); r2.appendChild(agnGo);
+    var agnRef = btn('Refresh');
+    agnRef.style.cssText += ';flex:0 0 auto;min-width:6.5em';
+    agnRow.appendChild(agnSel); agnRow.appendChild(agnRef);
     agnRef.addEventListener('click', function () {
-      fetch('/__agents', { credentials: 'include', signal: AbortSignal.timeout(5000) })
+      if (agnRef.disabled) return;
+      var old = agnRef.textContent;
+      agnRef.textContent = '…';
+      agnRef.disabled = true;
+      fetch('/__agents/entries', { credentials: 'include', signal: AbortSignal.timeout(5000) })
         .then(function (r) { return r.json(); })
-        .then(function (d) { fillAgents(d.entries); })
-        .catch(function () {});
+        .then(function (d) {
+          fillAgents(d);
+          agnRef.textContent = '✓';
+          setTimeout(function () { agnRef.textContent = old; agnRef.disabled = false; }, 800);
+        })
+        .catch(function () {
+          agnRef.textContent = '✗';
+          setTimeout(function () { agnRef.textContent = old; agnRef.disabled = false; }, 800);
+        });
     });
-    agnGo.addEventListener('click', function () {
-      var f = agnSel.value;
-      if (!f) { alert('Select an agent entry first'); return; }
-      fetch('/__restart?agent=' + encodeURIComponent(f), { method: 'POST', credentials: 'include' })
-        .catch(function () {});
-    });
-
-    b.appendChild(t); b.appendChild(h); b.appendChild(i); b.appendChild(r);
-    b.appendChild(agnLbl); b.appendChild(agnSel); b.appendChild(r2);
+    b.appendChild(t); b.appendChild(h); b.appendChild(i);
+    b.appendChild(agnLbl); b.appendChild(agnRow);
+    b.appendChild(r);
     o.appendChild(b);
     document.body.appendChild(o);
-
     function close() { o.remove(); }
     function go() {
       var v = i.value.trim();
-      fetch(v ? '/__restart?v=' + encodeURIComponent(v) : '/__restart', { credentials: 'include' })
+      var f = agnSel.value;
+      var url = '/__restart';
+      if (v) url += '?v=' + encodeURIComponent(v);
+      if (f) url += (url.indexOf('?') === -1 ? '?' : '&') + 'agent=' + encodeURIComponent(f);
+      fetch(url, { credentials: 'include' })
         .catch(function () {})
         .then(function () { setTimeout(function () { location.reload(); }, 1000); });
     }
@@ -155,34 +154,37 @@
       .catch(function () { h.textContent = 'Current version: unknown'; });
     i.focus();
   }
-
-  // Agents dialog — shows vsc_agents_cmd, Start/Restart/Stop buttons gated on
-  // the running state, an agent-entry select (from /__agents) with Refresh.
   function agentsDialog() {
     if (document.getElementById('__kvs_dlg')) return;
     var o = el('div');
     o.id = '__kvs_dlg';
     o.style.cssText = 'position:fixed;inset:0;z-index:99999;background:rgba(0,0,0,.5);display:flex;align-items:center;justify-content:center';
-
     var b = el('div');
     b.style.cssText =
       'background:' + tv('--vscode-editorWidget-background', '#252526') +
       ';color:' + tv('--vscode-editorWidget-foreground', '#ccc') +
       ';border:1px solid ' + tv('--vscode-widget-border', '#454545') +
-      ';border-radius:6px;padding:20px;min-width:420px;max-width:90vw;max-height:80vh;overflow:auto;box-shadow:0 8px 30px rgba(0,0,0,.5);font-size:13px';
-
+      ';border-radius:6px;padding:20px;min-width:520px;max-width:90vw;max-height:80vh;overflow:auto;box-shadow:0 8px 30px rgba(0,0,0,.5);font-size:13px';
     var t = el('div', null, 'Agents');
-    t.style.cssText = 'font-size:15px;font-weight:600;margin-bottom:12px';
-
-    // Command (read-only display of vsc_agents_cmd).
-    var i = el('div', null, '');
+    t.style.cssText = 'font-size:15px;font-weight:600;margin-bottom:4px';
+    var st = el('div', null, '');
+    st.style.cssText = 'display:flex;align-items:center;color:' + tv('--vscode-descriptionForeground', '#9d9d9d') + ';margin-bottom:10px';
+    var lbl = el('div', null, 'Agent host command');
+    lbl.style.cssText = 'color:' + tv('--vscode-descriptionForeground', '#9d9d9d') + ';margin-bottom:4px';
+    var i = el('textarea');
+    i.rows = 5;
+    i.spellcheck = false;
+    i.placeholder =
+      'e.g.  VSC_AGENTS_PORT=7300 /usr/local/bin/vsc-agent --port 7300\n' +
+      'Leading VAR=value tokens are applied to the process environment.';
     i.style.cssText =
-      'width:100%;box-sizing:border-box;margin-bottom:12px' +
+      'width:100%;box-sizing:border-box;resize:vertical;min-height:90px;margin-bottom:8px' +
       ';background:' + tv('--vscode-input-background', '#3c3c3c') +
       ';color:' + tv('--vscode-input-foreground', '#ccc') +
       ';border:1px solid ' + tv('--vscode-input-border', '#3c3c3c') +
-      ';border-radius:2px;padding:6px 8px;font-size:13px;outline:none';
-
+      ';border-radius:2px;padding:6px 8px;font-size:13px;outline:none;font-family:monospace;line-height:1.5';
+    var hint = el('div', null, 'Start/Restart replace the configured command with the value above (kvs.ini unchanged); Stop takes no command.');
+    hint.style.cssText = 'color:' + tv('--vscode-descriptionForeground', '#9d9d9d') + ';font-size:12px;margin-bottom:12px';
     function btn(s, p) {
       var x = el('button', null, s);
       x.style.cssText = 'padding:5px 12px;border-radius:2px;border:0;font-size:13px;cursor:pointer;' +
@@ -195,81 +197,105 @@
       x.style.opacity = d ? '0.5' : '1';
       x.style.cursor = d ? 'not-allowed' : 'pointer';
     }
-
-    // Start / Restart / Stop — enabled state depends on running.
     var r1 = el('div');
-    r1.style.cssText = 'display:flex;justify-content:flex-start;gap:8px;margin-bottom:16px';
+    r1.style.cssText = 'display:flex;justify-content:flex-end;gap:8px';
     var bStart = btn('Start'), bRestart = btn('Restart'), bStop = btn('Stop');
+    var bUpdate = btn('Update');
+    bUpdate.style.cssText += ';margin-right:auto';
+    r1.appendChild(bUpdate);
     r1.appendChild(bStart); r1.appendChild(bRestart); r1.appendChild(bStop);
-
-    function post(url, cb) {
-      fetch(url, { method: 'POST', credentials: 'include' })
+    var spin = el('span');
+    spin.style.cssText =
+      'display:none;margin-left:auto;width:10px;height:10px;vertical-align:-1px' +
+      ';border:2px solid ' + tv('--vscode-descriptionForeground', '#9d9d9d') +
+      ';border-top-color:transparent;border-radius:50%';
+    var stText = document.createTextNode('');
+    st.appendChild(stText);
+    st.appendChild(spin);
+    var resText = document.createTextNode('');
+    var res = el('span');
+    res.style.cssText = 'display:inline-block;max-width:340px;vertical-align:middle;overflow:hidden;text-overflow:ellipsis;white-space:nowrap;margin-left:auto';
+    res.appendChild(resText);
+    st.appendChild(res);
+    function setStatus(msg) { stText.nodeValue = msg; }
+    function setResult(msg) {
+      resText.nodeValue = msg;
+      res.style.display = msg ? 'inline-block' : 'none';
+      res.title = msg || '';
+    }
+    function setSpin(on) {
+      spin.style.display = on ? 'inline-block' : 'none';
+      spin.style.animation = on ? 'kvs-spin 1s linear infinite' : '';
+    }
+    if (!document.getElementById('__kvs_spin_style')) {
+      var ks = document.createElement('style');
+      ks.id = '__kvs_spin_style';
+      ks.textContent = '@keyframes kvs-spin{to{transform:rotate(360deg)}}';
+      document.head.appendChild(ks);
+    }
+    function lockAll() {
+      dis(bStart, true); dis(bRestart, true); dis(bStop, true);
+    }
+    function post(url, body, okLabel, errPrefix) {
+      lockAll();
+      setSpin(true);
+      var opt = { method: 'POST', credentials: 'include' };
+      if (body !== undefined && body !== null) {
+        opt.headers = { 'Content-Type': 'application/json' };
+        opt.body = JSON.stringify(body);
+      }
+      fetch(url, opt)
         .then(function (res) { return res.ok ? res.text() : res.text().then(function (t) { throw new Error(t); }); })
-        .then(function () { if (cb) cb(); })
-        .catch(function (e) { alert('agents: ' + e.message); });
+        .then(function () { setResult(okLabel); })
+        .catch(function (e) { setResult(errPrefix + (e && e.message ? e.message : '')); })
+        .then(function () { setSpin(false); refresh(); });
     }
-    bStart.addEventListener('click', function () { post('/__agents/start', refresh); });
-    bRestart.addEventListener('click', function () { post('/__agents/restart', refresh); });
-    bStop.addEventListener('click', function () { post('/__agents/stop', refresh); });
-
-    // Agent entry select + Refresh.
-    var lbl = el('div', null, 'Agent entry');
-    lbl.style.cssText = 'color:' + tv('--vscode-descriptionForeground', '#9d9d9d') + ';margin-bottom:4px';
-    var sel = el('select');
-    sel.style.cssText =
-      'width:100%;box-sizing:border-box;padding:6px 8px;font-size:13px;border-radius:2px' +
-      ';background:' + tv('--vscode-input-background', '#3c3c3c') +
-      ';color:' + tv('--vscode-input-foreground', '#ccc') +
-      ';border:1px solid ' + tv('--vscode-input-border', '#3c3c3c') + ';outline:none';
-    var r2 = el('div');
-    r2.style.cssText = 'display:flex;justify-content:flex-end;gap:8px;margin-top:12px';
-    var bRef = btn('Refresh'), bReload = btn('Reload'), bClear = btn('Clear');
-    r2.appendChild(bRef); r2.appendChild(bReload); r2.appendChild(bClear);
-
-    function fillSelect(entries) {
-      sel.innerHTML = '';
-      var empty = el('option', null, '(none)');
-      empty.value = '';
-      sel.appendChild(empty);
-      (entries || []).forEach(function (e) {
-        var op = el('option', null, e.name);
-        op.value = e.file;
-        sel.appendChild(op);
-      });
-    }
-
-    // Refresh: re-fetch entries + running state, update button availability.
+    bStart.addEventListener('click', function () {
+      post('/__agents/start', { command: i.value.trim() }, 'Start Success', 'Start Error: ');
+    });
+    bRestart.addEventListener('click', function () {
+      post('/__agents/restart', { command: i.value.trim() }, 'Restart Success', 'Restart Error: ');
+    });
+    bStop.addEventListener('click', function () {
+      post('/__agents/stop', undefined, 'Stop Success', 'Stop Error: ');
+    });
+    bUpdate.addEventListener('click', function () {
+      lockAll();
+      dis(bUpdate, true);
+      setSpin(true);
+      setResult('');
+      fetch('/__agents/entries', { credentials: 'include', signal: AbortSignal.timeout(5000) })
+        .then(function (r) { return r.ok ? r.json() : []; })
+        .catch(function () { return []; })
+        .then(function (d) {
+          var f = d && d.length ? d[0].file : '';
+          if (!f) { setResult('No Agent File'); return; }
+          return fetch('/__restart?agent=' + encodeURIComponent(f), { credentials: 'include' })
+            .then(function () {
+              setResult('Update Success');
+              setTimeout(function () { location.reload(); }, 1000);
+            })
+            .catch(function (e) { setResult('Update Error: ' + (e && e.message ? e.message : '')); });
+        })
+        .then(function () { setSpin(false); dis(bUpdate, false); refresh(); });
+    });
     function refresh() {
-      fetch('/__agents', { credentials: 'include', signal: AbortSignal.timeout(5000) })
+      fetch('/__agents/status', { credentials: 'include', signal: AbortSignal.timeout(5000) })
         .then(function (r) { return r.json(); })
         .then(function (d) {
-          i.textContent = d.command || '';
-          fillSelect(d.entries);
+          i.value = d.command || '';
+          setStatus('Status: ' + (d.running ? 'running' : 'stopped'));
           dis(bStart, !!d.running);
           dis(bRestart, !d.running);
           dis(bStop, !d.running);
         })
-        .catch(function () {});
+        .catch(function () { setStatus('Status: unknown'); });
     }
-    bRef.addEventListener('click', refresh);
-
-    // Reload: restart agent host with bridge args of the selected entry file.
-    bReload.addEventListener('click', function () {
-      var f = sel.value;
-      if (!f) { alert('Select an agent entry first'); return; }
-      post('/__restart?agent=' + encodeURIComponent(f));
-    });
-    // Clear: restart agent host without bridge args.
-    bClear.addEventListener('click', function () {
-      sel.value = '';
-      post('/__agents/restart');
-    });
-
-    b.appendChild(t); b.appendChild(i); b.appendChild(r1);
-    b.appendChild(lbl); b.appendChild(sel); b.appendChild(r2);
+    b.appendChild(t); b.appendChild(st); b.appendChild(lbl);
+    b.appendChild(i); b.appendChild(hint); b.appendChild(r1);
+    setResult('');
     o.appendChild(b);
     document.body.appendChild(o);
-
     function close() { o.remove(); }
     o.addEventListener('click', function (e) { if (e.target === o) close(); });
     o.addEventListener('keydown', function (e) {
@@ -277,7 +303,6 @@
     });
     refresh();
   }
-
   function agents() {
     var li = el('li', 'action-item');
     li.id = '__kvs_agn';
@@ -300,7 +325,6 @@
     act(li, agentsDialog);
     return li;
   }
-
   function upd() {
     var li = el('li', 'action-item');
     li.id = '__kvs_upd';
@@ -318,7 +342,6 @@
     act(li, dialog);
     return li;
   }
-
   var LANGS = [
     ['',      'Default'],
     ['cs',    'Čeština'],
@@ -336,11 +359,9 @@
     ['zh-cn', '简体中文'],
     ['zh-tw', '繁體中文']
   ];
-
   function curLocale() {
     return (document.cookie.match(/(?:^|;\s*)vscode\.nls\.locale=([^;]*)/) || [])[1] || '';
   }
-
   function a_hover(el) {
     el.addEventListener('mouseenter', function () {
       el.style.background = tv('--vscode-list-hoverBackground', '#2a2d2e');
@@ -349,9 +370,6 @@
       el.style.background = 'transparent';
     });
   }
-
-  // Build the submenu DOM and attach it to document.body (NOT inside the <li>,
-  // because the <li>'s ancestors have overflow:hidden which would clip it).
   function lsub(li) {
     var sub = document.getElementById('__kvs_lsub');
     if (sub) sub.remove();
@@ -396,10 +414,7 @@
     }
     sub.appendChild(ac);
     document.body.appendChild(sub);
-
-    // Position the submenu to the right of the Language menu item
     var r = li.getBoundingClientRect();
-    // Temporarily show to measure
     sub.style.display = 'block';
     var sr = sub.getBoundingClientRect();
     var x = r.right;
@@ -408,8 +423,6 @@
     if (y + sr.height > window.innerHeight) y = Math.max(0, window.innerHeight - sr.height);
     sub.style.left = x + 'px';
     sub.style.top = y + 'px';
-
-    // Keep submenu alive when the mouse is over it (it's on body, not in li)
     sub.addEventListener('mouseenter', function () {
       clearTimeout(window.__kvs_lhover);
       sub.style.display = 'block';
@@ -419,7 +432,6 @@
     });
     return sub;
   }
-
   function lang() {
     var li = el('li', 'action-item');
     li.id = '__kvs_lang';
@@ -436,7 +448,6 @@
     at(ind, { 'aria-hidden': 'true' });
     a.appendChild(c); a.appendChild(l); a.appendChild(ind); li.appendChild(a);
     a_hover(li);
-
     var hoverTimer = null;
     function open() {
       clearTimeout(window.__kvs_lhover);
@@ -459,11 +470,9 @@
     });
     return li;
   }
-
   function sync() {
     var tb = document.querySelector('.activitybar ul.actions-container[role="toolbar"]');
     if (tb && !tb.querySelector('#__kvs_out')) tb.insertBefore(item(), tb.firstChild);
-
     var btns = document.querySelectorAll('.menubar-menu-button');
     var help = null;
     for (var i = btns.length - 1; i >= 0; i--) {
@@ -487,40 +496,36 @@
       }
     }
     if (!ab) return;
-    // Insert language item right after the last real menu item
     var nn = ab.nextElementSibling;
     if (!(nn && nn.id === '__kvs_lang')) {
       ab.parentNode.insertBefore(lang(), ab.nextSibling);
     }
-    // Insert agents item after the language item (if not already there)
     var langEl = ab.parentNode.querySelector('#__kvs_lang');
-    var anchor = langEl || ab;
-    var an = anchor.nextElementSibling;
-    if (!(an && an.id === '__kvs_agn')) {
-      anchor.parentNode.insertBefore(agents(), anchor.nextSibling);
-    }
-    // Insert update item after the agents item (if not already there)
-    var agnEl = ab.parentNode.querySelector('#__kvs_agn');
-    if (agnEl) {
-      var un = agnEl.nextElementSibling;
-      if (!(un && un.id === '__kvs_upd')) {
-        agnEl.parentNode.insertBefore(upd(), agnEl.nextSibling);
+    if (langEl) {
+      var an = langEl.nextElementSibling;
+      if (!(an && an.id === '__kvs_agn')) {
+        langEl.parentNode.insertBefore(agents(), langEl.nextSibling);
+      }
+      var agnEl = langEl.nextElementSibling;
+      if (agnEl && agnEl.id === '__kvs_agn') {
+        var un = agnEl.nextElementSibling;
+        if (!(un && un.id === '__kvs_upd')) {
+          agnEl.parentNode.insertBefore(upd(), agnEl.nextSibling);
+        }
       }
     } else {
-      var n2 = anchor.nextElementSibling;
+      var n2 = ab.nextElementSibling;
       if (!(n2 && n2.id === '__kvs_upd')) {
-        anchor.parentNode.insertBefore(upd(), anchor.nextSibling);
+        ab.parentNode.insertBefore(upd(), ab.nextSibling);
       }
     }
   }
-
   function start() {
     sync();
     if (window.__kvs_obs) return;
     window.__kvs_obs = new MutationObserver(sync);
     window.__kvs_obs.observe(document.documentElement, { childList: true, subtree: true });
   }
-
   if (document.documentElement) start();
   else document.addEventListener('DOMContentLoaded', start);
 })();

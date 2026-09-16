@@ -167,7 +167,7 @@ vsc_agents_cmd = DISPLAY=:1 /usr/share/code/code --no-sandbox --user-data-dir ${
 # 列举 vsc_agents_dir 指定的文件内容， 具有 json.endpoint 文件的内容都要读取， 然后给一个列表，包括 json.endpoint.path or port(补充 ws://127.0.0.1:{port})内容
 vsc_agents_dir = ${SVC_HOME}/data/agent-host/local-endpoint/entries/
 # 上面的命令， 增加到 command 中， 默认最好为空，使用自动自动挂着
-vsc_agents_svc = ${KVS_VSC_AGENTS_SVC}
+vsc_agent_args = ${KVS_VSC_AGENT_ARGS}
 
 # ----------------------------------------------------------------------------
 # 将应用镜像同步s3服务器上， 这个是为 vscode 定制的功能
