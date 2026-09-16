@@ -56,6 +56,11 @@ if [ ! -f "${KVS_VSCODE_HOME}/data/Machine/settings.json" ]; then
       "defaultReasoningEffort": ""
     }
   },
+  "kaicustomendpoint.models": {
+    "alibaba": "sk-xxx",
+    "deepseek": "sk-xxx",
+    "bigmodel": "xx.xxx"
+  },
   "kaicustomendpoint.models": [
     {
       "name": "alibaba",
@@ -89,7 +94,7 @@ if [ ! -f "${KVS_VSCODE_HOME}/data/Machine/settings.json" ]; then
           "maxInputTokens": 1000000,
           "maxOutputTokens": 100000,
           "defaultReasoningEffort": "high",
-          "supportsReasoningEffort": ["none", "low", "high", "max", "high-op"]
+          "supportsReasoningEffort": ["none", "low", "high", "max"]
         }
       ]
     },

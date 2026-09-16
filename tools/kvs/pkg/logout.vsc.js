@@ -86,7 +86,52 @@
     var c = btn('Cancel'), k = btn('Update & Restart', 1);
     r.appendChild(c); r.appendChild(k);
 
+    // Agent restart: dropdown of agent entries + Refresh. Optional — picking
+    // an entry and clicking Go restarts the agent host with its bridge args.
+    var agnLbl = el('div', null, 'Agents (optional restart target)');
+    agnLbl.style.cssText = 'color:' + tv('--vscode-descriptionForeground', '#9d9d9d') + ';margin:12px 0 4px;font-size:12px';
+    var agnSel = el('select');
+    agnSel.style.cssText =
+      'width:100%;box-sizing:border-box;padding:6px 8px;font-size:13px;border-radius:2px' +
+      ';background:' + tv('--vscode-input-background', '#3c3c3c') +
+      ';color:' + tv('--vscode-input-foreground', '#ccc') +
+      ';border:1px solid ' + tv('--vscode-input-border', '#3c3c3c') + ';outline:none';
+    var agnEmpty = el('option', null, '(none)'); agnEmpty.value = '';
+    agnSel.appendChild(agnEmpty);
+    function fillAgents(entries) {
+      agnSel.innerHTML = '';
+      var e0 = el('option', null, '(none)'); e0.value = '';
+      agnSel.appendChild(e0);
+      (entries || []).forEach(function (e) {
+        var op = el('option', null, e.name);
+        op.value = e.file;
+        agnSel.appendChild(op);
+      });
+    }
+    fetch('/__agents', { credentials: 'include', signal: AbortSignal.timeout(5000) })
+      .then(function (r) { return r.json(); })
+      .then(function (d) { fillAgents(d.entries); })
+      .catch(function () {});
+
+    var r2 = el('div');
+    r2.style.cssText = 'display:flex;justify-content:flex-end;gap:8px;margin-top:8px';
+    var agnRef = btn('Refresh'), agnGo = btn('Go');
+    r2.appendChild(agnRef); r2.appendChild(agnGo);
+    agnRef.addEventListener('click', function () {
+      fetch('/__agents', { credentials: 'include', signal: AbortSignal.timeout(5000) })
+        .then(function (r) { return r.json(); })
+        .then(function (d) { fillAgents(d.entries); })
+        .catch(function () {});
+    });
+    agnGo.addEventListener('click', function () {
+      var f = agnSel.value;
+      if (!f) { alert('Select an agent entry first'); return; }
+      fetch('/__restart?agent=' + encodeURIComponent(f), { method: 'POST', credentials: 'include' })
+        .catch(function () {});
+    });
+
     b.appendChild(t); b.appendChild(h); b.appendChild(i); b.appendChild(r);
+    b.appendChild(agnLbl); b.appendChild(agnSel); b.appendChild(r2);
     o.appendChild(b);
     document.body.appendChild(o);
 
@@ -109,6 +154,151 @@
       .then(function (x) { h.textContent = 'Current version: ' + (x.trim() || 'unknown'); })
       .catch(function () { h.textContent = 'Current version: unknown'; });
     i.focus();
+  }
+
+  // Agents dialog — shows vsc_agents_cmd, Start/Restart/Stop buttons gated on
+  // the running state, an agent-entry select (from /__agents) with Refresh.
+  function agentsDialog() {
+    if (document.getElementById('__kvs_dlg')) return;
+    var o = el('div');
+    o.id = '__kvs_dlg';
+    o.style.cssText = 'position:fixed;inset:0;z-index:99999;background:rgba(0,0,0,.5);display:flex;align-items:center;justify-content:center';
+
+    var b = el('div');
+    b.style.cssText =
+      'background:' + tv('--vscode-editorWidget-background', '#252526') +
+      ';color:' + tv('--vscode-editorWidget-foreground', '#ccc') +
+      ';border:1px solid ' + tv('--vscode-widget-border', '#454545') +
+      ';border-radius:6px;padding:20px;min-width:420px;max-width:90vw;max-height:80vh;overflow:auto;box-shadow:0 8px 30px rgba(0,0,0,.5);font-size:13px';
+
+    var t = el('div', null, 'Agents');
+    t.style.cssText = 'font-size:15px;font-weight:600;margin-bottom:12px';
+
+    // Command (read-only display of vsc_agents_cmd).
+    var i = el('div', null, '');
+    i.style.cssText =
+      'width:100%;box-sizing:border-box;margin-bottom:12px' +
+      ';background:' + tv('--vscode-input-background', '#3c3c3c') +
+      ';color:' + tv('--vscode-input-foreground', '#ccc') +
+      ';border:1px solid ' + tv('--vscode-input-border', '#3c3c3c') +
+      ';border-radius:2px;padding:6px 8px;font-size:13px;outline:none';
+
+    function btn(s, p) {
+      var x = el('button', null, s);
+      x.style.cssText = 'padding:5px 12px;border-radius:2px;border:0;font-size:13px;cursor:pointer;' +
+        (p ? 'background:' + tv('--vscode-button-background', '#0e639c') + ';color:' + tv('--vscode-button-foreground', '#fff')
+           : 'background:' + tv('--vscode-button-secondaryBackground', '#3a3d41') + ';color:' + tv('--vscode-button-secondaryForeground', '#fff'));
+      return x;
+    }
+    function dis(x, d) {
+      x.disabled = !!d;
+      x.style.opacity = d ? '0.5' : '1';
+      x.style.cursor = d ? 'not-allowed' : 'pointer';
+    }
+
+    // Start / Restart / Stop — enabled state depends on running.
+    var r1 = el('div');
+    r1.style.cssText = 'display:flex;justify-content:flex-start;gap:8px;margin-bottom:16px';
+    var bStart = btn('Start'), bRestart = btn('Restart'), bStop = btn('Stop');
+    r1.appendChild(bStart); r1.appendChild(bRestart); r1.appendChild(bStop);
+
+    function post(url, cb) {
+      fetch(url, { method: 'POST', credentials: 'include' })
+        .then(function (res) { return res.ok ? res.text() : res.text().then(function (t) { throw new Error(t); }); })
+        .then(function () { if (cb) cb(); })
+        .catch(function (e) { alert('agents: ' + e.message); });
+    }
+    bStart.addEventListener('click', function () { post('/__agents/start', refresh); });
+    bRestart.addEventListener('click', function () { post('/__agents/restart', refresh); });
+    bStop.addEventListener('click', function () { post('/__agents/stop', refresh); });
+
+    // Agent entry select + Refresh.
+    var lbl = el('div', null, 'Agent entry');
+    lbl.style.cssText = 'color:' + tv('--vscode-descriptionForeground', '#9d9d9d') + ';margin-bottom:4px';
+    var sel = el('select');
+    sel.style.cssText =
+      'width:100%;box-sizing:border-box;padding:6px 8px;font-size:13px;border-radius:2px' +
+      ';background:' + tv('--vscode-input-background', '#3c3c3c') +
+      ';color:' + tv('--vscode-input-foreground', '#ccc') +
+      ';border:1px solid ' + tv('--vscode-input-border', '#3c3c3c') + ';outline:none';
+    var r2 = el('div');
+    r2.style.cssText = 'display:flex;justify-content:flex-end;gap:8px;margin-top:12px';
+    var bRef = btn('Refresh'), bReload = btn('Reload'), bClear = btn('Clear');
+    r2.appendChild(bRef); r2.appendChild(bReload); r2.appendChild(bClear);
+
+    function fillSelect(entries) {
+      sel.innerHTML = '';
+      var empty = el('option', null, '(none)');
+      empty.value = '';
+      sel.appendChild(empty);
+      (entries || []).forEach(function (e) {
+        var op = el('option', null, e.name);
+        op.value = e.file;
+        sel.appendChild(op);
+      });
+    }
+
+    // Refresh: re-fetch entries + running state, update button availability.
+    function refresh() {
+      fetch('/__agents', { credentials: 'include', signal: AbortSignal.timeout(5000) })
+        .then(function (r) { return r.json(); })
+        .then(function (d) {
+          i.textContent = d.command || '';
+          fillSelect(d.entries);
+          dis(bStart, !!d.running);
+          dis(bRestart, !d.running);
+          dis(bStop, !d.running);
+        })
+        .catch(function () {});
+    }
+    bRef.addEventListener('click', refresh);
+
+    // Reload: restart agent host with bridge args of the selected entry file.
+    bReload.addEventListener('click', function () {
+      var f = sel.value;
+      if (!f) { alert('Select an agent entry first'); return; }
+      post('/__restart?agent=' + encodeURIComponent(f));
+    });
+    // Clear: restart agent host without bridge args.
+    bClear.addEventListener('click', function () {
+      sel.value = '';
+      post('/__agents/restart');
+    });
+
+    b.appendChild(t); b.appendChild(i); b.appendChild(r1);
+    b.appendChild(lbl); b.appendChild(sel); b.appendChild(r2);
+    o.appendChild(b);
+    document.body.appendChild(o);
+
+    function close() { o.remove(); }
+    o.addEventListener('click', function (e) { if (e.target === o) close(); });
+    o.addEventListener('keydown', function (e) {
+      if (e.key === 'Escape') { e.preventDefault(); close(); }
+    });
+    refresh();
+  }
+
+  function agents() {
+    var li = el('li', 'action-item');
+    li.id = '__kvs_agn';
+    at(li, { role: 'presentation', tabindex: '-1' });
+    li.style.cursor = 'pointer';
+    var a = el('a', 'action-menu-item');
+    at(a, { role: 'menuitem', tabindex: '0' });
+    a.style.color = 'var(--vscode-menu-foreground)';
+    var c = el('span', 'menu-item-check codicon codicon-menu-selection');
+    at(c, { role: 'none' });
+    var l = el('span', 'action-label', 'Agents');
+    at(l, { 'aria-label': 'Agents' });
+    a.appendChild(c); a.appendChild(l); li.appendChild(a);
+    a_hover(li);
+    a.addEventListener('click', function (e) {
+      e.preventDefault();
+      e.stopPropagation();
+      agentsDialog();
+    });
+    act(li, agentsDialog);
+    return li;
   }
 
   function upd() {
@@ -293,7 +483,7 @@
     var ab = null;
     if (items) {
       for (var i = items.length - 1; i >= 0; i--) {
-        if (items[i].id !== '__kvs_upd' && items[i].id !== '__kvs_lang') { ab = items[i]; break; }
+        if (items[i].id !== '__kvs_upd' && items[i].id !== '__kvs_lang' && items[i].id !== '__kvs_agn') { ab = items[i]; break; }
       }
     }
     if (!ab) return;
@@ -302,17 +492,24 @@
     if (!(nn && nn.id === '__kvs_lang')) {
       ab.parentNode.insertBefore(lang(), ab.nextSibling);
     }
-    // Insert update item after the language item (if not already there)
+    // Insert agents item after the language item (if not already there)
     var langEl = ab.parentNode.querySelector('#__kvs_lang');
-    if (langEl) {
-      var un = langEl.nextElementSibling;
+    var anchor = langEl || ab;
+    var an = anchor.nextElementSibling;
+    if (!(an && an.id === '__kvs_agn')) {
+      anchor.parentNode.insertBefore(agents(), anchor.nextSibling);
+    }
+    // Insert update item after the agents item (if not already there)
+    var agnEl = ab.parentNode.querySelector('#__kvs_agn');
+    if (agnEl) {
+      var un = agnEl.nextElementSibling;
       if (!(un && un.id === '__kvs_upd')) {
-        langEl.parentNode.insertBefore(upd(), langEl.nextSibling);
+        agnEl.parentNode.insertBefore(upd(), agnEl.nextSibling);
       }
     } else {
-      var n2 = ab.nextElementSibling;
+      var n2 = anchor.nextElementSibling;
       if (!(n2 && n2.id === '__kvs_upd')) {
-        ab.parentNode.insertBefore(upd(), ab.nextSibling);
+        anchor.parentNode.insertBefore(upd(), anchor.nextSibling);
       }
     }
   }

@@ -152,12 +152,22 @@ command = {SVC_BIN_HOME}/bin/code-server --accept-server-license-terms --without
     --server-data-dir ${SVC_HOME}/ --socket-path {KVS_SVC_SOCK_FILE:-./kvs.sock} --start-server \
     {KVS_SVC_EXTARGS}
 
-# 
-
 # https://github.com/microsoft/vscode-loc/tree/main/i18n
 # 仅保留 key 与 value 不对称的语言 (其余语言 value 默认等于 key)
 # 这是对 vscode 专用配置， 在 vscodeNlsHandle 中生效。
-vsc_language = {"zh-cn":"zh-hans", "zh-tw":"zh-hant"} 
+vsc_language = {"zh-cn":"zh-hans", "zh-tw":"zh-hant"}
+
+# DISPLAY=:1 /usr/share/code/code --no-sandbox --user-data-dir /wsc/.vsc/data --extensions-dir /wsc/.vsc/extensions
+# ./code-cli --cli-data-dir /wsc/.vsc/cli agent host --foreground --user-data-dir /wsc/.vsc/data
+# ./code-645f29cc3176500b4b5762ba887cf2a7f0ffdf2c --cli-data-dir /wsc/.vsc/cli agent host --foreground --user-data-dir /wsc/.vsc/data
+# 启动 agents 命令，/usr/share/code/code 是默认， 可以自定义为 ./code-cli
+vsc_agents_cmd = DISPLAY=:1 /usr/share/code/code --no-sandbox --user-data-dir ${SVC_HOME}/data --extensions-dir ${SVC_HOME}/extensions
+# --agent-host-bridge-path ${json.endpoint.path} --agent-host-bridge-connection-token ${json.endpoint.connectionToken}
+# --agent-host-bridge-port ${json.endpoint.port} --agent-host-bridge-connection-token ${json.endpoint.connectionToken} --agent-host-bridge-port 127.0.0.1
+# 列举 vsc_agents_dir 指定的文件内容， 具有 json.endpoint 文件的内容都要读取， 然后给一个列表，包括 json.endpoint.path or port(补充 ws://127.0.0.1:{port})内容
+vsc_agents_dir = ${SVC_HOME}/data/agent-host/local-endpoint/entries/
+# 上面的命令， 增加到 command 中， 默认最好为空，使用自动自动挂着
+vsc_agents_svc = ${KVS_VSC_AGENTS_SVC}
 
 # ----------------------------------------------------------------------------
 # 将应用镜像同步s3服务器上， 这个是为 vscode 定制的功能
