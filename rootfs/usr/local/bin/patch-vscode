@@ -32,6 +32,9 @@
 #   ./patch-agents.sh            # 应用（幂等）
 #   ./patch-agents.sh --revert   # 回滚
 #
+# node 定位：脚本自动查找（PATH → whereis → 系统位置 / VS Code 自带 / nvm），
+#   若环境特殊可用 NODE_BIN=/path/to/node 显式指定。
+#
 # 输出示例:
 #   [patch1:authz] …workbench.js: 替换 2 处 → 语法 OK
 #   [patch2:retry] …workbench.js: 替换 1 处 → 语法 OK
@@ -40,6 +43,43 @@
 set -euo pipefail
 
 S="${SERVER_DIR:-/wsc/.vsc/cli/servers/Stable-7debcd0e2acdea1c52de81bf9ee1620444407dda/server}"
+
+# 解析 node 可执行文件路径（多级兜底，兼容被 hook / 非交互 shell 调起时 PATH 不全的情况）
+#   1) PATH 中的 node（command -v）
+#   2) whereis -b（⚠ whereis 也会读 PATH，PATH 里没有时同样找不到，仅作补充）
+#   3) 固定候选路径：系统位置 → VS Code server 自带 node → nvm（多版本时取版本号最大者）
+_is_node() { [[ -n "${1:-}" && -x "${1:-}" ]]; }
+
+N="${NODE_BIN:-}"                                    # 允许外部显式指定：NODE_BIN=/path/to/node
+if ! _is_node "$N"; then
+  N="$(command -v node 2>/dev/null || true)"
+fi
+if ! _is_node "$N"; then
+  N="$(whereis -b node 2>/dev/null | awk '{print $2}')"
+fi
+if ! _is_node "$N"; then
+  _cands=(
+    /usr/local/bin/node
+    /usr/bin/node
+    /snap/bin/node
+    /opt/homebrew/bin/node
+    "$S/node"
+    "${HOME:-/root}"/.nvm/versions/node/*/bin/node
+    /root/.nvm/versions/node/*/bin/node
+  )
+  for _c in "${_cands[@]}"; do
+    _is_node "$_c" && N="$_c"   # 后面的候选覆盖前面的：nvm 最新版 / VS Code 自带 node 优先
+  done
+  unset _cands _c
+fi
+if ! _is_node "$N"; then
+  echo "[error] 未找到可用的 node 可执行文件。" >&2
+  echo "[error] 已尝试：command -v node、whereis -b node、/usr/local/bin、/usr/bin、\$S/node、nvm 目录" >&2
+  echo "[error] 当前 PATH=$PATH" >&2
+  echo "[error] 请安装 node，或手动指定：NODE_BIN=/path/to/node $0" >&2
+  exit 1
+fi
+echo "[info] 使用 node: $N ($("$N" --version 2>/dev/null || echo '版本未知'))"
 
 # 目标 server 目录不存在（未部署 / 正在重装）时直接跳过
 if [[ ! -d "$S" ]]; then
@@ -70,7 +110,7 @@ if [[ "$MODE" == "--revert" ]]; then
   for f in "${FILES[@]}"; do
     if [[ -f "$f.bak3" ]]; then
       cp "$f.bak3" "$f"
-      node --check "$f" && echo "[revert] 恢复原始文件 + 语法 OK: $(basename "$f")"
+      "$N" --check "$f" && echo "[revert] 恢复原始文件 + 语法 OK: $(basename "$f")"
     else
       echo "[revert] 无备份 (.bak3)，跳过: $(basename "$f")"
     fi
@@ -82,7 +122,7 @@ fi
 # 用 node 做精确字符串替换：匹配数不等于预期则中止，避免误伤 minified 代码
 apply_patch() {
   local file="$1" target="$2" repl="$3" expected="$4" tag="$5"
-  node - "$file" "$target" "$repl" "$expected" "$tag" <<'EOF'
+  "$N" - "$file" "$target" "$repl" "$expected" "$tag" <<'EOF'
 const fs = require('fs');
 const [file, target, replacement, expectedStr, tag] = process.argv.slice(2);
 const expected = Number(expectedStr);
@@ -100,7 +140,7 @@ EOF
 # 用 node 做正则替换：pattern 支持捕获组，replacement 支持 $1..$9 回填
 apply_patch_re() {
   local file="$1" pattern="$2" repl="$3" expected="$4" tag="$5"
-  node - "$file" "$pattern" "$repl" "$expected" "$tag" <<'EOF'
+  "$N" - "$file" "$pattern" "$repl" "$expected" "$tag" <<'EOF'
 const fs = require('fs');
 const [file, pattern, replacement, expectedStr, tag] = process.argv.slice(2);
 const expected = Number(expectedStr);
@@ -127,7 +167,7 @@ for f in "${FILES[@]}"; do
   else
     apply_patch "$f" "$AU_TARGET" "$AU_REPL" "$AU_EXPECTED" "[patch1:authz]"
   fi
-  node --check "$f" && echo "[patch1:authz] 语法 OK: $base"
+  "$N" --check "$f" && echo "[patch1:authz] 语法 OK: $base"
 
   # ---- Patch 2: retry createSession 遇 AUTH 错误自动重推配置 + 重试 ----
   if grep -q "$RT_MARK" "$f"; then
@@ -135,7 +175,7 @@ for f in "${FILES[@]}"; do
   else
     apply_patch_re "$f" "$RT_TARGET_RE" "$RT_REPL" "$RT_EXPECTED" "[patch2:retry]"
   fi
-  node --check "$f" && echo "[patch2:retry] 语法 OK: $base"
+  "$N" --check "$f" && echo "[patch2:retry] 语法 OK: $base"
 done
 
 echo '---- 验证 ----'
