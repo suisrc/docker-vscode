@@ -24,7 +24,7 @@ import (
 	"time"
 )
 
-//go:embed favicon.ico loading.html login.html logout.vsc.js kvs.ini.example
+//go:embed favicon.ico loading.html login.html logout.vsc.js kvs.ini.example zlist.html
 var staticFS embed.FS
 
 // MustAsset reads an embedded asset by name, failing fast at startup if missing.
@@ -135,6 +135,17 @@ func newBackend(prefix, rawURL string) *Backend {
 // Backend Handlers — createBackendHandler dispatches to the right handler type.
 // =============================================================================
 
+// apiHandleMap is the registry for "api://" backends: handler name →
+// http.Handler. Modules register their handlers via registerAPI at init
+// time (e.g. zcode.go registers "zlist"); api://<name> looks the handler
+// up here directly.
+var apiHandleMap = map[string]http.Handler{}
+
+// registerAPI adds a handler to the api:// registry.
+func registerAPI(name string, h http.Handler) {
+	apiHandleMap[name] = h
+}
+
 // CreateBackendHandler builds an http.Handler for the given backend.
 // Supported schemes: http, https, ws, wss (reverse proxy), unix (reverse proxy),
 // file (directory), text (literal).
@@ -198,6 +209,36 @@ func CreateBackendHandler(b Backend, cacheHeaders map[string]string, loginAuthz 
 		dir := b.Target
 		log.Printf("backend file server: %s", dir)
 		return http.StripPrefix(b.Prefix, http.FileServer(http.Dir(dir)))
+
+	case "wsws":
+		// In-process WebSocket relay backend (ws-to-ws, e.g. the zcode
+		// pairing relay): the target is a logical relay name resolved by
+		// zcodeGetRelay (optionally "/state-file"), not a host:port. The
+		// relay is role-agnostic — the routing prefix (any prefix) is where
+		// both desktop and web clients connect. Upgrade requests are handed
+		// to the relay state machine; anything else is a 426.
+		log.Printf("backend wsws relay: %s", b.Target)
+		relay := zcodeGetRelay(b.Target)
+		return http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+			if !isWebSocketUpgrade(r) {
+				w.Header().Set("Upgrade", "websocket")
+				http.Error(w, "websocket upgrade required", http.StatusUpgradeRequired)
+				return
+			}
+			relay.Handle(w, r)
+		})
+
+	case "api":
+		// In-process API backend: the target names a handler registered in
+		// apiHandleMap; the response is rendered directly by Go code
+		// (no subprocess). Handlers are registered via registerAPI from
+		// their owning modules (e.g. zcode.go registers "zlist").
+		if h, ok := apiHandleMap[b.Target]; ok {
+			log.Printf("backend api handler: %s", b.Target)
+			return h
+		}
+		log.Fatalf("unknown api handler %q in %q", b.Target, b.RawURL)
+		return nil
 
 	case "text":
 		content := b.Target

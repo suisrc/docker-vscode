@@ -58,6 +58,7 @@ type Config struct {
 	LoginTimeout int               // login_timeout (seconds); 0=session; >0=hashed+expiring; <0=error
 	UseSSL       bool              // use_ssl — enable HTTPS with a self-signed cert
 	Headers      map[string]string // [headers] section: Xxx=Val → set/override; Xxx= → delete
+	PathPublic   []string          // path_public — |-separated paths reachable without auth
 	InitError    string            // non-fatal init error (e.g. version resolve failure); shown on loading page
 }
 
@@ -736,6 +737,17 @@ func LoadInitConfig() Config {
 	cfg.LoginToken = expandValue(strProp(ini, "login_token", ""), svcVars)
 	cfg.LoginTimeout = parseTimeout(expandValue(strProp(ini, "login_timeout", "0"), svcVars))
 	cfg.UseSSL = parseBool(expandValue(strProp(ini, "use_ssl", ""), svcVars), false)
+// path_public — |-separated list of paths reachable without auth
+	// (e.g. /api/v1/public|/remote/v4). Non-empty entries are kept as-is;
+	// prefix matching is applied by the auth middleware.
+	if raw := expandValue(strProp(ini, "path_public", ""), svcVars); raw != "" {
+		for _, p := range strings.Split(raw, "|") {
+			if p = strings.TrimSpace(p); p != "" {
+				cfg.PathPublic = append(cfg.PathPublic, p)
+			}
+		}
+	}
 
+	
 	return cfg
 }

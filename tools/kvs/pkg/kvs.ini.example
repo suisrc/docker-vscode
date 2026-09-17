@@ -36,6 +36,9 @@ login_timeout = {KVS_LOGIN_TIMEOUT:-0}
 # Cookie 名
 cookie = {KVS_COOKIE:-kvs}
 
+# 不需要鉴权的接口， 格式： /api/v1/public|/api/v2/public|...
+path_public = {KVS_PATH_PUBLIC}
+
 # ----------------------------------------------------------------------------
 # 后端路由 ([proxies] 段，必填)
 # ----------------------------------------------------------------------------
