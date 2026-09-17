@@ -36,6 +36,7 @@ type Config struct {
 	SvcDownloadFieldURL string // download_field_url — JSON field for URL in download_info
 	SvcDownloadProxy    string // download_proxy — proxy URL (http/https/socks5) for downloads
 	SvcCacheDir         string // cache_dir — cache directory
+	SvcCacheSed         string // cache_sed — cc~ cache rewrite rules: file|old|new||... (via KVS_CC_SED)
 	SvcProxyPath        string // proxy_path — /__cache/ path prefix
 	SvcBinHome          string // bin_home — extracted bin directory, → SVC_BIN_HOME
 	SvcOnceShell        string // once_shell — one-time script (file:// or sh -c), runs once per deploy, guarded by {bin_home}/__once__
@@ -68,6 +69,8 @@ type Backend struct {
 	RawURL    string // original URL for logging
 	IsService bool   // this backend is the one managed by kvs (auto-deploy, etc.)
 	IsRegex   bool   // prefix is a regex pattern (^ prefix in [proxies])
+	IsCache   bool   // cc~ prefix: cache proxied responses on disk ({cache_dir:-/cache}/ccproxy/{scheme}:{host}/path)
+	IsWSock   bool   // ws~ prefix (or ws://wss:// url scheme): WebSocket-aware route, upgrade requests detected and handled separately
 }
 
 // iniFile holds parsed key-value pairs from kvs.ini.
@@ -621,6 +624,14 @@ func LoadInitConfig() Config {
 	svcVars["SVC_HOME"] = cfg.SvcHome
 	_ = os.Setenv("SVC_HOME", cfg.SvcHome)
 
+	// 1b. cache_dir → expanded with svcVars. Parsed even in -n mode so
+	// cc~ marked backends can honor a configured cache directory.
+	cfg.SvcCacheDir = expandValue(svcStr(ini, "cache_dir", ""), svcVars)
+
+	// 1c. cache_sed → cc~ 缓存内容替换规则 (file|old|new||...)。与 cache_dir
+	// 一样在 -n 模式下也解析，使 cc~ 标记的后端也能做缓存内容替换。
+	cfg.SvcCacheSed = expandValue(svcStr(ini, "cache_sed", ""), svcVars)
+
 	if !useN {
 		// 1b. version_base_url → SVC_VERSION_BASE_URL (before version_latest_url etc.)
 		svcVersionBaseURL := expandValue(svcStr(ini, "version_base_url", ""), svcVars)
@@ -658,9 +669,6 @@ func LoadInitConfig() Config {
 		cfg.SvcDownloadInfo = expandValue(svcStr(ini, "download_info", ""), svcVars)
 		cfg.SvcDownloadFieldURL = expandValue(svcStr(ini, "download_field_url", "url"), svcVars)
 		cfg.SvcDownloadProxy = expandValue(svcStr(ini, "download_proxy", ""), svcVars)
-
-		// 5. cache_dir → expand with svcVars
-		cfg.SvcCacheDir = expandValue(svcStr(ini, "cache_dir", ""), svcVars)
 
 		// 6. bin_home → SVC_BIN_HOME
 		cfg.SvcBinHome = expandValue(svcStr(ini, "bin_home", ""), svcVars)

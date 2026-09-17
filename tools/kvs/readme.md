@@ -70,6 +70,7 @@ make build
 - `&/path/` → kvs 托管的服务后端（触发自动部署、loading 页）
 - `^pattern` → 正则表达式匹配
 - `http://` 或 `https://` 开头 → 全域名匹配
+- `ws://` 或者 `wss://` 开头 → 全域名匹配
 
 > **服务后端必须以 `&` 开头显式标记**，无隐式提升。
 
@@ -80,6 +81,7 @@ make build
 | 协议 | 格式 | 说明 |
 |---|---|---|
 | `http` / `https` | `http://host:port` | 反向代理到 HTTP 后端 |
+| `ws` / `wss` | `ws://host:port` | 反向代理到 HTTP 后端 |
 | `unix` | `unix:///path/to/sock` | 反向代理到 Unix domain socket |
 | `file` | `file:///var/www` | 静态文件服务器（`http.FileServer`） |
 | `text` | `text://任意文本` | 直接返回文本内容；支持 `@now` 替换为当前时间（RFC3339） |

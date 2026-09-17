@@ -55,7 +55,12 @@ func MustAsset(name string) []byte {
 // Prefix markers:
 //   - "&" prefix: kvs-managed service backend (auto-deploy, loading page)
 //   - "^" prefix: regex pattern match (cannot combine with "&")
+//   - "cc~" prefix: cached proxy backend (disk cache)
+//   - "ws~" prefix: WebSocket-aware backend (upgrade requests detected)
 //   - "http://" or "https://" prefix on the prefix itself: full-domain match
+//
+// Markers may combine (e.g. "&cc~/" is a kvs-managed cached backend); they
+// are stripped in any order.
 //
 // Service backends must be explicitly marked with "&"; there is no implicit
 // single-backend-to-service promotion.
@@ -69,10 +74,21 @@ func parseBackends(entries [][2]string) []Backend {
 			continue
 		}
 
-		// Detect service marker ("&" prefix) and strip it for routing.
-		isService := strings.HasPrefix(prefix, "&")
-		if isService {
-			prefix = strings.TrimPrefix(prefix, "&")
+		// Strip prefix markers (in any order, so "&cc~/" etc. combine).
+		var isService, isCache, isWSock bool
+		for changed := true; changed; {
+			changed = false
+			switch {
+			case strings.HasPrefix(prefix, "&"):
+				prefix = prefix[1:]
+				isService, changed = true, true
+			case strings.HasPrefix(prefix, "cc~"):
+				prefix = prefix[3:]
+				isCache, changed = true, true
+			case strings.HasPrefix(prefix, "ws~"):
+				prefix = prefix[3:]
+				isWSock, changed = true, true
+			}
 		}
 
 		// Detect regex marker ("^" prefix).
@@ -89,6 +105,8 @@ func parseBackends(entries [][2]string) []Backend {
 		if b := newBackend(prefix, urlStr); b != nil {
 			b.IsService = isService
 			b.IsRegex = isRegex
+			b.IsCache = isCache
+			b.IsWSock = isWSock
 			backends = append(backends, *b)
 		}
 	}
@@ -118,10 +136,22 @@ func newBackend(prefix, rawURL string) *Backend {
 // =============================================================================
 
 // CreateBackendHandler builds an http.Handler for the given backend.
-// Supported schemes: http, https, unix (reverse proxy), file (directory), text (literal).
+// Supported schemes: http, https, ws, wss (reverse proxy), unix (reverse proxy),
+// file (directory), text (literal).
+//
+// Backend markers:
+//   - cc~ (b.IsCache): proxied GET responses are cached on disk under
+//     {cache_dir:-/cache}/ccproxy/{scheme}:{host}/path
+//   - ws~ / ws:// / wss:// (b.IsWSock): WebSocket-aware route — upgrade requests
+//     are detected and handled through the upgrade-capable proxy transport.
 func CreateBackendHandler(b Backend, cacheHeaders map[string]string, loginAuthz bool) http.Handler {
 	switch b.Scheme {
-	case "http", "https":
+	case "http", "https", "ws", "wss":
+		// ws/wss backends are plain HTTP under the hood; mark them as
+		// WebSocket routes so upgrade requests get the dedicated handling.
+		if b.Scheme == "ws" || b.Scheme == "wss" {
+			b.IsWSock = true
+		}
 		targetURL, err := url.Parse(b.RawURL)
 		if err != nil {
 			log.Fatalf("invalid backend URL %q: %v", b.RawURL, err)
@@ -134,6 +164,12 @@ func CreateBackendHandler(b Backend, cacheHeaders map[string]string, loginAuthz 
 		}
 		if loginAuthz {
 			rp.ModifyResponse = cacheResponseModifier()
+		}
+		if b.IsCache {
+			return HandleCCBackend(b)
+		}
+		if b.IsWSock {
+			return wsProxyHandler(b, rp)
 		}
 		return rp
 
@@ -372,4 +408,39 @@ func generateSelfSignedCert() (tls.Certificate, error) {
 	keyPEM := pem.EncodeToMemory(&pem.Block{Type: "EC PRIVATE KEY", Bytes: keyDER})
 
 	return tls.X509KeyPair(certPEM, keyPEM)
+}
+
+// =============================================================================
+// WebSocket-aware proxying (ws~ marked routes)
+// =============================================================================
+
+// isWebSocketUpgrade reports whether the client requests a WebSocket
+// connection: Upgrade: websocket plus a Connection header containing the
+// "upgrade" token (Connection may list multiple tokens).
+func isWebSocketUpgrade(r *http.Request) bool {
+	if !strings.EqualFold(r.Header.Get("Upgrade"), "websocket") {
+		return false
+	}
+	for _, v := range r.Header.Values("Connection") {
+		for _, tok := range strings.Split(v, ",") {
+			if strings.EqualFold(strings.TrimSpace(tok), "upgrade") {
+				return true
+			}
+		}
+	}
+	return false
+}
+
+// wsProxyHandler wraps the reverse proxy of a ws~ marked backend. Upgrade
+// requests are detected and logged as WS routes (routed through the
+// hijack-capable ReverseProxy transport, which transparently tunnels the
+// 101 Switching Protocols handshake and the bidirectional frames); all other
+// requests fall through as regular HTTP proxying.
+func wsProxyHandler(b Backend, rp http.Handler) http.Handler {
+	return http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		if isWebSocketUpgrade(r) {
+			log.Printf("[ws] upgrade %s%s → %s (scheme=%s)", r.Host, r.URL.Path, b.RawURL, b.Scheme)
+		}
+		rp.ServeHTTP(w, r)
+	})
 }

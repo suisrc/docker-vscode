@@ -1,12 +1,15 @@
 package pkg
 
 import (
+	"bytes"
+	"compress/gzip"
 	"encoding/json"
 	"fmt"
 	"io"
 	"log"
 	"net"
 	"net/http"
+	"net/url"
 	"os"
 	"path/filepath"
 	"strings"
@@ -51,6 +54,10 @@ func SetCacheConfig(cacheDir, proxyPath string) {
 	cacheOverride = filepath.Join(cacheDir, "ccproxy")
 	proxyPathPrefix = NormalizeProxyPath(proxyPath)
 }
+
+// SetCacheSed parses the cache_sed rules ("file|old|new||...") and enables
+// cache content rewriting for cc~ cached responses. Empty rules disable it.
+func SetCacheSed(rules string) { parseCacheSed(rules) }
 
 // CachePathPrefix reports the registered proxy_path prefix (empty = disabled).
 func CachePathPrefix() string { return proxyPathPrefix }
@@ -101,18 +108,30 @@ type cacheMeta struct {
 //
 // Cache layout mirrors the URL structure:
 //
-//	{KVS_SVC_PROXYPATH}/{scheme}:{host}/path/to/file.js       → body
-//	{KVS_SVC_PROXYPATH}/{scheme}:{host}/path/to/file.js_.json  → metadata
+//	{root}/{scheme}:{host}/path/to/file.js       → body
+//	{root}/{scheme}:{host}/path/to/file.js_.json  → metadata
 //
 // The rest path is cleaned and stripped of leading "/" to stay within
 // the cache root.  Requests for the root path use "__index" as filename.
-func cachePaths(scheme, host, rest string) (bodyPath, metaPath string) {
+func cachePaths(root, scheme, host, rest string) (bodyPath, metaPath string) {
 	// Clean and make relative to prevent directory traversal.
 	p := strings.TrimPrefix(filepath.Clean(rest), "/")
 	if p == "" || p == "." {
 		p = "__index"
 	}
-	base := filepath.Join(cacheRoot, scheme+":"+host, p)
+	base := filepath.Join(root, scheme+":"+host, p)
+	return base, base + "_.json"
+}
+
+// cachePathsVersioned is cachePaths with an extra version segment after the
+// host: {root}/{scheme}:{host}/{version}/path (body + "_.json" sidecar).
+// version is expected to be a single sanitized path segment.
+func cachePathsVersioned(root, scheme, host, version, rest string) (bodyPath, metaPath string) {
+	p := strings.TrimPrefix(filepath.Clean(rest), "/")
+	if p == "" || p == "." {
+		p = "__index"
+	}
+	base := filepath.Join(root, scheme+":"+host, version, p)
 	return base, base + "_.json"
 }
 
@@ -188,7 +207,7 @@ func HandleCache(w http.ResponseWriter, r *http.Request) {
 	}
 
 	// Try cache lookup; on MISS fetch, stream and store.
-	bodyPath, metaPath := cachePaths(scheme, host, rest)
+	bodyPath, metaPath := cachePaths(cacheRoot, scheme, host, rest)
 	if serveFromCache(w, bodyPath, metaPath, targetURL) {
 		return
 	}
@@ -323,7 +342,6 @@ func handleCachedCache(w http.ResponseWriter, r *http.Request, targetURL, bodyPa
 		}
 	}
 	w.Header().Set("X-Cache", "MISS")
-	w.WriteHeader(resp.StatusCode)
 
 	// Ensure cache directory exists.
 	if err := os.MkdirAll(filepath.Dir(bodyPath), 0o755); err != nil {
@@ -332,7 +350,49 @@ func handleCachedCache(w http.ResponseWriter, r *http.Request, targetURL, bodyPa
 		return
 	}
 
-	// Stream to client + temp file simultaneously.
+	// cache_sed path: buffer the body, rewrite it (gzip aware, backing the
+	// original up as <file>_.bak1), and serve + store the REWRITTEN content —
+	// the client gets the rewritten body on this very first request.
+	if sedRules != nil {
+		data, err := io.ReadAll(resp.Body)
+		if err != nil {
+			log.Printf("[cache] read body FAIL: %v", err)
+			return
+		}
+		out, changed, err := sedRewrite(filepath.Base(bodyPath), data, isGzipMeta(meta), r.Host)
+		if err != nil {
+			log.Printf("[cache] cache_sed FAIL: %s → %v", bodyPath, err)
+			out, changed = data, false // serve/store the untouched original
+		}
+		if changed {
+			// Keep the original bytes once: <file>_.bak1 (never overwritten).
+			bakPath := bodyPath + "_.bak1"
+			if _, err := os.Stat(bakPath); os.IsNotExist(err) {
+				if err := atomicWriteFile(bakPath, data, 0o644); err != nil {
+					log.Printf("[cache] cache_sed backup FAIL: %v", err)
+				} else {
+					log.Printf("[cache] cache_sed: backup %s → %s", filepath.Base(bodyPath), filepath.Base(bakPath))
+				}
+			}
+			// Content-Length no longer matches the rewritten body.
+			delete(meta.Headers, "Content-Length")
+			w.Header().Del("Content-Length")
+		}
+		w.WriteHeader(resp.StatusCode)
+		_, _ = w.Write(out)
+		if err := atomicWriteFile(bodyPath, out, 0o644); err != nil {
+			log.Printf("[cache] write body FAIL: %s → %v", bodyPath, err)
+			return
+		}
+		if err := writeCacheMeta(metaPath, meta); err != nil {
+			log.Printf("[cache] write meta FAIL: %s → %v", metaPath, err)
+		} else {
+			log.Printf("[cache] CACHED %s → %s (%d bytes, sed=%v)", targetURL, bodyPath, len(out), changed)
+		}
+		return
+	}
+
+	// Plain path: stream to client + temp file simultaneously.
 	tmp, err := os.CreateTemp(filepath.Dir(bodyPath), ".tmp-*")
 	if err != nil {
 		log.Printf("[cache] create temp FAIL: %v", err)
@@ -425,4 +485,255 @@ func atomicWriteFile(path string, data []byte, perm os.FileMode) error {
 		return err
 	}
 	return os.Rename(tmpName, path)
+}
+
+// =============================================================================
+// cc~ Backends — static file proxy caching per [proxies] route
+// =============================================================================
+
+// defaultCacheDir is the cache root fallback when cache_dir is not
+// configured.
+const defaultCacheDir = "/cache"
+
+// cacheBase holds the cc~ backend cache root: {cache_dir:-/cache}/ccproxy.
+// This is the same directory used by the /__cache/ proxy cache
+// ({cache_dir}/ccproxy), so cc~ backends and /__cache/cc~ requests share
+// the same on-disk cache content.
+var cacheBase string
+
+// SetCacheDir configures the cc~ backend cache root from the cache_dir
+// config value (empty → /cache). Call before routes are built.
+func SetCacheDir(cacheDir string) {
+	base := cacheDir
+	if base == "" {
+		base = defaultCacheDir
+	}
+	cacheBase = filepath.Join(base, "ccproxy")
+	log.Printf("[cache] cc~ backend cache root: %s", cacheBase)
+}
+
+// HandleCCBackend returns the caching proxy handler for a cc~ marked backend
+// (http/https only). Proxied responses are cached at
+// {cache_dir:-/cache}/ccproxy/{scheme}:{host}/path, mirroring the URL
+// structure (body + "_.json" metadata sidecar), reusing the same cache
+// machinery as the /__cache/ proxy route:
+//   - only GET 2xx/404 responses are cached
+//   - cache HITs are served directly from disk
+//   - non-GET requests pass through uncached
+//
+// KVS_CC_VER_REFERER (a query key name, e.g. "app_version"): when set AND the
+// request's Referer URL carries that query key, the key's value is inserted
+// as a version path segment after the host:
+//
+//	{cache_dir}/ccproxy/{scheme}:{host}/{version}/{path}
+//
+// Missing config, missing Referer, or missing key → plain layout (ignored).
+func HandleCCBackend(b Backend) http.Handler {
+	scheme := b.Scheme
+	host := b.Target
+	return http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		cacheOnce.Do(initCache)
+
+		// Sub-path of the backend: strip the routing prefix (full path for
+		// regex backends, where the prefix is the pattern itself).
+		rest := r.URL.Path
+		if !b.IsRegex {
+			rest = strings.TrimPrefix(rest, b.Prefix)
+		}
+		if rest == "" {
+			rest = "/"
+		}
+
+		targetURL := buildTargetURL(scheme, host, rest, r.URL.RawQuery)
+		log.Printf("[cache] cc~ %s %s → %s", r.Method, r.URL.Path, targetURL)
+
+		if r.Method != http.MethodGet {
+			handlePassThroughCache(w, r, targetURL)
+			return
+		}
+
+		// Version segment from the Referer query (KVS_CC_VER_REFERER):
+		// cache layout becomes {cache_dir}/ccproxy/{scheme}:{domain}/{version}/{target-path}/{path}
+		// — the version goes right after the domain, before the backend
+		// target's own path prefix (e.g. "remote/v4").
+		var bodyPath, metaPath string
+		if v := refererVersion(r); v != "" {
+			log.Printf("[cache] cc~ version segment: %s", v)
+			// host may carry a path (e.g. "zcode.z.ai/remote/v4") — split
+			// domain from path so the version lands between them.
+			domain, targetPath := host, ""
+			if i := strings.Index(host, "/"); i >= 0 {
+				domain, targetPath = host[:i], host[i:]
+			}
+			bodyPath, metaPath = cachePathsVersioned(cacheBase, scheme, domain, v, targetPath+rest)
+		} else {
+			bodyPath, metaPath = cachePaths(cacheBase, scheme, host, rest)
+		}
+		if serveFromCache(w, bodyPath, metaPath, targetURL) {
+			return
+		}
+		handleCachedCache(w, r, targetURL, bodyPath, metaPath)
+	})
+}
+
+// refererVersion extracts the version segment from the request's Referer.
+// KVS_CC_VER_REFERER names a query key (e.g. "app_version"); when the key is
+// present in the Referer URL query, its value is sanitized into a single
+// safe path segment and returned. Returns "" when disabled or absent.
+func refererVersion(r *http.Request) string {
+	key := os.Getenv("KVS_CC_VER_REFERER")
+	if key == "" || r == nil {
+		return ""
+	}
+	ref := r.Header.Get("Referer")
+	if ref == "" {
+		return ""
+	}
+	u, err := url.Parse(ref)
+	if err != nil {
+		return ""
+	}
+	v := u.Query().Get(key)
+	if v == "" {
+		return ""
+	}
+	// Sanitize into one safe path segment (letters, digits, dot, dash, _).
+	v = strings.Map(func(c rune) rune {
+		switch {
+		case c >= 'a' && c <= 'z', c >= 'A' && c <= 'Z', c >= '0' && c <= '9':
+			return c
+		case c == '.', c == '-', c == '_':
+			return c
+		default:
+			return '-'
+		}
+	}, v)
+	return v
+}
+
+// =============================================================================
+// cache_sed — rewrite cc~ cached response bodies on write
+// =============================================================================
+
+// cacheSedRule is one parsed rewrite group: "<file>|<old>|<new>".
+// file supports a single '*' wildcard (prefix*/suffix match); without '*'
+// the cache file base name must equal the rule's file field exactly.
+type cacheSedRule struct {
+	file string // match pattern against the cache file base name
+	old  string // literal content to find
+	new  string // replacement content
+}
+
+// sedRules holds the parsed cache_sed groups; nil = feature disabled.
+var sedRules []cacheSedRule
+
+// parseCacheSed parses "file|old|new||file2|old2|new2||..." into sedRules.
+// '|' separates fields inside a group; '||' separates groups. A group with
+// fewer than 3 fields is skipped with a warning. Empty input disables the
+// feature (sedRules = nil).
+func parseCacheSed(spec string) {
+	spec = strings.TrimSpace(spec)
+	if spec == "" {
+		sedRules = nil
+		return
+	}
+	var rules []cacheSedRule
+	for _, part := range strings.Split(spec, "||") {
+		fields := strings.Split(part, "|")
+		if len(fields) < 3 {
+			log.Printf("[cache] cache_sed: skip invalid group %q (want file|old|new)", part)
+			continue
+		}
+		file := strings.TrimSpace(fields[0])
+		if file == "" {
+			log.Printf("[cache] cache_sed: skip group with empty file pattern")
+			continue
+		}
+		rules = append(rules, cacheSedRule{file: file, old: fields[1], new: fields[2]})
+	}
+	if len(rules) == 0 {
+		sedRules = nil
+		log.Printf("[cache] cache_sed: no valid rules, disabled")
+		return
+	}
+	sedRules = rules
+	log.Printf("[cache] cache_sed: %d rule(s) enabled", len(rules))
+}
+
+// sedFileMatch reports whether the rule matches the cache file base name.
+// A '*' in the pattern splits it into prefix+suffix parts; the name must
+// start with the prefix and end with the suffix. Without '*' exact match.
+func sedFileMatch(pattern, name string) bool {
+	if !strings.Contains(pattern, "*") {
+		return pattern == name
+	}
+	prefix, suffix, _ := strings.Cut(pattern, "*")
+	return strings.HasPrefix(name, prefix) && strings.HasSuffix(name, suffix)
+}
+
+// isGzipMeta reports whether the cache metadata records a gzip body.
+func isGzipMeta(meta *cacheMeta) bool {
+	for _, v := range meta.Headers["Content-Encoding"] {
+		if strings.EqualFold(strings.TrimSpace(v), "gzip") {
+			return true
+		}
+	}
+	return false
+}
+
+// sedRewrite applies every matching cache_sed rule to the (possibly gzip
+// compressed) body bytes:
+//   - gzip bodies are decompressed, rewritten, then re-compressed;
+//   - plain bodies are rewritten directly;
+//   - ">host<" inside the replacement value expands to the current request's
+//     Host header (e.g. rule "src-*.js|`wss://up/ws`|`wss://>host</ws`"
+//     rewrites to the host the client actually connected to);
+//
+// Returns the (possibly rewritten) bytes and whether any rule changed the
+// content. The original bytes stay untouched — the caller decides what to do
+// with them (backup, serving, storing).
+func sedRewrite(name string, data []byte, isGzip bool, host string) ([]byte, bool, error) {
+	payload := data
+	if isGzip {
+		zr, err := gzip.NewReader(bytes.NewReader(data))
+		if err != nil {
+			return nil, false, fmt.Errorf("gzip open: %w", err)
+		}
+		payload, err = io.ReadAll(zr)
+		zr.Close()
+		if err != nil {
+			return nil, false, fmt.Errorf("gzip read: %w", err)
+		}
+	}
+
+	// Apply every matching rule; remember whether anything changed.
+	changed := false
+	for _, rule := range sedRules {
+		if !sedFileMatch(rule.file, name) || !strings.Contains(string(payload), rule.old) {
+			continue
+		}
+		newVal := strings.ReplaceAll(rule.new, ">host<", host)
+		payload = []byte(strings.ReplaceAll(string(payload), rule.old, newVal))
+		changed = true
+		log.Printf("[cache] cache_sed: %s: %q → %q", name, rule.old, newVal)
+	}
+	if !changed {
+		return data, false, nil
+	}
+
+	// Re-compress gzip bodies.
+	out := payload
+	if isGzip {
+		var buf bytes.Buffer
+		zw := gzip.NewWriter(&buf)
+		if _, err := zw.Write(payload); err != nil {
+			return nil, false, fmt.Errorf("gzip write: %w", err)
+		}
+		if err := zw.Close(); err != nil {
+			return nil, false, fmt.Errorf("gzip close: %w", err)
+		}
+		out = buf.Bytes()
+	}
+	log.Printf("[cache] cache_sed: rewritten %s (%d → %d bytes)", name, len(data), len(out))
+	return out, true, nil
 }

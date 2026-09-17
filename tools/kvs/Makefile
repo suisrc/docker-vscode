@@ -26,6 +26,15 @@ vscode:
 	KVS_HOME=../../temp/.vsc \
 	go run main.go -c default
 
+# KVS_CC_SED='src-*.js|`wss://zcode.z.ai/ws`|`wss://>host</ws`'
+# KVS_CC_SED='index-*.js|overrideUrl:void 0|overrideUrl:`wss://>host</ws`'
+# ws~/ws=http://127.0.0.1:8081;
+zcode:
+	KVS_DEBUG=1 KVS_PORT=7180 KVS_LOGIN_AUTHZ=true KVS_LOGIN_TOKEN=123456 \
+	KVS_HOME=../../temp/.zco KVS_CC_VER_REFERER=app_version \
+	KVS_CC_SED='index-*.js|overrideUrl:void 0|overrideUrl:`wss://>host</ws`' \
+	go run main.go -n "ws~/ws=http://127.0.0.1:8787;cc~/remote/v4=https://zcode.z.ai/remote/v4"
+
 # export K3S_MIRROR_VSCODE_S3_ACCESS=
 # export K3S_MIRROR_VSCODE_S3_SECRET=
 mirror:

@@ -47,6 +47,11 @@ func main() {
 	if cfg.SvcCacheDir != "" {
 		pkg.SetCacheConfig(cfg.SvcCacheDir, cfg.SvcProxyPath)
 	}
+	// cc~ marked backends always have disk caching available, defaulting to
+	// /cache when cache_dir is not configured.
+	pkg.SetCacheDir(cfg.SvcCacheDir)
+	// cache_sed: rewrite cc~ cached bodies (file|old|new||... rules).
+	pkg.SetCacheSed(cfg.SvcCacheSed)
 
 	// Service preparation state (for showing loading page during download/extract).
 	srvState := &pkg.ServiceState{}
@@ -59,6 +64,7 @@ func main() {
 		re        *regexp.Regexp // compiled regex for ^-prefixed backends, nil otherwise
 		handler   http.Handler
 		isService bool
+		exact     bool // ws~ backends: request path must equal prefix exactly (no prefix match)
 	}
 	routes := make([]route, len(cfg.Proxies))
 	servicePrefix := "" // prefix of the kvs-managed service backend, "" if none
@@ -71,7 +77,7 @@ func main() {
 			}
 			re = compiled
 		}
-		routes[i] = route{prefix: b.Prefix, re: re, handler: pkg.CreateBackendHandler(b, cfg.Headers, cfg.LoginAuthz), isService: b.IsService}
+		routes[i] = route{prefix: b.Prefix, re: re, handler: pkg.CreateBackendHandler(b, cfg.Headers, cfg.LoginAuthz), isService: b.IsService, exact: b.IsWSock}
 		if b.IsService {
 			servicePrefix = b.Prefix
 		}
@@ -430,9 +436,14 @@ func main() {
 		}
 		// Dispatch to the first matching route.
 		for _, rt := range routes {
-			// Match: regex backends use regexp.Match; others use prefix match.
+			// Match: regex backends use regexp.Match; ws~ backends require
+			// the path to equal the prefix exactly; others use prefix match.
 			if rt.re != nil {
 				if !rt.re.MatchString(r.URL.Path) {
+					continue
+				}
+			} else if rt.exact {
+				if r.URL.Path != rt.prefix {
 					continue
 				}
 			} else {
@@ -529,7 +540,13 @@ func main() {
 	for i, b := range cfg.Proxies {
 		marker := ""
 		if b.IsService {
-			marker = " (service)"
+			marker += " (service)"
+		}
+		if b.IsCache {
+			marker += " (cc cache)"
+		}
+		if b.IsWSock {
+			marker += " (ws)"
 		}
 		log.Printf("  route[%d] %s → %s://%s%s", i, b.Prefix, b.Scheme, b.Target, marker)
 	}

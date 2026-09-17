@@ -52,6 +52,8 @@ cookie = {KVS_COOKIE:-kvs}
 #   /=text://Hello World
 #
 # 多后端示例:
+#   ws~/=ws://localhost:8080 #特殊
+#   cc~/=https://api:8080  自动缓存
 #   /api/=http://api:8080  前缀匹配
 #   /cdn/=file:///var/www  静态文件
 #   ^xxx=http://localhost:8080  正则表达式匹配
@@ -61,6 +63,8 @@ cookie = {KVS_COOKIE:-kvs}
 # 特殊示例
 #   /__healthz=text://OK:@now  健康检查，返回 200 OK， 会被替换为当前时间 time.Now().Format(time.RFC3339)
 # 
+
+
 [proxies]
 /__healthz=text://OK:@now
 &/=unix://{KVS_SVC_SOCK_FILE:-./kvs.sock}
@@ -114,6 +118,10 @@ download = {SVC_VERSION_BASE_URL}/{KVS_VSCODE_DOWNLOAD_PATH:-commit:SVC_VERSION_
 # 缓存1：{CACHE_DIR}/version/{SVC_VERSION}_{SVC_VERSION_HASH}.{SVC_PACKAGE_EXT}
 # 缓存2：{CACHE_DIR}/ccproxy/{domain}/{path}[.{version}].xxx
 cache_dir = {SVC_HOME}/cache
+
+# 只针对于 cc~ 的静态资源, | 是一个分组内替换内容， || 是多个分组的分隔符， KVS_CC_SED 环境变量替换改值内容
+# <文件名，支持一个*匹配多个随意字符>|<原始内容>|<替换内容>||...
+cache_sed = {KVS_CC_SED}
 
 # /__cache/ 外部资源代理缓存路径前缀；留空禁用缓存代理 (默认空)
 proxy_path = {SVC_PROXY_PATH}
