@@ -1,5 +1,7 @@
 # kvs — 反向代理网关
 
+kai vscode   
+
 轻量级 Go 反向代理。提供 **Cookie 认证**、**多后端路由（前缀/正则）**、**服务自动部署**、**外部资源代理（带缓存）**、**退出按钮 + Update 菜单注入（VS Code专有）**、**S3 镜像同步（VS Code专有）**。
 
 仅依赖 Go 标准库 + `embed`，无第三方依赖。**完全通过 `kvs.ini` 配置文件驱动**。
@@ -126,6 +128,7 @@ kvs -n "&/=unix:///var/run/app.sock"
 | `download_field_url` | | download_info JSON 中 URL 字段名，默认 `url` |
 | `download_proxy` | | 下载代理（留空=直连）；支持 `http://`、`https://`、`socks5://` |
 | `cache_dir` | | 缓存目录 |
+| `cache_sed` | | cc~ 缓存内容替换规则 `file\|old\|new\|\|...`（见下方 cache_sed 一节；可用 `{KVS_CC_SED}` 引用环境变量） |
 | `proxy_path` | | 外部资源代理缓存路径前缀；默认空（禁用），设为 `/__cache/` 启用 |
 | `bin_home` | `SVC_BIN_HOME` | 解压后 bin 目录 |
 | `once_shell` | | 一次性脚本（每个部署只执行一次，由 `{bin_home}/__once__` 标记文件记录时间；`file://` 走脚本文件，否则 `sh -c`；留空跳过） |
@@ -256,6 +259,30 @@ kvs 暴露以下 `/__` 前缀的内部控制端点：
 
 - `cc~` 前缀 = 缓存（仅 GET 2xx）
 - 缓存布局：`{cache_dir}/cache/ccproxy/{scheme}:{host}/path`
+
+### cache_sed（缓存内容替换）
+
+针对 cc~ 缓存的静态资源做内容替换，规则格式（`|` 分隔字段，`||` 分隔规则组）：
+
+```
+<文件名，支持一个 *>|<原始内容>|<替换内容>||...
+```
+
+替换内容中的 `>host<` 会展开为当前请求的 Host。规则在**首次写入缓存时**分类，处理模式持久化到元数据（`_.json` 的 `sed` 字段），之后命中缓存只按元数据处理：
+
+| 模式 | 触发条件 | 写入时 | 命中时 |
+|---|---|---|---|
+| `once` | 替换与请求无关（new 不含 `>host<`） | 解压→替换→重新压缩存储，原文备份为 `<file>_.bak1` | 直接返回存储内容 |
+| `each` | 某条替换含 `>host<` 且（once 替换后的）原文中存在 old | once 规则先替换并烤入存储体，原始（once 后的）内容以明文存储；实际生效的 each 规则按数组持久化到元数据 `sed.each` | 按元数据 `sed.each` 数组 + 当前 Host 重新替换后返回；响应是否 gzip 跟随原始响应（`src_gzip`），不强制压缩 |
+| `none` | 规则匹配文件名但内容未变化 | 原样存储 | 直接返回 |
+
+同一文件可同时有 once 与 each 规则：once 先替换保存，文件仍标记为 `each`，每次请求补上 each 部分。each 规则持久化为数组（old/new），命中时只靠元数据处理，不反查运行时规则。
+
+```
+{cache_dir}/ccproxy/{scheme}:{host}/path            → 存储体（once 已替换；each 为明文）
+{cache_dir}/ccproxy/{scheme}:{host}/path_.json      → 元数据（status/headers + sed: mode/gzipped/src_gzip/each[]）
+{cache_dir}/ccproxy/{scheme}:{host}/path_.bak1      → once 模式的原文备份（仅一次）
+```
 
 ---
 

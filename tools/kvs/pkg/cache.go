@@ -99,9 +99,12 @@ var cacheHeaderWhitelist = map[string]bool{
 }
 
 // cacheMeta holds the cached HTTP status and a subset of response headers.
+// Sed is the cache_sed processing plan persisted at write time; serveFromCache
+// relies on it alone to turn the stored bytes into a response body.
 type cacheMeta struct {
 	Status  int
 	Headers map[string][]string
+	Sed     *sedMeta `json:"sed,omitempty"`
 }
 
 // cachePaths returns the body and meta file paths for a cache entry.
@@ -208,7 +211,7 @@ func HandleCache(w http.ResponseWriter, r *http.Request) {
 
 	// Try cache lookup; on MISS fetch, stream and store.
 	bodyPath, metaPath := cachePaths(cacheRoot, scheme, host, rest)
-	if serveFromCache(w, bodyPath, metaPath, targetURL) {
+	if serveFromCache(w, bodyPath, metaPath, targetURL, r.Host) {
 		return
 	}
 	handleCachedCache(w, r, targetURL, bodyPath, metaPath)
@@ -258,7 +261,9 @@ func buildTargetURL(scheme, host, rest, rawQuery string) string {
 }
 
 // serveFromCache tries to serve a response from cache. Returns true on HIT.
-func serveFromCache(w http.ResponseWriter, bodyPath, metaPath, targetURL string) bool {
+// The stored body is transformed per the persisted sedMeta plan (legacy
+// entries without one are served as-is).
+func serveFromCache(w http.ResponseWriter, bodyPath, metaPath, targetURL string, host string) bool {
 	meta, err := readCacheMeta(metaPath)
 	if err != nil {
 		return false
@@ -267,15 +272,35 @@ func serveFromCache(w http.ResponseWriter, bodyPath, metaPath, targetURL string)
 	if err != nil {
 		return false
 	}
-	log.Printf("[cache] cache HIT  %s ← %s (%d bytes)", targetURL, bodyPath, len(body))
+	out, outGzip, err := sedServe(meta.Sed, body, host)
+	if err != nil {
+		log.Printf("[cache] cache_sed serve FAIL: %s → %v", bodyPath, err)
+		out, outGzip = body, isGzipMeta(meta)
+	}
+	if meta.Sed == nil {
+		// Legacy entry (no persisted plan): the body is the upstream
+		// original — keep its framing from the stored headers.
+		outGzip = isGzipMeta(meta)
+	}
+	log.Printf("[cache] cache HIT  %s ← %s (%d bytes)", targetURL, bodyPath, len(out))
 	w.Header().Set("X-Cache", "HIT")
 	for k, vs := range meta.Headers {
 		for _, v := range vs {
 			w.Header().Add(k, v)
 		}
 	}
+	// Framing fixup AFTER meta headers are copied, so stored headers are
+	// overridden (never duplicated) with the framing of the body actually
+	// sent: mode=each stores plain payload and responds per SrcGzip, so the
+	// metadata's original Content-Encoding must not leak through.
+	if outGzip {
+		w.Header().Set("Content-Encoding", "gzip")
+	} else {
+		w.Header().Del("Content-Encoding")
+	}
+	w.Header().Del("Content-Length")
 	w.WriteHeader(meta.Status)
-	_, _ = w.Write(body)
+	_, _ = w.Write(out)
 	return true
 }
 
@@ -350,34 +375,44 @@ func handleCachedCache(w http.ResponseWriter, r *http.Request, targetURL, bodyPa
 		return
 	}
 
-	// cache_sed path: buffer the body, rewrite it (gzip aware, backing the
-	// original up as <file>_.bak1), and serve + store the REWRITTEN content —
-	// the client gets the rewritten body on this very first request.
+	// cache_sed path: classify the rewrite once at write time (see
+	// sedProcess) and persist the mode in the metadata; serve time relies
+	// on it alone.
 	if sedRules != nil {
 		data, err := io.ReadAll(resp.Body)
 		if err != nil {
 			log.Printf("[cache] read body FAIL: %v", err)
 			return
 		}
-		out, changed, err := sedRewrite(filepath.Base(bodyPath), data, isGzipMeta(meta), r.Host)
+		name := filepath.Base(bodyPath)
+		srcGzip := isGzipMeta(meta)
+		out, splan, err := sedProcess(sedMatchingRules(name), name, data, srcGzip, r.Host)
 		if err != nil {
 			log.Printf("[cache] cache_sed FAIL: %s → %v", bodyPath, err)
-			out, changed = data, false // serve/store the untouched original
+			out, splan = data, sedMeta{Mode: sedModeNone, Gzipped: srcGzip}
 		}
-		if changed {
+		if splan.Mode == sedModeOnce {
 			// Keep the original bytes once: <file>_.bak1 (never overwritten).
 			bakPath := bodyPath + "_.bak1"
 			if _, err := os.Stat(bakPath); os.IsNotExist(err) {
 				if err := atomicWriteFile(bakPath, data, 0o644); err != nil {
 					log.Printf("[cache] cache_sed backup FAIL: %v", err)
 				} else {
-					log.Printf("[cache] cache_sed: backup %s → %s", filepath.Base(bodyPath), filepath.Base(bakPath))
+					log.Printf("[cache] cache_sed: backup %s → %s", name, filepath.Base(bakPath))
 				}
 			}
 			// Content-Length no longer matches the rewritten body.
 			delete(meta.Headers, "Content-Length")
 			w.Header().Del("Content-Length")
 		}
+		if splan.Mode == sedModeEach {
+			// Stored bytes are plain payload; drop the gzip framing claim.
+			delete(meta.Headers, "Content-Encoding")
+			w.Header().Del("Content-Encoding")
+			delete(meta.Headers, "Content-Length")
+			w.Header().Del("Content-Length")
+		}
+		meta.Sed = &splan
 		w.WriteHeader(resp.StatusCode)
 		_, _ = w.Write(out)
 		if err := atomicWriteFile(bodyPath, out, 0o644); err != nil {
@@ -387,7 +422,7 @@ func handleCachedCache(w http.ResponseWriter, r *http.Request, targetURL, bodyPa
 		if err := writeCacheMeta(metaPath, meta); err != nil {
 			log.Printf("[cache] write meta FAIL: %s → %v", metaPath, err)
 		} else {
-			log.Printf("[cache] CACHED %s → %s (%d bytes, sed=%v)", targetURL, bodyPath, len(out), changed)
+			log.Printf("[cache] CACHED %s → %s (%d bytes, sed=%s)", targetURL, bodyPath, len(out), splan.Mode)
 		}
 		return
 	}
@@ -569,7 +604,7 @@ func HandleCCBackend(b Backend) http.Handler {
 		} else {
 			bodyPath, metaPath = cachePaths(cacheBase, scheme, host, rest)
 		}
-		if serveFromCache(w, bodyPath, metaPath, targetURL) {
+		if serveFromCache(w, bodyPath, metaPath, targetURL, r.Host) {
 			return
 		}
 		handleCachedCache(w, r, targetURL, bodyPath, metaPath)
@@ -614,6 +649,39 @@ func refererVersion(r *http.Request) string {
 // =============================================================================
 // cache_sed — rewrite cc~ cached response bodies on write
 // =============================================================================
+
+// sedMode is the cache_sed processing mode decided once at cache-write time
+// and persisted in the metadata, so serve time never re-derives it.
+type sedMode string
+
+const (
+	sedModeNone sedMode = "none" // no rule changed the body
+	sedModeOnce sedMode = "once" // host-independent rewrite, applied and stored once
+	sedModeEach sedMode = "each" // new value contains ">host<": original stored, rewritten per request
+)
+
+// sedMeta is the per-file rewrite plan persisted in the cache metadata.
+//   - Mode: how the stored body was processed (see sedMode).
+//   - Gzipped: whether the STORED bytes are gzip framed.
+//   - SrcGzip: whether the ORIGINAL upstream body was gzip framed. For
+//     mode=each it drives the response framing: gzip origins are
+//     re-compressed per request, plain origins stay plain.
+//   - Each: the request-dependent rules (old/new, new keeps the ">host<"
+//     placeholder) that actually matched this file, persisted as an array —
+//     one file may carry several each rules; serve time uses this list
+//     instead of the runtime config.
+type sedMeta struct {
+	Mode    sedMode       `json:"mode"`
+	Gzipped bool          `json:"gzipped"`
+	SrcGzip bool          `json:"src_gzip,omitempty"`
+	Each    []sedEachRule `json:"each,omitempty"`
+}
+
+// sedEachRule is one persisted old→new pair (new may contain ">host<").
+type sedEachRule struct {
+	Old string `json:"old"`
+	New string `json:"new"`
+}
 
 // cacheSedRule is one parsed rewrite group: "<file>|<old>|<new>".
 // file supports a single '*' wildcard (prefix*/suffix match); without '*'
@@ -681,59 +749,152 @@ func isGzipMeta(meta *cacheMeta) bool {
 	return false
 }
 
-// sedRewrite applies every matching cache_sed rule to the (possibly gzip
-// compressed) body bytes:
-//   - gzip bodies are decompressed, rewritten, then re-compressed;
-//   - plain bodies are rewritten directly;
-//   - ">host<" inside the replacement value expands to the current request's
-//     Host header (e.g. rule "src-*.js|`wss://up/ws`|`wss://>host</ws`"
-//     rewrites to the host the client actually connected to);
-//
-// Returns the (possibly rewritten) bytes and whether any rule changed the
-// content. The original bytes stay untouched — the caller decides what to do
-// with them (backup, serving, storing).
-func sedRewrite(name string, data []byte, isGzip bool, host string) ([]byte, bool, error) {
-	payload := data
-	if isGzip {
-		zr, err := gzip.NewReader(bytes.NewReader(data))
-		if err != nil {
-			return nil, false, fmt.Errorf("gzip open: %w", err)
-		}
-		payload, err = io.ReadAll(zr)
-		zr.Close()
-		if err != nil {
-			return nil, false, fmt.Errorf("gzip read: %w", err)
+// sedMatchingRules returns the runtime rules whose file pattern matches name.
+func sedMatchingRules(name string) []cacheSedRule {
+	var out []cacheSedRule
+	for _, rule := range sedRules {
+		if sedFileMatch(rule.file, name) {
+			out = append(out, rule)
 		}
 	}
+	return out
+}
 
-	// Apply every matching rule; remember whether anything changed.
+// sedApply expands ">host<" in replacements and substitutes old→new for
+// rules whose old value occurs in the body.
+func sedApply(rules []cacheSedRule, payload []byte, host string) ([]byte, bool) {
+	s := string(payload)
 	changed := false
-	for _, rule := range sedRules {
-		if !sedFileMatch(rule.file, name) || !strings.Contains(string(payload), rule.old) {
+	for _, rule := range rules {
+		if !strings.Contains(s, rule.old) {
 			continue
 		}
 		newVal := strings.ReplaceAll(rule.new, ">host<", host)
-		payload = []byte(strings.ReplaceAll(string(payload), rule.old, newVal))
+		s = strings.ReplaceAll(s, rule.old, newVal)
 		changed = true
-		log.Printf("[cache] cache_sed: %s: %q → %q", name, rule.old, newVal)
+		log.Printf("[cache] cache_sed: apply %q → %q", rule.old, newVal)
 	}
 	if !changed {
-		return data, false, nil
+		return payload, false
+	}
+	return []byte(s), true
+}
+
+// gzipEncode compresses payload into a gzip framed byte slice.
+func gzipEncode(payload []byte) ([]byte, error) {
+	var buf bytes.Buffer
+	zw := gzip.NewWriter(&buf)
+	if _, err := zw.Write(payload); err != nil {
+		return nil, fmt.Errorf("gzip write: %w", err)
+	}
+	if err := zw.Close(); err != nil {
+		return nil, fmt.Errorf("gzip close: %w", err)
+	}
+	return buf.Bytes(), nil
+}
+
+// gzipDecode decompresses a gzip framed body into its raw payload.
+func gzipDecode(data []byte) ([]byte, error) {
+	zr, err := gzip.NewReader(bytes.NewReader(data))
+	if err != nil {
+		return nil, fmt.Errorf("gzip open: %w", err)
+	}
+	payload, err := io.ReadAll(zr)
+	zr.Close()
+	if err != nil {
+		return nil, fmt.Errorf("gzip read: %w", err)
+	}
+	return payload, nil
+}
+
+// sedProcess runs the cache-write pipeline and decides how the body is
+// stored and later served. Rules split into once (host-independent, new has
+// no ">host<") and each (new contains ">host<"):
+//
+//  1. once rules are applied first and their result is baked into the
+//     stored body;
+//  2. the each rules whose old value still occurs in that payload are
+//     persisted (as an array — a file may carry several); if any exist the
+//     mode is each and the payload is stored PLAIN (gzip framing stripped)
+//     so per-request rewrites + re-compression work;
+//  3. otherwise mode is once (rewritten body stored, gzip re-applied) or
+//     none (body stored as fetched).
+//
+// Returns the bytes to store and the plan to persist.
+func sedProcess(rules []cacheSedRule, name string, data []byte, srcGzip bool, host string) (store []byte, sm sedMeta, err error) {
+	if len(rules) == 0 {
+		return data, sedMeta{Mode: sedModeNone, Gzipped: srcGzip}, nil
+	}
+	payload := data
+	if srcGzip {
+		if payload, err = gzipDecode(data); err != nil {
+			return nil, sedMeta{}, err
+		}
 	}
 
-	// Re-compress gzip bodies.
-	out := payload
-	if isGzip {
-		var buf bytes.Buffer
-		zw := gzip.NewWriter(&buf)
-		if _, err := zw.Write(payload); err != nil {
-			return nil, false, fmt.Errorf("gzip write: %w", err)
+	var onceRules, eachRules []cacheSedRule
+	for _, r := range rules {
+		if strings.Contains(r.new, ">host<") {
+			eachRules = append(eachRules, r)
+		} else {
+			onceRules = append(onceRules, r)
 		}
-		if err := zw.Close(); err != nil {
-			return nil, false, fmt.Errorf("gzip close: %w", err)
-		}
-		out = buf.Bytes()
 	}
-	log.Printf("[cache] cache_sed: rewritten %s (%d → %d bytes)", name, len(data), len(out))
-	return out, true, nil
+
+	// Host-independent rules first; the result is baked into the body.
+	payload, onceChanged := sedApply(onceRules, payload, host)
+
+	// Persist every each rule that still matches (post-once payload).
+	var matched []sedEachRule
+	for _, r := range eachRules {
+		if strings.Contains(string(payload), r.old) {
+			matched = append(matched, sedEachRule{Old: r.old, New: r.new})
+		}
+	}
+	if len(matched) > 0 {
+		log.Printf("[cache] cache_sed: %s: mode=each (%d rule(s), once=%v), stored plain (%d bytes)", name, len(matched), onceChanged, len(payload))
+		return payload, sedMeta{Mode: sedModeEach, SrcGzip: srcGzip, Each: matched}, nil
+	}
+	if onceChanged {
+		stored := payload
+		if srcGzip {
+			if stored, err = gzipEncode(payload); err != nil {
+				return nil, sedMeta{}, err
+			}
+		}
+		log.Printf("[cache] cache_sed: %s: mode=once, rewritten (%d → %d bytes)", name, len(data), len(stored))
+		return stored, sedMeta{Mode: sedModeOnce, Gzipped: srcGzip}, nil
+	}
+	// Rules matched the file name but nothing in the body.
+	return data, sedMeta{Mode: sedModeNone, Gzipped: srcGzip}, nil
+}
+
+// sedServe transforms a stored cache body into the response body for the
+// current request, driven solely by the persisted sedMeta:
+//
+//   - mode=none / once: stored body is final — returned unchanged.
+//   - mode=each: apply the persisted Each rules with the current request
+//     Host; the response framing follows SrcGzip (gzip origins are
+//     re-compressed per request, plain origins stay plain — compression
+//     is never forced).
+//
+// Returns the bytes to send and whether the response is gzip framed.
+func sedServe(sm *sedMeta, body []byte, host string) ([]byte, bool, error) {
+	if sm == nil || sm.Mode != sedModeEach || len(sm.Each) == 0 {
+		return body, sm != nil && sm.Gzipped, nil
+	}
+	rules := make([]cacheSedRule, len(sm.Each))
+	for i, r := range sm.Each {
+		rules[i] = cacheSedRule{old: r.Old, new: r.New}
+	}
+	out, _ := sedApply(rules, body, host)
+	if sm.SrcGzip {
+		gz, err := gzipEncode(out)
+		if err != nil {
+			return nil, false, err
+		}
+		return gz, true, nil
+	}
+	// Plain source: never compress — echo the framing the origin used.
+	return out, false, nil
 }

@@ -44,3 +44,7 @@ for f in /usr/share/applications/zcode.desktop $HD/Desktop/zcode.desktop; do
         sed -i 's#/opt/ZCode/zcode#/opt/ZCode/zcode --no-sandbox#' "$f"
     fi
 done
+
+# env 
+# ZCODE_WEB_REMOTE_CONTROL_RELAY_WS_URL=ws://127.0.0.1:7188/ws 
+# ZCODE_WEB_REMOTE_CONTROL_URL=https://??/remote/v4 /opt/ZCode/zcode --no-sandbox %U

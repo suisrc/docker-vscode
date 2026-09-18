@@ -922,15 +922,9 @@ func ipMeta(ip string) string {
 // defaults to "/remote/v4" — the injected zcode web bundle).
 func (r *zcodeRelay) ServeZList(w http.ResponseWriter, req *http.Request, pagePrefix string) {
 	// Public URL base from the request Host so links work behind whatever
-	// domain/proxy fronts kvs; X-Forwarded-Proto wins when present.
-	scheme := "http"
-	if req.TLS != nil {
-		scheme = "https"
-	}
-	if p := req.Header.Get("X-Forwarded-Proto"); p != "" {
-		scheme = p
-	}
-	base := scheme + "://" + req.Host + pagePrefix
+	// domain/proxy fronts kvs. Links are always https — the endpoints are
+	// TLS-terminated in front of kvs, plain http links would fail there.
+	base := "https://" + req.Host + pagePrefix
 
 	list := r.deviceList()
 	now := time.Now().UnixMilli()
