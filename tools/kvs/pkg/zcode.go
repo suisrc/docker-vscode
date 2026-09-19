@@ -332,19 +332,19 @@ var (
 )
 
 // SetZcodeHome sets the base directory for the relay state file
-// ({home}/zstate.json). Call once from main() with cfg.SvcHome.
+// ({home}/zcoded.json). Call once from main() with cfg.SvcHome.
 func SetZcodeHome(home string) { zcodeHome = home }
 
 // zcodeGetRelay returns (creating on first use) the named relay instance.
 // The name is the wsws:// target (e.g. "zcode"). The device registry must
 // persist across restarts (otherwise the desktop's saved credentials become
 // unknown and it gets AUTH_FAILED), so the state file lives under the
-// kvs home directory: {KVS_HOME:-.}/zstate.json.
+// kvs home directory: {KVS_HOME:-.}/zcoded.json.
 func zcodeGetRelay(name string) *zcodeRelay {
 	if name == "" {
 		name = "zcode"
 	}
-	stateFile := filepath.Join(zcodeHome, "zstate.json")
+	stateFile := filepath.Join(zcodeHome, "zcoded.json")
 	zcodeRelaysMu.Lock()
 	defer zcodeRelaysMu.Unlock()
 	if r, ok := zcodeRelays[name]; ok {

@@ -50,7 +50,7 @@ func main() {
 	// cc~ marked backends always have disk caching available, defaulting to
 	// /cache when cache_dir is not configured.
 	pkg.SetCacheDir(cfg.SvcCacheDir)
-	// zcode relay state file lives under the service home ({home}/zstate.json).
+	// zcode relay state file lives under the service home ({home}/zcoded.json).
 	pkg.SetZcodeHome(cfg.SvcHome)
 	// cache_sed: rewrite cc~ cached bodies (file|old|new||... rules).
 	pkg.SetCacheSed(cfg.SvcCacheSed)
