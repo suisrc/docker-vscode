@@ -9,8 +9,8 @@ import (
 	"log"
 	"net"
 	"net/http"
-	"net/url"
 	"os"
+	"os/exec"
 	"path/filepath"
 	"strings"
 	"sync"
@@ -19,13 +19,20 @@ import (
 
 // =============================================================================
 // Cache — handles proxy_path endpoints
+//
+// cache_sed 总逻辑（写入与命中都以此为准）:
+//  1. 文件名未匹配规则 → 透传，数据不做任何处理，怎么来怎么走。
+//  2. 文件名匹配 → 按上游 Content-Encoding 类型解压：gzip 用 gzip 解压， br 用 brotli CLI 解压，其他编码不处理（等同透传）。
+//  3. 解压后的内容未命中替换串 → 跳过，处理同 1（原始字节原样存/回）。
+//  4. 命中且只有 once 规则 → 替换后压缩为 gzip 存储，直接回给前端。
+//  5. once 之外还有 each 匹配 → 原文（plain，不再 gzip）存储；每次请求替换后，上游是 gzip/br 的统一用 gzip 压缩回给前端，否则原文返回。
 // =============================================================================
 
-// allowedCacheSchemes restricts the cache to web schemes to mitigate SSRF.
+// allowedCacheSchemes restricts the cache to web schemes (SSRF mitigation).
 var allowedCacheSchemes = map[string]bool{"http": true, "https": true}
 
-// cacheTransport is a shared transport for the cache with a response
-// header timeout so a slow/hung upstream cannot hold connections indefinitely.
+// cacheTransport: shared transport with a response header timeout so a slow
+// upstream cannot hold connections indefinitely.
 var cacheTransport = &http.Transport{
 	Proxy:                 http.ProxyFromEnvironment,
 	DialContext:           (&net.Dialer{Timeout: 10 * time.Second, KeepAlive: 30 * time.Second}).DialContext,
@@ -62,15 +69,14 @@ func SetCacheSed(rules string) { parseCacheSed(rules) }
 // CachePathPrefix reports the registered proxy_path prefix (empty = disabled).
 func CachePathPrefix() string { return proxyPathPrefix }
 
-// initCache resolves the cache root from the cache_dir config. The proxy_path route
-// is only registered when cache_dir is set, so the root is always non-empty
-// here; this just stores it for the cache handlers.
+// initCache stores the cache root (route only registered when cache_dir
+// is set, so cacheOverride is never empty here).
 func initCache() {
 	cacheRoot = cacheOverride
 	log.Printf("[cache] cache root: %s", cacheRoot)
 }
 
-// redirectLimit is a CheckRedirect policy shared by cache and download clients.
+// redirectLimit caps upstream redirects (shared by cache clients).
 func redirectLimit(max int) func(*http.Request, []*http.Request) error {
 	return func(req *http.Request, via []*http.Request) error {
 		if len(via) >= max {
@@ -80,7 +86,7 @@ func redirectLimit(max int) func(*http.Request, []*http.Request) error {
 	}
 }
 
-// cacheClient is used for manual upstream fetches when caching.
+// cacheClient fetches upstream responses when caching.
 var cacheClient = &http.Client{
 	Transport:     cacheTransport,
 	Timeout:       5 * time.Minute,
@@ -108,33 +114,17 @@ type cacheMeta struct {
 }
 
 // cachePaths returns the body and meta file paths for a cache entry.
+// Cache layout mirrors the URL structure (rest is cleaned and stripped of
+// its leading "/" to stay within the root; root requests use "__index"):
 //
-// Cache layout mirrors the URL structure:
-//
-//	{root}/{scheme}:{host}/path/to/file.js       → body
+//	{root}/{scheme}:{host}/path/to/file.js        → body
 //	{root}/{scheme}:{host}/path/to/file.js_.json  → metadata
-//
-// The rest path is cleaned and stripped of leading "/" to stay within
-// the cache root.  Requests for the root path use "__index" as filename.
 func cachePaths(root, scheme, host, rest string) (bodyPath, metaPath string) {
-	// Clean and make relative to prevent directory traversal.
 	p := strings.TrimPrefix(filepath.Clean(rest), "/")
 	if p == "" || p == "." {
 		p = "__index"
 	}
 	base := filepath.Join(root, scheme+":"+host, p)
-	return base, base + "_.json"
-}
-
-// cachePathsVersioned is cachePaths with an extra version segment after the
-// host: {root}/{scheme}:{host}/{version}/path (body + "_.json" sidecar).
-// version is expected to be a single sanitized path segment.
-func cachePathsVersioned(root, scheme, host, version, rest string) (bodyPath, metaPath string) {
-	p := strings.TrimPrefix(filepath.Clean(rest), "/")
-	if p == "" || p == "." {
-		p = "__index"
-	}
-	base := filepath.Join(root, scheme+":"+host, version, p)
 	return base, base + "_.json"
 }
 
@@ -164,15 +154,9 @@ func writeCacheMeta(path string, m *cacheMeta) error {
 // Cache Handler
 // =============================================================================
 
-// handleCache proxies {proxy_path}/[...] → target URL.
-//
-// Format:  {proxy_path}/[cc~]{scheme}:{host}[/path][?query]
-//
-//	cc~              — optional cache marker: check cache, write on MISS
-//	{scheme}:        — optional scheme (http, https); defaults to https
-//	{host}           — upstream host[:port]
-//
-// HandleCache serves the proxy cache route: {prefix}/{scheme}:{host}/path.
+// HandleCache serves the proxy cache route:
+// {proxy_path}/[cc~]{scheme}:{host}[/path][?query] — cc~ marks cacheable
+// requests (GET only), {scheme}: defaults to https.
 func HandleCache(w http.ResponseWriter, r *http.Request) {
 	cacheOnce.Do(initCache)
 
@@ -182,14 +166,9 @@ func HandleCache(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
-	// Detect cc~ cache prefix.
-	cacheable := strings.HasPrefix(p, "cc~")
+	cacheable := strings.HasPrefix(p, "cc~") && r.Method == http.MethodGet
 	if cacheable {
 		p = p[3:]
-	}
-	// Only cache safe GET responses.
-	if r.Method != http.MethodGet {
-		cacheable = false
 	}
 
 	// Parse scheme:host/rest from the path.
@@ -272,16 +251,13 @@ func serveFromCache(w http.ResponseWriter, bodyPath, metaPath, targetURL string,
 	if err != nil {
 		return false
 	}
-	out, outGzip, err := sedServe(meta.Sed, body, host)
-	if err != nil {
-		log.Printf("[cache] cache_sed serve FAIL: %s → %v", bodyPath, err)
-		out, outGzip = body, isGzipMeta(meta)
-	}
-	if meta.Sed == nil {
-		// Legacy entry (no persisted plan): the body is the upstream
-		// original — keep its framing from the stored headers.
-		outGzip = isGzipMeta(meta)
-	}
+	// Framing fixup AFTER meta headers are copied — always clear first, then
+	// set once, so the header is never duplicated (a repeated Content-Encoding
+	// makes browsers reject the whole response):
+	//   mode=each → rewrite per request, gzip framed when SrcGzip (rule 5);
+	//   otherwise → stored bytes are final (none = upstream original with
+	//                its recorded framing header; once = our gzip).
+	out, outGzip := sedServeFromMeta(meta, body, host)
 	log.Printf("[cache] cache HIT  %s ← %s (%d bytes)", targetURL, bodyPath, len(out))
 	w.Header().Set("X-Cache", "HIT")
 	for k, vs := range meta.Headers {
@@ -289,14 +265,14 @@ func serveFromCache(w http.ResponseWriter, bodyPath, metaPath, targetURL string,
 			w.Header().Add(k, v)
 		}
 	}
-	// Framing fixup AFTER meta headers are copied, so stored headers are
-	// overridden (never duplicated) with the framing of the body actually
-	// sent: mode=each stores plain payload and responds per SrcGzip, so the
-	// metadata's original Content-Encoding must not leak through.
+	w.Header().Del("Content-Encoding")
 	if outGzip {
 		w.Header().Set("Content-Encoding", "gzip")
-	} else {
-		w.Header().Del("Content-Encoding")
+	} else if enc := cacheContentEncoding(meta); enc != "" {
+		// Non-gzip encoded stored body (e.g. br passthrough): keep the
+		// original encoding claim — the stored bytes are NOT plain and must
+		// never be re-framed or delivered bare.
+		w.Header().Set("Content-Encoding", enc)
 	}
 	w.Header().Del("Content-Length")
 	w.WriteHeader(meta.Status)
@@ -304,13 +280,23 @@ func serveFromCache(w http.ResponseWriter, bodyPath, metaPath, targetURL string,
 	return true
 }
 
-// handleCachedCache fetches the upstream, streams the response to both the
-// client and a cache file, and writes cache metadata on success.
+// copyHeaders adds every header from src into dst (used to mirror cached
+// or upstream headers onto a response).
+func copyHeaders(dst http.Header, src map[string][]string) {
+	for k, vs := range src {
+		for _, v := range vs {
+			dst.Add(k, v)
+		}
+	}
+}
+
+// handleCachedCache fetches the upstream on a MISS, mirrors it to the
+// client and writes the cache entry on success.
 func handleCachedCache(w http.ResponseWriter, r *http.Request, targetURL, bodyPath, metaPath string) {
 	log.Printf("[cache] cache MISS (will cache) %s", targetURL)
 
-	// cacheClient already enforces a 5m timeout; reuse the request context
-	// so client disconnects cancel the upstream fetch.
+	// Reuse the request context so client disconnects cancel the upstream
+	// fetch (cacheClient caps the total at 5m).
 	req, err := http.NewRequestWithContext(r.Context(), "GET", targetURL, nil)
 	if err != nil {
 		http.Error(w, "bad target URL", http.StatusBadRequest)
@@ -324,6 +310,14 @@ func handleCachedCache(w http.ResponseWriter, r *http.Request, targetURL, bodyPa
 			}
 		}
 	}
+	// Rule 2 only: files matching a cache_sed rule need a pipeline-
+	// controllable encoding (gzip, decodable in-process; br via brotli CLI).
+	// Force gzip upstream for those. Unmatched files (rule 1: pass through
+	// untouched) keep the client's original Accept-Encoding so upstream
+	// responses — including br — are stored and served exactly as-is.
+	if name := filepath.Base(bodyPath); len(sedMatchingRules(name)) > 0 {
+		req.Header.Set("Accept-Encoding", "gzip")
+	}
 
 	resp, err := cacheClient.Do(req)
 	if err != nil {
@@ -333,39 +327,26 @@ func handleCachedCache(w http.ResponseWriter, r *http.Request, targetURL, bodyPa
 	}
 	defer resp.Body.Close()
 
-	// Only 2xx (200-299) and 404 responses are cached; all other status codes
-	// (3xx, 5xx, etc.) stream through without caching so transient errors are
-	// not stuck in cache.
-	if !((resp.StatusCode >= 200 && resp.StatusCode < 300) || resp.StatusCode == 404) {
+	// Only 2xx and 404 responses are cached; everything else streams
+	// through uncached so transient errors never stick.
+	cacheableStatus := (resp.StatusCode >= 200 && resp.StatusCode < 300) || resp.StatusCode == 404
+	if !cacheableStatus {
 		log.Printf("[cache] upstream returned %d, not caching", resp.StatusCode)
-		for k, vs := range resp.Header {
-			for _, v := range vs {
-				w.Header().Add(k, v)
-			}
-		}
+		copyHeaders(w.Header(), resp.Header)
 		w.Header().Set("X-Cache", "MISS")
 		w.WriteHeader(resp.StatusCode)
 		_, _ = io.Copy(w, resp.Body)
 		return
 	}
 
-	// Collect whitelisted headers for cache metadata.
-	meta := &cacheMeta{
-		Status:  resp.StatusCode,
-		Headers: make(map[string][]string),
-	}
+	// Collect whitelisted headers for the cache metadata and the response.
+	meta := &cacheMeta{Status: resp.StatusCode, Headers: map[string][]string{}}
 	for k, vs := range resp.Header {
 		if cacheHeaderWhitelist[strings.ToLower(k)] {
 			meta.Headers[k] = vs
 		}
 	}
-
-	// Set response headers before writing body.
-	for k, vs := range meta.Headers {
-		for _, v := range vs {
-			w.Header().Add(k, v)
-		}
-	}
+	copyHeaders(w.Header(), meta.Headers)
 	w.Header().Set("X-Cache", "MISS")
 
 	// Ensure cache directory exists.
@@ -375,9 +356,8 @@ func handleCachedCache(w http.ResponseWriter, r *http.Request, targetURL, bodyPa
 		return
 	}
 
-	// cache_sed path: classify the rewrite once at write time (see
-	// sedProcess) and persist the mode in the metadata; serve time relies
-	// on it alone.
+	// cache_sed path: sedPipeline decides once what is stored, sent and
+	// persisted (see its rules 1-5 comment).
 	if sedRules != nil {
 		data, err := io.ReadAll(resp.Body)
 		if err != nil {
@@ -385,12 +365,7 @@ func handleCachedCache(w http.ResponseWriter, r *http.Request, targetURL, bodyPa
 			return
 		}
 		name := filepath.Base(bodyPath)
-		srcGzip := isGzipMeta(meta)
-		out, splan, err := sedProcess(sedMatchingRules(name), name, data, srcGzip, r.Host)
-		if err != nil {
-			log.Printf("[cache] cache_sed FAIL: %s → %v", bodyPath, err)
-			out, splan = data, sedMeta{Mode: sedModeNone, Gzipped: srcGzip}
-		}
+		store, send, splan, sendGzip := sedPipeline(sedMatchingRules(name), name, data, cacheContentEncoding(meta), r.Host)
 		if splan.Mode == sedModeOnce {
 			// Keep the original bytes once: <file>_.bak1 (never overwritten).
 			bakPath := bodyPath + "_.bak1"
@@ -401,28 +376,39 @@ func handleCachedCache(w http.ResponseWriter, r *http.Request, targetURL, bodyPa
 					log.Printf("[cache] cache_sed: backup %s → %s", name, filepath.Base(bakPath))
 				}
 			}
-			// Content-Length no longer matches the rewritten body.
-			delete(meta.Headers, "Content-Length")
-			w.Header().Del("Content-Length")
 		}
-		if splan.Mode == sedModeEach {
-			// Stored bytes are plain payload; drop the gzip framing claim.
+		// Response framing per the plan — header driven, bytes never sniffed.
+		switch splan.Mode {
+		case sedModeOnce: // stored & served gzip; Content-Length no longer matches
+			meta.Headers["Content-Encoding"] = []string{"gzip"}
+			delete(meta.Headers, "Content-Length")
+			w.Header().Set("Content-Encoding", "gzip")
+			w.Header().Del("Content-Length")
+		case sedModeEach: // stored plain — the original framing claim must go
 			delete(meta.Headers, "Content-Encoding")
-			w.Header().Del("Content-Encoding")
 			delete(meta.Headers, "Content-Length")
 			w.Header().Del("Content-Length")
+			if sendGzip {
+				w.Header().Set("Content-Encoding", "gzip")
+			} else {
+				w.Header().Del("Content-Encoding")
+			}
 		}
-		meta.Sed = &splan
+		// Passthrough (rules 1/2/3): upstream headers stay exactly as recorded
+		// — body untouched, so Content-Length still matches.
+		if splan.Mode != sedModeNone {
+			meta.Sed = &splan
+		}
 		w.WriteHeader(resp.StatusCode)
-		_, _ = w.Write(out)
-		if err := atomicWriteFile(bodyPath, out, 0o644); err != nil {
+		_, _ = w.Write(send)
+		if err := atomicWriteFile(bodyPath, store, 0o644); err != nil {
 			log.Printf("[cache] write body FAIL: %s → %v", bodyPath, err)
 			return
 		}
 		if err := writeCacheMeta(metaPath, meta); err != nil {
 			log.Printf("[cache] write meta FAIL: %s → %v", metaPath, err)
 		} else {
-			log.Printf("[cache] CACHED %s → %s (%d bytes, sed=%s)", targetURL, bodyPath, len(out), splan.Mode)
+			log.Printf("[cache] CACHED %s → %s (store %d, send %d, sed=%s)", targetURL, bodyPath, len(store), len(send), splan.Mode)
 		}
 		return
 	}
@@ -526,18 +512,14 @@ func atomicWriteFile(path string, data []byte, perm os.FileMode) error {
 // cc~ Backends — static file proxy caching per [proxies] route
 // =============================================================================
 
-// defaultCacheDir is the cache root fallback when cache_dir is not
-// configured.
+// defaultCacheDir is the cache root fallback when cache_dir is not configured.
 const defaultCacheDir = "/cache"
 
-// cacheBase holds the cc~ backend cache root: {cache_dir:-/cache}/ccproxy.
-// This is the same directory used by the /__cache/ proxy cache
-// ({cache_dir}/ccproxy), so cc~ backends and /__cache/cc~ requests share
-// the same on-disk cache content.
+// cacheBase is the cc~ backend cache root — the same {cache_dir}/ccproxy
+// directory the /__cache/ route uses, so both share on-disk content.
 var cacheBase string
 
-// SetCacheDir configures the cc~ backend cache root from the cache_dir
-// config value (empty → /cache). Call before routes are built.
+// SetCacheDir configures the cc~ backend cache root (empty → /cache).
 func SetCacheDir(cacheDir string) {
 	base := cacheDir
 	if base == "" {
@@ -549,20 +531,9 @@ func SetCacheDir(cacheDir string) {
 
 // HandleCCBackend returns the caching proxy handler for a cc~ marked backend
 // (http/https only). Proxied responses are cached at
-// {cache_dir:-/cache}/ccproxy/{scheme}:{host}/path, mirroring the URL
-// structure (body + "_.json" metadata sidecar), reusing the same cache
-// machinery as the /__cache/ proxy route:
-//   - only GET 2xx/404 responses are cached
-//   - cache HITs are served directly from disk
-//   - non-GET requests pass through uncached
-//
-// KVS_CC_VER_REFERER (a query key name, e.g. "app_version"): when set AND the
-// request's Referer URL carries that query key, the key's value is inserted
-// as a version path segment after the host:
-//
-//	{cache_dir}/ccproxy/{scheme}:{host}/{version}/{path}
-//
-// Missing config, missing Referer, or missing key → plain layout (ignored).
+// {cache_dir:-/cache}/ccproxy/{scheme}:{host}/path — same layout and
+// machinery as the /__cache/ proxy route (only GET 2xx/404 are cached;
+// HITs serve from disk; non-GET passes through uncached).
 func HandleCCBackend(b Backend) http.Handler {
 	scheme := b.Scheme
 	host := b.Target
@@ -587,63 +558,12 @@ func HandleCCBackend(b Backend) http.Handler {
 			return
 		}
 
-		// Version segment from the Referer query (KVS_CC_VER_REFERER):
-		// cache layout becomes {cache_dir}/ccproxy/{scheme}:{domain}/{version}/{target-path}/{path}
-		// — the version goes right after the domain, before the backend
-		// target's own path prefix (e.g. "remote/v4").
-		var bodyPath, metaPath string
-		if v := refererVersion(r); v != "" {
-			log.Printf("[cache] cc~ version segment: %s", v)
-			// host may carry a path (e.g. "zcode.z.ai/remote/v4") — split
-			// domain from path so the version lands between them.
-			domain, targetPath := host, ""
-			if i := strings.Index(host, "/"); i >= 0 {
-				domain, targetPath = host[:i], host[i:]
-			}
-			bodyPath, metaPath = cachePathsVersioned(cacheBase, scheme, domain, v, targetPath+rest)
-		} else {
-			bodyPath, metaPath = cachePaths(cacheBase, scheme, host, rest)
-		}
+		bodyPath, metaPath := cachePaths(cacheBase, scheme, host, rest)
 		if serveFromCache(w, bodyPath, metaPath, targetURL, r.Host) {
 			return
 		}
 		handleCachedCache(w, r, targetURL, bodyPath, metaPath)
 	})
-}
-
-// refererVersion extracts the version segment from the request's Referer.
-// KVS_CC_VER_REFERER names a query key (e.g. "app_version"); when the key is
-// present in the Referer URL query, its value is sanitized into a single
-// safe path segment and returned. Returns "" when disabled or absent.
-func refererVersion(r *http.Request) string {
-	key := os.Getenv("KVS_CC_VER_REFERER")
-	if key == "" || r == nil {
-		return ""
-	}
-	ref := r.Header.Get("Referer")
-	if ref == "" {
-		return ""
-	}
-	u, err := url.Parse(ref)
-	if err != nil {
-		return ""
-	}
-	v := u.Query().Get(key)
-	if v == "" {
-		return ""
-	}
-	// Sanitize into one safe path segment (letters, digits, dot, dash, _).
-	v = strings.Map(func(c rune) rune {
-		switch {
-		case c >= 'a' && c <= 'z', c >= 'A' && c <= 'Z', c >= '0' && c <= '9':
-			return c
-		case c == '.', c == '-', c == '_':
-			return c
-		default:
-			return '-'
-		}
-	}, v)
-	return v
 }
 
 // =============================================================================
@@ -655,24 +575,21 @@ func refererVersion(r *http.Request) string {
 type sedMode string
 
 const (
-	sedModeNone sedMode = "none" // no rule changed the body
-	sedModeOnce sedMode = "once" // host-independent rewrite, applied and stored once
-	sedModeEach sedMode = "each" // new value contains ">host<": original stored, rewritten per request
+	sedModeNone sedMode = "none" // rules did not touch the body — upstream bytes stored & served as-is (rules 1/2/3)
+	sedModeOnce sedMode = "once" // once-only rewrite, stored gzip, served as-is (rule 4)
+	sedModeEach sedMode = "each" // once baked in + each rewrites per request; stored plain (rule 5)
 )
 
 // sedMeta is the per-file rewrite plan persisted in the cache metadata.
 //   - Mode: how the stored body was processed (see sedMode).
-//   - Gzipped: whether the STORED bytes are gzip framed.
-//   - SrcGzip: whether the ORIGINAL upstream body was gzip framed. For
-//     mode=each it drives the response framing: gzip origins are
-//     re-compressed per request, plain origins stay plain.
-//   - Each: the request-dependent rules (old/new, new keeps the ">host<"
-//     placeholder) that actually matched this file, persisted as an array —
-//     one file may carry several each rules; serve time uses this list
-//     instead of the runtime config.
+//   - SrcGzip: only for mode=each — the upstream origin was gzip/br
+//     encoded, so every response is re-compressed as gzip after the
+//     per-request rewrite (rule 5); plain origins stay plain.
+//   - Each: the request-dependent rules (old→new, new keeps the ">host<"
+//     placeholder) that matched this file at write time; serve time uses
+//     this list instead of the runtime config.
 type sedMeta struct {
 	Mode    sedMode       `json:"mode"`
-	Gzipped bool          `json:"gzipped"`
 	SrcGzip bool          `json:"src_gzip,omitempty"`
 	Each    []sedEachRule `json:"each,omitempty"`
 }
@@ -741,12 +658,18 @@ func sedFileMatch(pattern, name string) bool {
 
 // isGzipMeta reports whether the cache metadata records a gzip body.
 func isGzipMeta(meta *cacheMeta) bool {
+	return strings.EqualFold(cacheContentEncoding(meta), "gzip")
+}
+
+// cacheContentEncoding returns the first Content-Encoding value recorded in
+// the cache metadata (lowercased, trimmed; empty = plain body).
+func cacheContentEncoding(meta *cacheMeta) string {
 	for _, v := range meta.Headers["Content-Encoding"] {
-		if strings.EqualFold(strings.TrimSpace(v), "gzip") {
-			return true
+		if v = strings.ToLower(strings.TrimSpace(v)); v != "" && v != "identity" {
+			return v
 		}
 	}
-	return false
+	return ""
 }
 
 // sedMatchingRules returns the runtime rules whose file pattern matches name.
@@ -780,6 +703,38 @@ func sedApply(rules []cacheSedRule, payload []byte, host string) ([]byte, bool) 
 	return []byte(s), true
 }
 
+// brotliOnce guards the one-time brotli binary detection.
+var brotliOnce sync.Once
+
+// brotliFound caches the result of the brotli binary lookup.
+var brotliFound bool
+
+// brotliAvailable reports whether the `brotli` CLI is installed. Detected
+// once; a missing binary disables br decoding for the process lifetime.
+func brotliAvailable() bool {
+	brotliOnce.Do(func() {
+		if _, err := exec.LookPath("brotli"); err == nil {
+			brotliFound = true
+			return
+		}
+		log.Printf("[cache] 未安装 brotli 软件，不支持 br 解压，按原样返回")
+	})
+	return brotliFound
+}
+
+// brotliDecompress decompresses a brotli framed body via the `brotli` CLI
+// (no Go br dependency): -d decompress, -c write to stdout.
+func brotliDecompress(compressed []byte) ([]byte, error) {
+	cmd := exec.Command("brotli", "-d", "-c")
+	cmd.Stdin = bytes.NewReader(compressed)
+	var out bytes.Buffer
+	cmd.Stdout = &out
+	if err := cmd.Run(); err != nil {
+		return nil, fmt.Errorf("brotli 解压失败: %w", err)
+	}
+	return out.Bytes(), nil
+}
+
 // gzipEncode compresses payload into a gzip framed byte slice.
 func gzipEncode(payload []byte) ([]byte, error) {
 	var buf bytes.Buffer
@@ -807,31 +762,53 @@ func gzipDecode(data []byte) ([]byte, error) {
 	return payload, nil
 }
 
-// sedProcess runs the cache-write pipeline and decides how the body is
-// stored and later served. Rules split into once (host-independent, new has
-// no ">host<") and each (new contains ">host<"):
+// sedPipeline implements the cache_sed rules 1-5 for a cache MISS in one
+// pass. It returns the bytes to STORE on disk, the bytes to SEND to the
+// client, the plan to persist in the metadata (Mode=none ⇒ Sed stays nil)
+// and whether the response is gzip framed.
 //
-//  1. once rules are applied first and their result is baked into the
-//     stored body;
-//  2. the each rules whose old value still occurs in that payload are
-//     persisted (as an array — a file may carry several); if any exist the
-//     mode is each and the payload is stored PLAIN (gzip framing stripped)
-//     so per-request rewrites + re-compression work;
-//  3. otherwise mode is once (rewritten body stored, gzip re-applied) or
-//     none (body stored as fetched).
-//
-// Returns the bytes to store and the plan to persist.
-func sedProcess(rules []cacheSedRule, name string, data []byte, srcGzip bool, host string) (store []byte, sm sedMeta, err error) {
+//	rules 1/3, unsupported encoding, decode/encode failure:
+//		passthrough — store=send=original bytes, headers untouched;
+//	rule 4 (once only): store=send=gzip(rewritten) — HIT serves as-is;
+//	rule 5 (once + each): store=rewritten plain; send is the each-rewritten
+//		copy, gzip framed when the origin was gzip/br (HIT replays this).
+func sedPipeline(rules []cacheSedRule, name string, data []byte, srcEnc string, host string) (store, send []byte, plan sedMeta, sendGzip bool) {
+	// Rule 1: file name not matched — pass through untouched.
 	if len(rules) == 0 {
-		return data, sedMeta{Mode: sedModeNone, Gzipped: srcGzip}, nil
-	}
-	payload := data
-	if srcGzip {
-		if payload, err = gzipDecode(data); err != nil {
-			return nil, sedMeta{}, err
-		}
+		return data, data, sedMeta{Mode: sedModeNone}, false
 	}
 
+	// Rule 2: decode per upstream Content-Encoding. Unsupported encodings
+	// and decode failures degrade to passthrough.
+	var payload []byte
+	encoded := false // origin was gzip/br — rule 5 response framing
+	switch srcEnc {
+	case "":
+		payload = data
+	case "gzip":
+		p, err := gzipDecode(data)
+		if err != nil {
+			log.Printf("[cache] cache_sed: %s gzip decode FAIL: %v (passthrough)", name, err)
+			return data, data, sedMeta{Mode: sedModeNone}, false
+		}
+		payload, encoded = p, true
+	case "br":
+		if !brotliAvailable() {
+			return data, data, sedMeta{Mode: sedModeNone}, false
+		}
+		p, err := brotliDecompress(data)
+		if err != nil {
+			log.Printf("[cache] cache_sed: %s brotli decode FAIL: %v (passthrough)", name, err)
+			return data, data, sedMeta{Mode: sedModeNone}, false
+		}
+		payload, encoded = p, true
+	default:
+		// Other encodings are not handled — equivalent to passthrough.
+		log.Printf("[cache] cache_sed: %s upstream encoding %q unsupported (passthrough)", name, srcEnc)
+		return data, data, sedMeta{Mode: sedModeNone}, false
+	}
+
+	// Split rules into once (host-independent) and each (">host<" placeholder).
 	var onceRules, eachRules []cacheSedRule
 	for _, r := range rules {
 		if strings.Contains(r.new, ">host<") {
@@ -841,60 +818,99 @@ func sedProcess(rules []cacheSedRule, name string, data []byte, srcGzip bool, ho
 		}
 	}
 
-	// Host-independent rules first; the result is baked into the body.
+	// Rule 3: no rule content occurs in the payload — passthrough.
+	s := string(payload)
+	anyHit := false
+	for _, r := range onceRules {
+		if strings.Contains(s, r.old) {
+			anyHit = true
+			break
+		}
+	}
+	if !anyHit {
+		for _, r := range eachRules {
+			if strings.Contains(s, r.old) {
+				anyHit = true
+				break
+			}
+		}
+	}
+	if !anyHit {
+		log.Printf("[cache] cache_sed: %s: no rule content matched (passthrough)", name)
+		return data, data, sedMeta{Mode: sedModeNone}, false
+	}
+
+	// Rule 4: apply ALL once rules first — the result is baked into the
+	// stored body for both the once and each paths.
 	payload, onceChanged := sedApply(onceRules, payload, host)
 
-	// Persist every each rule that still matches (post-once payload).
+	// Rule 5 selection: each rules still matching the post-once payload.
 	var matched []sedEachRule
 	for _, r := range eachRules {
 		if strings.Contains(string(payload), r.old) {
 			matched = append(matched, sedEachRule{Old: r.old, New: r.new})
 		}
 	}
-	if len(matched) > 0 {
-		log.Printf("[cache] cache_sed: %s: mode=each (%d rule(s), once=%v), stored plain (%d bytes)", name, len(matched), onceChanged, len(payload))
-		return payload, sedMeta{Mode: sedModeEach, SrcGzip: srcGzip, Each: matched}, nil
-	}
-	if onceChanged {
-		stored := payload
-		if srcGzip {
-			if stored, err = gzipEncode(payload); err != nil {
-				return nil, sedMeta{}, err
-			}
+	if len(matched) == 0 {
+		// Rule 4: once only — compress to gzip, store and serve as-is.
+		gz, err := gzipEncode(payload)
+		if err != nil {
+			log.Printf("[cache] cache_sed: %s gzip encode FAIL: %v (passthrough)", name, err)
+			return data, data, sedMeta{Mode: sedModeNone}, false
 		}
-		log.Printf("[cache] cache_sed: %s: mode=once, rewritten (%d → %d bytes)", name, len(data), len(stored))
-		return stored, sedMeta{Mode: sedModeOnce, Gzipped: srcGzip}, nil
+		log.Printf("[cache] cache_sed: %s: mode=once, stored gzip (%d → %d bytes)", name, len(data), len(gz))
+		return gz, gz, sedMeta{Mode: sedModeOnce}, true
 	}
-	// Rules matched the file name but nothing in the body.
-	return data, sedMeta{Mode: sedModeNone, Gzipped: srcGzip}, nil
+
+	// Rule 5: store plain (once result baked in); the response is rewritten
+	// per request and gzip framed when the origin was gzip/br.
+	log.Printf("[cache] cache_sed: %s: mode=each (%d rule(s), once=%v), stored plain (%d bytes)", name, len(matched), onceChanged, len(payload))
+	plan = sedMeta{Mode: sedModeEach, SrcGzip: encoded, Each: matched}
+	send = sedApplyEach(matched, payload, host)
+	if encoded {
+		gz, gerr := gzipEncode(send)
+		if gerr == nil {
+			return payload, gz, plan, true
+		}
+		log.Printf("[cache] cache_sed: %s gzip encode FAIL: %v (serving plain)", name, gerr)
+		plan.SrcGzip = false // keep MISS and HIT framing in agreement
+	}
+	return payload, send, plan, false
 }
 
-// sedServe transforms a stored cache body into the response body for the
-// current request, driven solely by the persisted sedMeta:
-//
-//   - mode=none / once: stored body is final — returned unchanged.
-//   - mode=each: apply the persisted Each rules with the current request
-//     Host; the response framing follows SrcGzip (gzip origins are
-//     re-compressed per request, plain origins stay plain — compression
-//     is never forced).
-//
-// Returns the bytes to send and whether the response is gzip framed.
-func sedServe(sm *sedMeta, body []byte, host string) ([]byte, bool, error) {
-	if sm == nil || sm.Mode != sedModeEach || len(sm.Each) == 0 {
-		return body, sm != nil && sm.Gzipped, nil
-	}
-	rules := make([]cacheSedRule, len(sm.Each))
-	for i, r := range sm.Each {
+// sedApplyEach applies persisted each rules (old→new, ">host<" expanded
+// with the current request Host) against a plain stored body.
+func sedApplyEach(each []sedEachRule, payload []byte, host string) []byte {
+	rules := make([]cacheSedRule, len(each))
+	for i, r := range each {
 		rules[i] = cacheSedRule{old: r.Old, new: r.New}
 	}
-	out, _ := sedApply(rules, body, host)
+	out, _ := sedApply(rules, payload, host)
+	return out
+}
+
+// sedServeFromMeta builds the HIT response body from the stored bytes,
+// driven solely by the persisted plan and the metadata headers (never by
+// sniffing bytes):
+//
+//	mode=each  → apply the persisted Each rules with the current request
+//	             Host; gzip framed when SrcGzip (rule 5 replay);
+//	otherwise  → stored bytes are final; framing is whatever the metadata
+//	             headers record (none = upstream original, once = our gzip).
+func sedServeFromMeta(meta *cacheMeta, body []byte, host string) ([]byte, bool) {
+	sm := meta.Sed
+	if sm == nil || sm.Mode != sedModeEach || len(sm.Each) == 0 {
+		return body, isGzipMeta(meta)
+	}
+	out := sedApplyEach(sm.Each, body, host)
 	if sm.SrcGzip {
 		gz, err := gzipEncode(out)
 		if err != nil {
-			return nil, false, err
+			log.Printf("[cache] cache_sed gzip encode FAIL: %v (serving plain)", err)
+			return out, false
 		}
-		return gz, true, nil
+		return gz, true
 	}
-	// Plain source: never compress — echo the framing the origin used.
-	return out, false, nil
+	// Plain origin: never compress — echo the framing the origin used.
+	return out, false
 }
