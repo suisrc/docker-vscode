@@ -25,6 +25,7 @@ var gDebug = os.Getenv("KVS_DEBUG") == "1"
 type Config struct {
 	Proxies []Backend
 	// [service] section
+	SvcEnable           bool   // service enable
 	SvcCheck            string // check — detect if backend already running (http/unix/file)
 	SvcHome             string // home — working directory, injected as SVC_HOME
 	SvcVersion          string // version — literal version, or empty to fetch from version_latest_url
@@ -45,6 +46,7 @@ type Config struct {
 	SvcCommand          string // command — optional shell command to run as the backend subprocess
 
 	VscAgentsCmd string            // vsc_agents_cmd — agent host command (env assignments + argv), kvs-managed subprocess
+	VscAgentCmds map[string]string // vsc_agent_cmds — named agent host command presets (JSON map name→command)
 	VscAgentsDir string            // vsc_agents_dir — directory scanned for *.json agent endpoint entries
 	VscAgentArgs string            // SvcCommnand suffix, vscode agents connect config
 	VscLanguage  map[string]string // vsc_language — lang→langpack mapping (e.g. zh-cn→zh-hans)
@@ -566,7 +568,28 @@ func loadIni() (*iniFile, string) {
 	}
 
 	// -n present without -c: auto-use default config.
-	if cfgPath == "" && flagValue("-n") != "" {
+	if cfgPath == "" && (flagValue("-n") != "" || os.Getenv("KVS_PROXIES") != "") {
+		if os.Getenv("KVS_SVC_ENABLE") == "" {
+			os.Setenv("KVS_SVC_ENABLE", "false")
+		}
+		cfgPath = "default"
+	}
+
+	// -c zcoded for zcode custom config
+	if cfgPath == "zcoded" {
+		if os.Getenv("KVS_SVC_ENABLE") == "" {
+			os.Setenv("KVS_SVC_ENABLE", "false")
+		}
+		if os.Getenv("KVS_PATH_PUBLIC") == "" {
+			os.Setenv("KVS_PATH_PUBLIC", "/ws|/remote/v4|/api/v1/client/configs")
+		}
+		if os.Getenv("KVS_CC_SED") == "" {
+			// KVS_CC_SED='index-*.js|overrideUrl:void 0|overrideUrl:`wss://>host</ws`'
+			os.Setenv("KVS_CC_SED", "src-*.js|`wss://zcode.z.ai/ws`|`wss://>host</ws`||src-*.js|`/api/v1/client/configs`,ff(e).origin|`/api/v1/client/configs`")
+		}
+		if os.Getenv("KVS_PROXIES") == "" {
+			os.Setenv("KVS_PROXIES", "ws~/ws=wsws://zcode;cc~/api/v1/=https://zcode.z.ai/api/v1/;cc~/remote/v4=https://zcode.z.ai/remote/v4;/=api://zlist")
+		}
 		cfgPath = "default"
 	}
 
@@ -601,16 +624,21 @@ func LoadInitConfig() Config {
 	// -n flag overrides [proxies] with inline "prefix=url;prefix=url" entries.
 	// When -n is used, the user provides their own backends, so kvs skips the
 	// service lifecycle (download/extract/start command, version resolution).
-	useN := flagValue("-n") != ""
+	useNext := flagValue("-n")
+	if useNext == "" {
+		useNext = os.Getenv("KVS_PROXIES")
+	}
 
 	// svcVars holds internal SVC_* variables, built incrementally as [service]
 	// fields are resolved. These are available for {VAR} expansion in later
 	// values within the same kvs.ini.
 	svcVars := map[string]string{}
 
-	proxyEntries := ini.hasPrefix("proxies.")
-	if useN {
-		proxyEntries = parseProxiesArg(flagValue("-n"))
+	var proxyEntries [][2]string
+	if useNext != "" {
+		proxyEntries = parseProxiesArg(useNext)
+	} else {
+		proxyEntries = ini.hasPrefix("proxies.")
 	}
 	if len(proxyEntries) == 0 {
 		log.Fatal("config error: [proxies] section is required in kvs.ini")
@@ -619,6 +647,7 @@ func LoadInitConfig() Config {
 	var cfg Config
 
 	// --- Resolve [service] fields in dependency order ---
+	cfg.SvcEnable = parseBool(expandValue(strProp(ini, "service.enable", ""), svcVars), true)
 
 	// 1. home → SVC_HOME (loaded first, available for later references)
 	cfg.SvcHome = expandValue(svcStr(ini, "home", ""), svcVars)
@@ -633,7 +662,7 @@ func LoadInitConfig() Config {
 	// 一样在 -n 模式下也解析，使 cc~ 标记的后端也能做缓存内容替换。
 	cfg.SvcCacheSed = expandValue(svcStr(ini, "cache_sed", ""), svcVars)
 
-	if !useN {
+	if cfg.SvcEnable {
 		// 1b. version_base_url → SVC_VERSION_BASE_URL (before version_latest_url etc.)
 		svcVersionBaseURL := expandValue(svcStr(ini, "version_base_url", ""), svcVars)
 		svcVars["SVC_VERSION_BASE_URL"] = svcVersionBaseURL
@@ -696,6 +725,18 @@ func LoadInitConfig() Config {
 			}
 		}
 		cfg.VscAgentsCmd = expandValue(svcStr(ini, "vsc_agents_cmd", ""), svcVars)
+		// vsc_agent_cmds — named command presets (JSON map). Values carry
+		// {SVC_HOME}/{SVC_BIN_HOME} placeholders, so expand FIRST (the JSON
+		// keys like "vscode" are not valid identifiers and pass through
+		// verbatim), then unmarshal.
+		if raw := ini.get("service.vsc_agent_cmds"); raw != "" {
+			var m map[string]string
+			if err := json.Unmarshal([]byte(expandValue(raw, svcVars)), &m); err != nil {
+				log.Printf("WARNING: invalid vsc_agent_cmds JSON: %v", err)
+			} else {
+				cfg.VscAgentCmds = m
+			}
+		}
 		cfg.VscAgentsDir = expandValue(svcStr(ini, "vsc_agents_dir", ""), svcVars)
 		cfg.VscAgentArgs = expandValue(svcStr(ini, "vsc_agent_args", ""), svcVars)
 
@@ -707,6 +748,8 @@ func LoadInitConfig() Config {
 			name := strings.TrimPrefix(kv[0], "actions.")
 			cfg.Actions[name] = strings.TrimSpace(expandValue(kv[1], svcVars))
 		}
+	} else {
+		log.Printf("[service] disable, pass service config.")
 	}
 
 	// 8. Expand [proxies] and [headers] now that all SVC_* vars are set.
@@ -737,7 +780,7 @@ func LoadInitConfig() Config {
 	cfg.LoginToken = expandValue(strProp(ini, "login_token", ""), svcVars)
 	cfg.LoginTimeout = parseTimeout(expandValue(strProp(ini, "login_timeout", "0"), svcVars))
 	cfg.UseSSL = parseBool(expandValue(strProp(ini, "use_ssl", ""), svcVars), false)
-// path_public — |-separated list of paths reachable without auth
+	// path_public — |-separated list of paths reachable without auth
 	// (e.g. /api/v1/public|/remote/v4). Non-empty entries are kept as-is;
 	// prefix matching is applied by the auth middleware.
 	if raw := expandValue(strProp(ini, "path_public", ""), svcVars); raw != "" {
@@ -748,6 +791,5 @@ func LoadInitConfig() Config {
 		}
 	}
 
-	
 	return cfg
 }

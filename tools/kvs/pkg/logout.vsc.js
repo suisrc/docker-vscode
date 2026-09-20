@@ -185,6 +185,31 @@
       ';border-radius:2px;padding:6px 8px;font-size:13px;outline:none;font-family:monospace;line-height:1.5';
     var hint = el('div', null, 'Start/Restart replace the configured command with the value above (kvs.ini unchanged); Stop takes no command.');
     hint.style.cssText = 'color:' + tv('--vscode-descriptionForeground', '#9d9d9d') + ';font-size:12px;margin-bottom:12px';
+    // Quick-fill buttons from vsc_agent_cmds (name→command presets): shown
+    // when the command box is empty; clicking one fills the box. They follow
+    // the box — cleared once it has content, restored when emptied again.
+    var presets = el('div');
+    presets.style.cssText = 'display:none;flex-wrap:wrap;gap:6px;margin-bottom:8px';
+    var presetCmds = {}; // name -> command (from /__agents/status cmds)
+    function fillPresets(cmds) {
+      presetCmds = cmds || {};
+      presets.innerHTML = '';
+      Object.keys(presetCmds).forEach(function (name) {
+        var q = btn(name);
+        q.title = presetCmds[name];
+        q.style.cssText += ';padding:3px 10px;font-size:12px';
+        q.addEventListener('click', function () {
+          i.value = presetCmds[name];
+          syncPresets();
+        });
+        presets.appendChild(q);
+      });
+      syncPresets();
+    }
+    function syncPresets() {
+      presets.style.display = (!i.value.trim() && presets.childNodes.length) ? 'flex' : 'none';
+    }
+    i.addEventListener('input', syncPresets);
     function btn(s, p) {
       var x = el('button', null, s);
       x.style.cssText = 'padding:5px 12px;border-radius:2px;border:0;font-size:13px;cursor:pointer;' +
@@ -299,6 +324,7 @@
         .then(function (r) { return r.json(); })
         .then(function (d) {
           i.value = d.command || '';
+          fillPresets(d.cmds);
           setStatus('Status: ' + (d.running ? 'running' : 'stopped'));
           dis(bStart, !!d.running);
           dis(bRestart, !d.running);
@@ -313,7 +339,7 @@
         });
     }
     b.appendChild(t); b.appendChild(st); b.appendChild(lbl);
-    b.appendChild(i); b.appendChild(hint); b.appendChild(r1);
+    b.appendChild(i); b.appendChild(presets); b.appendChild(hint); b.appendChild(r1);
     setResult('');
     o.appendChild(b);
     document.body.appendChild(o);

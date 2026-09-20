@@ -17,12 +17,20 @@ make build
 # 编辑 kvs.ini
 ./kvs -c kvs.ini                    # 指定配置文件启动
 ./kvs -c default                    # 使用 embed 中的 kvs.ini.example
+./kvs -c zcoded                     # zcode 中继默认配置（内置，见下方说明）
 ./kvs -n "/=http://127.0.0.1:8080"  # 内联路由，自动补充 -c default
 ```
 
-**`-c` 为必填项**，不指定直接报错退出。特殊值 `default` 使用 embed 中的 `kvs.ini.example`，无需磁盘文件。
+**`-c` 为必填项**，不指定直接报错退出。特殊值：
 
-`-n` 出现时自动补充 `-c default`，用内联路由替代 `[proxies]` 段，详见 [内联路由 `-n`](#内联路由--n)。
+- `default`：使用 embed 中的 `kvs.ini.example`，无需磁盘文件
+- `zcoded`：zcode 中继预设，等效于内置默认 + 以下环境变量（已显式设置的环境变量优先，不会被覆盖）：
+  - `KVS_SVC_ENABLE=false`（禁用 [service] 服务生命周期）
+  - `KVS_PATH_PUBLIC=/ws|/remote/v4|/api/v1/client/configs`
+  - `KVS_CC_SED=src-*.js|\`wss://zcode.z.ai/ws\`|\`wss://>host</ws\`||src-*.js|\`/api/v1/client/configs\`,ff(e).origin|\`/api/v1/client/configs\``
+  - `KVS_PROXIES=ws~/ws=wsws://zcode;cc~/api/v1/=https://zcode.z.ai/api/v1/;cc~/remote/v4=https://zcode.z.ai/remote/v4;/=api://zlist`
+
+`-n` 出现时自动补充 `-c default`，用内联路由替代 `[proxies]` 段；设置 `KVS_PROXIES` 环境变量同样生效（与 `-n` 等价，同样自动补充 `-c default` 并禁用 [service]）。详见 [内联路由 `-n`](#内联路由--n)。
 
 ---
 
@@ -109,6 +117,9 @@ kvs -n "/healthz=text://OK:@now;/=unix:///var/run/vscode.sock"
 
 # 带 service 后端 (& 前缀)
 kvs -n "&/=unix:///var/run/app.sock"
+
+# 环境变量形式（与 -n 等价，自动补充 -c default 并禁用 [service]）
+KVS_PROXIES="/=http://127.0.0.1:8080" kvs
 ```
 
 ### `[service]` 段
@@ -117,6 +128,7 @@ kvs -n "&/=unix:///var/run/app.sock"
 
 | 键 | 内部变量 | 说明 |
 |---|---|---|
+| `enable` | | `true`（默认）启用服务生命周期；`false` 跳过整个 [service] 段（版本解析/下载/命令启动），仅作纯代理。可用 `KVS_SVC_ENABLE` 环境变量控制 |
 | `check` | | 防重复启动检测（http/unix/file 协议） |
 | `home` | `SVC_HOME` | 工作目录基准，最先加载 |
 | `version_base_url` | `SVC_VERSION_BASE_URL` | 版本 API 基础 URL |
@@ -135,6 +147,10 @@ kvs -n "&/=unix:///var/run/app.sock"
 | `init_shell` | | 启动脚本（每次 kvs 启动执行；`file://` 走脚本文件，否则 `sh -c`；留空跳过） |
 | `stop_shell` | | 退出前脚本（每次终止执行一次，仅 kvs 管理的后端） |
 | `command` | | 后端子进程启动命令 |
+| `vsc_agents_cmd` | | agent host 启动命令（环境变量前缀 + argv）；可通过 `VSC_VSC_AGENTS_CMD` 环境变量指定 |
+| `vsc_agent_cmds` | | 命令预设表（JSON：`name → command`），命令内支持 `{SVC_HOME}`/`{SVC_BIN_HOME}` 占位符；Agents 对话框下拉选择后填入命令框 |
+| `vsc_agents_dir` | | agent 端点目录（扫描 *.json） |
+| `vsc_agent_args` | | 追加到 command 的 agent 连接参数 |
 
 #### 自动部署流程
 

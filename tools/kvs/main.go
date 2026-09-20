@@ -260,13 +260,16 @@ func main() {
 
 	//======================================================================================
 
-	// /__agents/status — returns { running, command } for the Agents dialog.
-	// command reflects the current (possibly body-replaced) vsc_agents_cmd.
+	// /__agents/status — returns { running, command, cmds } for the Agents
+	// dialog. command reflects the current (possibly body-replaced)
+	// vsc_agents_cmd; cmds is the vsc_agent_cmds preset map (name→command),
+	// shown as quick-fill buttons when the command box is empty.
 	mux.HandleFunc("/__agents/status", func(w http.ResponseWriter, r *http.Request) {
 		w.Header().Set("Content-Type", "application/json; charset=utf-8")
 		resp := map[string]any{
 			"running": vagents.Running(),
 			"command": cfg.VscAgentsCmd,
+			"cmds":    cfg.VscAgentCmds,
 		}
 		_ = json.NewEncoder(w).Encode(resp)
 	})

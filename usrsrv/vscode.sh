@@ -143,6 +143,6 @@ fi
 
 # kvs 是一个用于授权的工具，它会在启动 vscode server 前进行授权验证，确保只有通过验证的用户才能访问 vscode server
 echo 'start vscode server. wss need set env: KVS_SVC_HEADER_X_FORWARDED_PORT=443'
-KVS_SVC_SOCK_FILE="${KVS_VSCODE_HOME}/kvs.sock" KVS_HOME="${KVS_VSCODE_HOME}" KVS_LOGIN_AUTHZ=true \
+KVS_HOME="${KVS_VSCODE_HOME}" KVS_LOGIN_AUTHZ=true KVS_SVC_SOCK_FILE="${KVS_VSCODE_HOME}/kvs.sock" \
 KVS_PORT="${KVS_VSCODE_PORT:-7080}" KVS_COOKIE=vscode-tkn KVS_LOGIN_TOKEN="${PASSWORD}" \
 exec kvs -c default
