@@ -194,12 +194,10 @@ func AuthMiddleware(next http.Handler, cfg Config, setCookie func(http.ResponseW
 				return
 			}
 		}
-		// Fast-path token via query (?tkn=...): only in plain mode
-		// (login_timeout <= 0). A query token equal to login_token passes
-		// without any cookie check, and no cookie is set — auth is per-request.
-		// A wrong tkn is rejected outright with 403 Forbidden.
+		// Header-based auth (x-cookie-<cookieName>): replaces the old query
+		// param approach, which leaked into logs/history/Referer.
 		if cfg.LoginTimeout == 0 && cfg.LoginToken != "" {
-			if tkn := r.URL.Query().Get("tkn"); tkn != "" {
+			if tkn := r.Header.Get("x-cookie-" + cfg.CookieName); tkn != "" {
 				if subtle.ConstantTimeCompare([]byte(tkn), []byte(cfg.LoginToken)) != 1 {
 					http.Error(w, "403 Forbidden", http.StatusForbidden)
 					return
@@ -208,26 +206,24 @@ func AuthMiddleware(next http.Handler, cfg Config, setCookie func(http.ResponseW
 				return
 			}
 		}
-		c, err := r.Cookie(cfg.CookieName)
-		if err != nil || c.Value == "" {
+		ckn, err := r.Cookie(cfg.CookieName)
+		if err != nil || ckn.Value == "" {
 			ServeLoginAsset(w, "")
 			return
 		}
-
 		if cfg.LoginTimeout <= 0 {
 			// Plain mode: direct comparison.
-			if subtle.ConstantTimeCompare([]byte(c.Value), []byte(cfg.LoginToken)) != 1 {
+			if subtle.ConstantTimeCompare([]byte(ckn.Value), []byte(cfg.LoginToken)) != 1 {
 				ServeLoginAsset(w, "")
 				return
 			}
 			next.ServeHTTP(w, r)
 			return
 		}
-
 		// Hashed mode: parse "<hash>.<ts>.<salt>".
-		ok, refresh := validateHashedCookie(c.Value, cfg.LoginToken, cfg.LoginTimeout)
+		ok, refresh := validateHashedCookie(ckn.Value, cfg.LoginToken, cfg.LoginTimeout)
 		if !ok {
-			log.Printf("[authz] cookie validation failed: %q", c.Value)
+			log.Printf("[authz] cookie validation failed: %q", ckn.Value)
 			ServeLoginAsset(w, "")
 			return
 		}

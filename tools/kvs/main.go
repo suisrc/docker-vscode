@@ -551,7 +551,7 @@ func main() {
 			marker += " (cc cache)"
 		}
 		if b.IsWSock {
-			marker += " (ws)"
+			marker += " (ws serve)"
 		}
 		log.Printf("  route[%d] %s → %s://%s%s", i, b.Prefix, b.Scheme, b.Target, marker)
 	}
