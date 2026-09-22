@@ -322,7 +322,9 @@ func isBackendAlive(checkURL string) bool {
 			return false
 		}
 		resp.Body.Close()
-		return true
+		// Only a 200 proves the backend is actually serving; a 404/500
+		// means something is listening but not ready.
+		return resp.StatusCode == http.StatusOK
 	case "unix":
 		conn, err := net.Dial("unix", target)
 		if err != nil {

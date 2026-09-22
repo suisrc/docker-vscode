@@ -66,7 +66,7 @@ type Config struct {
 
 // Backend describes a single proxy target with its routing prefix.
 type Backend struct {
-	Prefix    string // routing prefix, "/" for root
+	Source    string // routing Source, "/" for root
 	Scheme    string // http, https, unix, file, text
 	Target    string // host:port, socket path, dir path, or literal text
 	RawURL    string // original URL for logging
@@ -734,6 +734,9 @@ func LoadInitConfig() Config {
 		cfg.SvcInitShell = expandValue(svcStr(ini, "init_shell", ""), svcVars)
 		cfg.SvcStopShell = expandValue(svcStr(ini, "stop_shell", ""), svcVars)
 		cfg.SvcCommand = expandValue(svcStr(ini, "command", ""), svcVars)
+		if strings.ContainsRune(cfg.SvcCommand, '{') {
+			cfg.SvcCommand = expandValue(cfg.SvcCommand, svcVars)
+		}
 
 		// 7b. vsc_language — lang→langpack JSON map (e.g. {"zh-cn":"zh-hans"}).
 		//     NOT expanded via expandValue: the {…} JSON braces would be

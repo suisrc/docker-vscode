@@ -19,6 +19,8 @@ import (
 	"net/http/httputil"
 	"net/url"
 	"os"
+	"path"
+	"path/filepath"
 	"strconv"
 	"strings"
 	"time"
@@ -124,7 +126,7 @@ func newBackend(prefix, rawURL string) *Backend {
 	scheme = strings.ToLower(scheme)
 	log.Printf("backend %q → prefix=%q scheme=%q target=%q", rawURL, prefix, scheme, target)
 	return &Backend{
-		Prefix: prefix,
+		Source: prefix,
 		Scheme: scheme,
 		Target: target,
 		RawURL: rawURL,
@@ -208,7 +210,8 @@ func CreateBackendHandler(b Backend, cacheHeaders map[string]string, loginAuthz 
 	case "file":
 		dir := b.Target
 		log.Printf("backend file server: %s", dir)
-		return http.StripPrefix(b.Prefix, http.FileServer(http.Dir(dir)))
+		// return http.StripPrefix(b.Source, http.FileServer(http.Dir(dir))) + .gz or .br
+		return http.StripPrefix(b.Source, precompressedFileServer(dir, http.FileServer(http.Dir(dir))))
 
 	case "wsws":
 		// In-process WebSocket relay backend (ws-to-ws, e.g. the zcode
@@ -484,4 +487,74 @@ func wsProxyHandler(b Backend, rp http.Handler) http.Handler {
 		}
 		rp.ServeHTTP(w, r)
 	})
+}
+
+// precompressedFileServer wraps a file handler with pre-compressed asset
+// support: for a request path <a>, when the plain file and a sibling
+// <a>.br or <a>.gz exist on disk, the pre-compressed variant is served
+// instead. br wins over gz. The variant is only selected when the
+// request's Accept-Encoding lists the matching coding, and the response
+// carries Content-Encoding + Vary headers so caches do not mix variants.
+func precompressedFileServer(dir string, next http.Handler) http.Handler {
+	return http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		if r.Method != http.MethodGet && r.Method != http.MethodHead {
+			next.ServeHTTP(w, r)
+			return
+		}
+		upath := r.URL.Path
+		if upath == "" || strings.HasSuffix(upath, "/") {
+			next.ServeHTTP(w, r)
+			return
+		}
+		clean := path.Clean("/" + upath)[1:] // strip leading "/" for fs paths
+		if clean == "" {
+			next.ServeHTTP(w, r)
+			return
+		}
+		accept := r.Header.Get("Accept-Encoding")
+		// Preference: br > gz. Serve a variant only when both the plain
+		// file and the pre-compressed sibling exist (the variant optimizes
+		// <a>; it is not a standalone asset).
+		for _, v := range []struct{ ext, coding string }{{".br", "br"}, {".gz", "gzip"}, {".zs", "zstd"}} {
+			if !acceptsEncoding(accept, v.coding) {
+				continue
+			}
+			full := filepath.Join(dir, filepath.FromSlash(clean))
+			if _, err := os.Stat(full); err != nil {
+				break // plain file missing; let the next handler 404 it
+			}
+			comp := full + v.ext
+			fi, err := os.Stat(comp)
+			if err != nil || fi.IsDir() {
+				continue
+			}
+			f, err := os.Open(comp)
+			if err != nil {
+				continue
+			}
+			w.Header().Set("Content-Encoding", v.coding)
+			w.Header().Set("Vary", "Accept-Encoding")
+			// Guess a content type from the original extension, not .br/.gz.
+			http.ServeContent(w, r, clean, fi.ModTime(), f)
+			f.Close()
+			return
+		}
+		next.ServeHTTP(w, r)
+	})
+}
+
+// acceptsEncoding reports whether the Accept-Encoding header value lists
+// the given coding (case-insensitive token match; "*" matches anything).
+func acceptsEncoding(accept, coding string) bool {
+	for _, part := range strings.Split(accept, ",") {
+		tok := strings.TrimSpace(part)
+		if i := strings.IndexByte(tok, ';'); i >= 0 {
+			tok = tok[:i]
+		}
+		tok = strings.TrimSpace(tok)
+		if strings.EqualFold(tok, coding) || tok == "*" {
+			return true
+		}
+	}
+	return false
 }

@@ -74,15 +74,15 @@ func main() {
 	for i, b := range cfg.Proxies {
 		var re *regexp.Regexp
 		if b.IsRegex {
-			compiled, err := regexp.Compile(b.Prefix)
+			compiled, err := regexp.Compile(b.Source)
 			if err != nil {
-				log.Fatalf("invalid regex %q: %v", b.Prefix, err)
+				log.Fatalf("invalid regex %q: %v", b.Source, err)
 			}
 			re = compiled
 		}
-		routes[i] = route{prefix: b.Prefix, re: re, handler: pkg.CreateBackendHandler(b, cfg.Headers, cfg.LoginAuthz), isService: b.IsService, exact: b.IsWSock}
+		routes[i] = route{prefix: b.Source, re: re, handler: pkg.CreateBackendHandler(b, cfg.Headers, cfg.LoginAuthz), isService: b.IsService, exact: b.IsWSock}
 		if b.IsService {
-			servicePrefix = b.Prefix
+			servicePrefix = b.Source
 		}
 	}
 
@@ -554,7 +554,7 @@ func main() {
 		if b.IsWSock {
 			marker += " (ws serve)"
 		}
-		log.Printf("  route[%d] %s → %s://%s%s", i, b.Prefix, b.Scheme, b.Target, marker)
+		log.Printf("  route[%d] %s → %s://%s%s", i, b.Source, b.Scheme, b.Target, marker)
 	}
 	if len(cfg.Headers) > 0 {
 		log.Printf("proxy headers: %v", cfg.Headers)

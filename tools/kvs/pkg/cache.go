@@ -544,7 +544,7 @@ func HandleCCBackend(b Backend) http.Handler {
 		// regex backends, where the prefix is the pattern itself).
 		rest := r.URL.Path
 		if !b.IsRegex {
-			rest = strings.TrimPrefix(rest, b.Prefix)
+			rest = strings.TrimPrefix(rest, b.Source)
 		}
 		if rest == "" {
 			rest = "/"
