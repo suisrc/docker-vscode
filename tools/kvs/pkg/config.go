@@ -706,7 +706,11 @@ func LoadInitConfig() Config {
 		_ = os.Setenv("SVC_BIN_HOME", cfg.SvcBinHome)
 
 		// 7. Other fields
-		cfg.SvcCheck = expandValue(svcStr(ini, "check", ""), svcVars)
+		if checkURL := os.Getenv("KVS_SVC_CHECK_URL"); checkURL != "" {
+			cfg.SvcCheck = checkURL
+		} else {
+			cfg.SvcCheck = expandValue(svcStr(ini, "check", ""), svcVars)
+		}
 		cfg.SvcProxyPath = expandValue(svcStr(ini, "proxy_path", ""), svcVars)
 		cfg.SvcOnceShell = expandValue(svcStr(ini, "once_shell", ""), svcVars)
 		cfg.SvcInitShell = expandValue(svcStr(ini, "init_shell", ""), svcVars)
