@@ -54,6 +54,5 @@ proxyn:
 deploy:
 	cp kvs /usr/bin/kvs
 
-# 
-update:
-	make clean && make build && rm -f ../../bin/kvs && cp kvs ../../bin
+# update
+# make clean && make build && rm -f ../../bin/kvs && cp kvs ../../bin

@@ -26,7 +26,7 @@ import (
 	"time"
 )
 
-//go:embed favicon.ico loading.html login.html logout.vsc.js kvs.default.ini kvs.vscode.ini zlist.html
+//go:embed favicon.ico manager.html loading.html login.html logout.vsc.js kvs.default.ini kvs.vscode.ini
 var staticFS embed.FS
 
 // MustAsset reads an embedded asset by name, failing fast at startup if missing.
@@ -93,23 +93,35 @@ func parseBackends(entries [][2]string) []Backend {
 			}
 		}
 
-		// Detect regex marker ("^" prefix).
-		isRegex := strings.HasPrefix(prefix, "^")
-		if isRegex {
-			prefix = prefix[1:] // strip "^", keep the regex pattern
+		// Detect regex marker ("^" prefix): the pattern (incl. commas) is
+		// used verbatim as one backend, no comma splitting.
+		if isRegex := strings.HasPrefix(prefix, "^"); isRegex {
+			if b := newBackend(prefix[1:], urlStr); b != nil {
+				b.IsService = isService
+				b.IsRegex = true
+				b.IsCache = isCache
+				b.IsWSock = isWSock
+				backends = append(backends, *b)
+			}
+			continue
 		}
 
-		if !isRegex && !strings.HasPrefix(prefix, "/") &&
-			!strings.HasPrefix(prefix, "http://") && !strings.HasPrefix(prefix, "https://") {
-			prefix = "/" + prefix
-		}
-
-		if b := newBackend(prefix, urlStr); b != nil {
-			b.IsService = isService
-			b.IsRegex = isRegex
-			b.IsCache = isCache
-			b.IsWSock = isWSock
-			backends = append(backends, *b)
+		// Comma-separated prefixes expand to one Backend per prefix, sharing
+		// the same URL and markers (e.g. "/assets/,/favicon.ico=file://...").
+		for _, p := range strings.Split(prefix, ",") {
+			if p = strings.TrimSpace(p); p == "" {
+				continue
+			}
+			if !strings.HasPrefix(p, "/") &&
+				!strings.HasPrefix(p, "http://") && !strings.HasPrefix(p, "https://") {
+				p = "/" + p
+			}
+			if b := newBackend(p, urlStr); b != nil {
+				b.IsService = isService
+				b.IsCache = isCache
+				b.IsWSock = isWSock
+				backends = append(backends, *b)
+			}
 		}
 	}
 
@@ -117,19 +129,30 @@ func parseBackends(entries [][2]string) []Backend {
 }
 
 // newBackend creates a Backend by parsing scheme:// from rawURL.
+// A leading "-" or "+" on rawURL is the http(s) path mode marker:
+//   - "-": replace — strip the routing prefix from the request path and
+//     join the remainder onto the target's own path
+//   - "+": append — the full request path (prefix included) is appended
+//     after the target's own path
+//   - none: the request path is forwarded unchanged
 func newBackend(prefix, rawURL string) *Backend {
+	var mode string
+	if strings.HasPrefix(rawURL, "-") || strings.HasPrefix(rawURL, "+") {
+		mode, rawURL = rawURL[:1], rawURL[1:]
+	}
 	scheme, target, ok := strings.Cut(rawURL, "://")
 	if !ok {
 		log.Printf("WARNING: backend %q has no scheme, skipping", rawURL)
 		return nil
 	}
 	scheme = strings.ToLower(scheme)
-	log.Printf("backend %q → prefix=%q scheme=%q target=%q", rawURL, prefix, scheme, target)
+	log.Printf("backend %q → prefix=%q scheme=%q target=%q mode=%q", rawURL, prefix, scheme, target, mode)
 	return &Backend{
-		Source: prefix,
-		Scheme: scheme,
-		Target: target,
-		RawURL: rawURL,
+		Source:   prefix,
+		Scheme:   scheme,
+		Target:   target,
+		RawURL:   rawURL,
+		PathMode: mode,
 	}
 }
 
@@ -139,7 +162,7 @@ func newBackend(prefix, rawURL string) *Backend {
 
 // apiHandleMap is the registry for "api://" backends: handler name →
 // http.Handler. Modules register their handlers via registerAPI at init
-// time (e.g. zcode.go registers "zlist"); api://<name> looks the handler
+// time (e.g. zcode.go registers "manager"); api://<name> looks the handler
 // up here directly.
 var apiHandleMap = map[string]http.Handler{}
 
@@ -169,11 +192,27 @@ func CreateBackendHandler(b Backend, cacheHeaders map[string]string, loginAuthz 
 		if err != nil {
 			log.Fatalf("invalid backend URL %q: %v", b.RawURL, err)
 		}
-		rp := httputil.NewSingleHostReverseProxy(targetURL)
-		origDirector := rp.Director
-		rp.Director = func(req *http.Request) {
-			origDirector(req)
-			applyCacheHeaders(req, cacheHeaders)
+		// Path handling per the -/+/none marker on the target URL:
+		//   none → request path forwarded unchanged (target path ignored);
+		//   -    → replace: strip the routing prefix, join onto target path;
+		//   +    → append: full request path joined after target path.
+		basePath := targetURL.EscapedPath()
+		rp := &httputil.ReverseProxy{
+			Director: func(req *http.Request) {
+				req.URL.Scheme = targetURL.Scheme
+				req.URL.Host = targetURL.Host
+				switch b.PathMode {
+				case "-":
+					req.URL.Path = joinProxyPaths(basePath, strings.TrimPrefix(req.URL.Path, b.Source))
+				case "+":
+					req.URL.Path = joinProxyPaths(basePath, req.URL.Path)
+				}
+				req.URL.RawPath = ""
+				if targetURL.RawQuery != "" && req.URL.RawQuery == "" {
+					req.URL.RawQuery = targetURL.RawQuery
+				}
+				applyCacheHeaders(req, cacheHeaders)
+			},
 		}
 		if loginAuthz {
 			rp.ModifyResponse = cacheResponseModifier()
@@ -235,7 +274,7 @@ func CreateBackendHandler(b Backend, cacheHeaders map[string]string, loginAuthz 
 		// In-process API backend: the target names a handler registered in
 		// apiHandleMap; the response is rendered directly by Go code
 		// (no subprocess). Handlers are registered via registerAPI from
-		// their owning modules (e.g. zcode.go registers "zlist").
+		// their owning modules (e.g. zcode.go registers "manager").
 		if h, ok := apiHandleMap[b.Target]; ok {
 			log.Printf("backend api handler: %s", b.Target)
 			return h
@@ -257,6 +296,18 @@ func CreateBackendHandler(b Backend, cacheHeaders map[string]string, loginAuthz 
 		log.Fatalf("unknown backend scheme %q in %q", b.Scheme, b.RawURL)
 		return nil
 	}
+}
+
+// joinProxyPaths joins a target base path and a (sub)path with a single
+// "/" separator; either side may be empty or "/".
+func joinProxyPaths(base, sub string) string {
+	if base == "" || base == "/" {
+		return sub
+	}
+	if sub == "" || sub == "/" {
+		return base
+	}
+	return strings.TrimSuffix(base, "/") + "/" + strings.TrimPrefix(sub, "/")
 }
 
 // applyCacheHeaders rewrites request headers according to the [headers] section.

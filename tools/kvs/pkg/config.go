@@ -70,6 +70,7 @@ type Backend struct {
 	Scheme    string // http, https, unix, file, text
 	Target    string // host:port, socket path, dir path, or literal text
 	RawURL    string // original URL for logging
+	PathMode  string // http(s) path handling: ""=forward as-is, "-"=replace (strip source prefix onto target path), "+"=append (request path after target path)
 	IsService bool   // this backend is the one managed by kvs (auto-deploy, etc.)
 	IsRegex   bool   // prefix is a regex pattern (^ prefix in [proxies])
 	IsCache   bool   // cc~ prefix: cache proxied responses on disk ({cache_dir:-/cache}/ccproxy/{scheme}:{host}/path)
@@ -590,27 +591,54 @@ func loadIni() (*iniFile, string) {
 			log.Fatalf("parse embedded config: %v", err)
 		}
 		return ini, "vscode"
-	case "zcoded":
-		if os.Getenv("KVS_SVC_ENABLE") == "" {
-			os.Setenv("KVS_SVC_ENABLE", "false")
+	case "zcodex":
+		if home := os.Getenv("KVS_ZCODEX_HOME"); home != "" {
+			if os.Getenv("ZCODE_DATA_BASE_DIR") == "" {
+				os.Setenv("ZCODE_DATA_BASE_DIR", home)
+			}
+			if os.Getenv("ZCODE_DESKTOP_HOME_DIR") == "" {
+				os.Setenv("ZCODE_DESKTOP_HOME_DIR", home)
+			}
+		}
+		zport := os.Getenv("KVS_ZCODE_PORT")
+		if zport == "" {
+			zport = "7587" // default: zcode port
+		}
+		if os.Getenv("KVS_SVC_CHECK_URL") == "" {
+			os.Setenv("KVS_SVC_CHECK_URL", "http://127.0.0.1:"+zport+"/api/server-info")
+		}
+		if os.Getenv("KVS_SVC_COMMAND") == "" {
+			os.Setenv("KVS_SVC_COMMAND", "${KVS_ZCODEX_NODE} {SVC_BIN_HOME}/bin/zcode.mjs --web --workspace ${HOME} --no-token --no-open --host=127.0.0.1 --port="+zport)
 		}
 		if os.Getenv("KVS_PATH_PUBLIC") == "" {
-			os.Setenv("KVS_PATH_PUBLIC", "/ws|/remote/v4|/api/v1/client/configs")
+			os.Setenv("KVS_PATH_PUBLIC", "/remote/ws|/remote/v4|/api/v1/client/configs")
 		}
 		if os.Getenv("KVS_CC_SED") == "" {
 			// KVS_CC_SED='index-*.js|overrideUrl:void 0|overrideUrl:`wss://>host</ws`'
-			os.Setenv("KVS_CC_SED", "src-*.js|`wss://zcode.z.ai/ws`|`wss://>host</ws`||src-*.js|`/api/v1/client/configs`,ff(e).origin|`/api/v1/client/configs`")
+			os.Setenv("KVS_CC_SED", "src-*.js|`wss://zcode.z.ai/ws`|`wss://>host</remote/ws`||src-*.js|`/api/v1/client/configs`,ff(e).origin|`/api/v1/client/configs`")
 		}
 		if os.Getenv("KVS_PROXIES") == "" {
-			os.Setenv("KVS_PROXIES", "ws~/ws=wsws://zcode;cc~/api/v1/=https://zcode.z.ai/api/v1/;cc~/remote/v4=https://zcode.z.ai/remote/v4;/=api://zlist")
+			os.Setenv("KVS_PROXIES", "/__healthz=text://OK:@now;"+ //
+				// zcode remote
+				"ws~/remote/ws=wsws://zcode-clients;"+
+				"cc~/remote/v4=https://zcode.z.ai/[v=app_version]remote/v4;"+
+				"cc~/api/v1/client=https://zcode.z.ai/[v=app_version]api/v1/client;"+
+				// zcode local
+				"/assets/,/material-icons/,/pdfjs/,/favicon.ico=file://{SVC_BIN_HOME}/web/assets;"+
+				"ws~/zcode/remote/ws=wsws://zcode-clients;"+
+				"/zcode/api/=-http://127.0.0.1:"+zport+"/api/;"+
+				"/zcode/ws=-http://127.0.0.1:"+zport+"/ws;"+
+				"&/zcode=http://127.0.0.1:"+zport+";"+
+				// zcode manager
+				"/=api://manager")
 		}
 		// read other config from kvs.default.ini
-		log.Printf("loading config: zcoded (embedded kvs.default.ini)")
+		log.Printf("loading config: zcodex (embedded kvs.default.ini)")
 		ini, err := parseIniData(MustAsset("kvs.default.ini"), "kvs.default.ini")
 		if err != nil {
 			log.Fatalf("parse embedded config: %v", err)
 		}
-		return ini, "zcoded"
+		return ini, "zcodex"
 	}
 	// -c by local fs
 	resolved := resolveConfigPath(cfgPath)
@@ -737,6 +765,7 @@ func LoadInitConfig() Config {
 		if strings.ContainsRune(cfg.SvcCommand, '{') {
 			cfg.SvcCommand = expandValue(cfg.SvcCommand, svcVars)
 		}
+		log.Printf("service.command: %s", cfg.SvcCommand)
 
 		// 7b. vsc_language — lang→langpack JSON map (e.g. {"zh-cn":"zh-hans"}).
 		//     NOT expanded via expandValue: the {…} JSON braces would be

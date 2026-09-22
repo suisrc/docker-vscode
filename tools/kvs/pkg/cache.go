@@ -9,6 +9,7 @@ import (
 	"log"
 	"net"
 	"net/http"
+	"net/url"
 	"os"
 	"os/exec"
 	"path/filepath"
@@ -537,6 +538,19 @@ func SetCacheDir(cacheDir string) {
 func HandleCCBackend(b Backend) http.Handler {
 	scheme := b.Scheme
 	host := b.Target
+	// Version-marker target: "[v=key]" anywhere in the target (e.g.
+	// "zcode.z.ai/[v=app_version]remote/v4"). The marker is removed from
+	// the upstream URL; for the cache path it is replaced per request with
+	// the value of the named query key (or "0.0.0" when absent), so each
+	// app version gets its own cache namespace.
+	upstreamHost := host
+	var verPrefix, verKey, verSuffix string
+	if i := strings.Index(host, "[v="); i >= 0 {
+		if j := strings.IndexByte(host[i:], ']'); j > 3 { // j > 3 → non-empty key
+			verPrefix, verKey, verSuffix = host[:i], host[i+3:i+j], host[i+j+1:]
+			upstreamHost = verPrefix + verSuffix
+		}
+	}
 	return http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 		cacheOnce.Do(initCache)
 
@@ -550,20 +564,46 @@ func HandleCCBackend(b Backend) http.Handler {
 			rest = "/"
 		}
 
-		targetURL := buildTargetURL(scheme, host, rest, r.URL.RawQuery)
-		log.Printf("[cache] cc~ %s %s → %s", r.Method, r.URL.Path, targetURL)
+		// Cache namespace host: with a [v=key] marker, embed the resolved
+		// version so different versions cache apart. The version segment
+		// gets its own "/" (the marker carried none).
+		cacheHost := upstreamHost
+		if verKey != "" {
+			cacheHost = verPrefix + ccVersion(r, verKey) + "/" + verSuffix
+		}
+
+		targetURL := buildTargetURL(scheme, upstreamHost, rest, r.URL.RawQuery)
+		log.Printf("[cache] cc~ %s %s → %s (cache=%s)", r.Method, r.URL.Path, targetURL, cacheHost)
 
 		if r.Method != http.MethodGet {
 			handlePassThroughCache(w, r, targetURL)
 			return
 		}
 
-		bodyPath, metaPath := cachePaths(cacheBase, scheme, host, rest)
+		bodyPath, metaPath := cachePaths(cacheBase, scheme, cacheHost, rest)
 		if serveFromCache(w, bodyPath, metaPath, targetURL, r.Host) {
 			return
 		}
 		handleCachedCache(w, r, targetURL, bodyPath, metaPath)
 	})
+}
+
+// ccVersion resolves the version value used by a "[v=key]" target marker.
+// Lookup order: the request's own query string, then the Referer URL's query
+// (sub-resource requests rarely carry the app version themselves, but the
+// page that referenced them does), then "0.0.0" as the unknown-version default.
+func ccVersion(r *http.Request, key string) string {
+	if v := r.URL.Query().Get(key); v != "" {
+		return v
+	}
+	if ref := r.Header.Get("Referer"); ref != "" {
+		if u, err := url.Parse(ref); err == nil {
+			if v := u.Query().Get(key); v != "" {
+				return v
+			}
+		}
+	}
+	return "0.0.0"
 }
 
 // =============================================================================

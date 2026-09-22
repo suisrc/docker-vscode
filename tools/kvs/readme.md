@@ -31,7 +31,7 @@ make build
   - `KVS_SVC_ENABLE=false`（禁用 [service] 服务生命周期）
   - `KVS_PATH_PUBLIC=/ws|/remote/v4|/api/v1/client/configs`
   - `KVS_CC_SED=src-*.js|\`wss://zcode.z.ai/ws\`|\`wss://>host</ws\`||src-*.js|\`/api/v1/client/configs\`,ff(e).origin|\`/api/v1/client/configs\``
-  - `KVS_PROXIES=ws~/ws=wsws://zcode;cc~/api/v1/=https://zcode.z.ai/api/v1/;cc~/remote/v4=https://zcode.z.ai/remote/v4;/=api://zlist`
+  - `KVS_PROXIES=ws~/ws=wsws://zcode-clients;cc~/api/v1/=https://zcode.z.ai/api/v1/;cc~/remote/v4=https://zcode.z.ai/remote/v4;/=api://manager`
 
 `-n` 出现时自动补充 `-c default`，用内联路由替代 `[proxies]` 段；设置 `KVS_PROXIES` 环境变量同样生效（与 `-n` 等价，同样自动补充 `-c default` 并禁用 [service]）。详见 [内联路由 `-n`](#内联路由--n)。
 

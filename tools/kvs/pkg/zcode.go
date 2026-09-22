@@ -5,7 +5,7 @@ package pkg
 // web client share one endpoint; who is who comes from the first auth_init
 // message, not the URL. The routing prefix is pure operator config:
 //
-//	ws~/ws = wsws://zcode
+//	ws~/ws = wsws://zcode-clients
 //
 // Desktop: ZCODE_WEB_REMOTE_CONTROL_RELAY_WS_URL=ws://host:port/ws[?mid=<uuid>]
 // Web page: endpoint injected via KVS_CC_SED (overrideUrl:`wss://>host</ws`).
@@ -308,7 +308,7 @@ type zcodeConn struct {
 
 // zcodeRelay is the in-process pairing relay. One instance serves any number
 // of "wsws://" backends; typically there is exactly one, named by the
-// backend target (e.g. wsws://zcode).
+// backend target (e.g. wsws://zcode-clients).
 type zcodeRelay struct {
 	mu        sync.Mutex
 	store     *zcodeStore
@@ -837,7 +837,7 @@ func clientRemoteAddr(req *http.Request) string {
 }
 
 // ---------------------------------------------------------------------------
-// api://zlist — device list page (non-core: presentation only)
+// api://manager — device list page (non-core: presentation only)
 // ---------------------------------------------------------------------------
 
 // zcodeDeviceInfo is one row of the device list page.
@@ -976,7 +976,7 @@ func (r *zcodeRelay) ServeZList(w http.ResponseWriter, req *http.Request, pagePr
 		rows.WriteString(closeTag)
 	}
 
-	html := string(MustAsset("zlist.html"))
+	html := string(MustAsset("manager.html"))
 	html = strings.Replace(html, "{{DEVICES}}", rows.String(), 1)
 	html = strings.Replace(html, "{{TOTAL}}", fmt.Sprint(len(list)), 1)
 	html = strings.Replace(html, "{{ONLINE}}", fmt.Sprint(onlineCount), 1)
@@ -991,10 +991,10 @@ func (r *zcodeRelay) ServeZList(w http.ResponseWriter, req *http.Request, pagePr
 	_, _ = w.Write([]byte(html))
 }
 
-// api://zlist handler registration: "zlist" serves the device list linking
+// api://manager handler registration: "manager" serves the device list linking
 // to the injected zcode web bundle (cc~ proxied /remote/v4).
 func init() {
-	registerAPI("zlist", http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
-		zcodeGetRelay("zcode").ServeZList(w, r, "/remote/v4")
+	registerAPI("manager", http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		zcodeGetRelay("zcode-clients").ServeZList(w, r, "/remote/v4")
 	}))
 }
