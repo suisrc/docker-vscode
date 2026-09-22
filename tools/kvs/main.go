@@ -26,9 +26,10 @@ func main() {
 		return
 	}
 
-	// Subcommand: "demo" — generate a starter kvs.ini from the embedded example.
+	// Subcommand: "demo" — generate a starter kvs.ini from an embedded template
+	// (default → kvs.default.ini, vscode → kvs.vscode.ini).
 	if len(os.Args) > 1 && os.Args[1] == "demo" {
-		pkg.DemoCommand()
+		pkg.DemoCommand(os.Args[2:])
 		return
 	}
 
@@ -86,7 +87,7 @@ func main() {
 	}
 
 	service := &pkg.Process{Name: "service"}
-	vagents := &pkg.Process{Name: "vagents"}
+	agentvs := &pkg.Process{Name: "agentvs"}
 	// vmodels := &pkg.Process{Name: "vmodels"}
 
 	// setCookie writes a cookie with the given value and MaxAge.
@@ -267,7 +268,7 @@ func main() {
 	mux.HandleFunc("/__agents/status", func(w http.ResponseWriter, r *http.Request) {
 		w.Header().Set("Content-Type", "application/json; charset=utf-8")
 		resp := map[string]any{
-			"running": vagents.Running(),
+			"running": agentvs.Running(),
 			"command": cfg.VscAgentsCmd,
 			"cmds":    cfg.VscAgentCmds,
 		}
@@ -289,7 +290,7 @@ func main() {
 			http.Error(w, "POST required", http.StatusMethodNotAllowed)
 			return
 		}
-		if vagents.Running() {
+		if agentvs.Running() {
 			http.Error(w, "agents already running", http.StatusConflict)
 			return
 		}
@@ -308,7 +309,7 @@ func main() {
 			http.Error(w, "vsc_agents_cmd not configured", http.StatusBadRequest)
 			return
 		}
-		if err := vagents.Start("", cfg.VscAgentsCmd); err != nil {
+		if err := agentvs.Start("", cfg.VscAgentsCmd); err != nil {
 			http.Error(w, "failed to start agents: "+err.Error(), http.StatusInternalServerError)
 			return
 		}
@@ -322,11 +323,11 @@ func main() {
 			http.Error(w, "POST required", http.StatusMethodNotAllowed)
 			return
 		}
-		if !vagents.Running() {
+		if !agentvs.Running() {
 			http.Error(w, "agents not running", http.StatusConflict)
 			return
 		}
-		vagents.Stop()
+		agentvs.Stop()
 		w.WriteHeader(http.StatusOK)
 		_, _ = io.WriteString(w, `{"success":true}`)
 	})
@@ -355,7 +356,7 @@ func main() {
 			http.Error(w, "vsc_agents_cmd not configured", http.StatusBadRequest)
 			return
 		}
-		if ok := vagents.Restart(cfg.VscAgentsCmd); !ok {
+		if ok := agentvs.Restart(cfg.VscAgentsCmd); !ok {
 			http.Error(w, "failed to start agents", http.StatusInternalServerError)
 			return
 		}
@@ -567,14 +568,19 @@ func main() {
 	}
 
 	<-sigCh
-	log.Printf("shutdown signal received, draining…")
+	log.Printf("shutdown signal received, draining… (press Ctrl+C again to force quit)")
+	go func() {
+		<-sigCh
+		log.Printf("forced exit on second signal")
+		os.Exit(1)
+	}()
 	shutdownCtx, cancel := context.WithTimeout(context.Background(), 15*time.Second)
 	defer cancel()
 	for _, srv := range servers {
 		_ = srv.Server.Shutdown(shutdownCtx)
 	}
 	// Agent host is kvs-managed: terminate it on kvs exit.
-	vagents.Stop()
+	agentvs.Stop()
 	// Only kvs-managed backends (started via startBackend) are cleaned up.
 	// External/system services (detected via check, no proc) are never
 	// killed or touched by kvs on shutdown.

@@ -398,14 +398,14 @@ func loadMirrorConfig() mirrorConfig {
 		}
 	}
 	if cfgPath == "" {
-		log.Fatal("mirror: config file required: use -c <path> or -c default")
+		log.Fatal("mirror: config file required: use -c <path> or -c vscode")
 	}
 
 	var ini *iniFile
-	if cfgPath == "default" {
-		log.Printf("mirror: loading config: default (embedded kvs.ini.example)")
+	if cfgPath == "vscode" {
+		log.Printf("mirror: loading config: vscode (embedded kvs.vscode.ini)")
 		var err error
-		ini, err = parseIniData(MustAsset("kvs.ini.example"), "kvs.ini.example")
+		ini, err = parseIniData(MustAsset("kvs.vscode.ini"), "kvs.vscode.ini")
 		if err != nil {
 			log.Fatalf("mirror: parse embedded config: %v", err)
 		}

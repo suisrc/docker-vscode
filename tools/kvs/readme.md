@@ -13,17 +13,20 @@ kai vscode
 ```bash
 make build
 ./kvs help                          # 查看帮助
-./kvs demo                          # 生成示例配置 ./kvs.ini
+./kvs demo                          # 生成示例配置 ./kvs.ini (kvs.default.ini 模板)
+./kvs demo vscode                   # 生成示例配置 ./kvs.ini (kvs.vscode.ini 模板)
 # 编辑 kvs.ini
 ./kvs -c kvs.ini                    # 指定配置文件启动
-./kvs -c default                    # 使用 embed 中的 kvs.ini.example
+./kvs -c default                    # 使用 embed 中的 kvs.default.ini
+./kvs -c vscode                     # 使用 embed 中的 kvs.vscode.ini (VS Code 专用配置)
 ./kvs -c zcoded                     # zcode 中继默认配置（内置，见下方说明）
 ./kvs -n "/=http://127.0.0.1:8080"  # 内联路由，自动补充 -c default
 ```
 
 **`-c` 为必填项**，不指定直接报错退出。特殊值：
 
-- `default`：使用 embed 中的 `kvs.ini.example`，无需磁盘文件
+- `default`：使用 embed 中的 `kvs.default.ini`，无需磁盘文件
+- `vscode`：使用 embed 中的 `kvs.vscode.ini`，VS Code Server 专用配置，无需磁盘文件
 - `zcoded`：zcode 中继预设，等效于内置默认 + 以下环境变量（已显式设置的环境变量优先，不会被覆盖）：
   - `KVS_SVC_ENABLE=false`（禁用 [service] 服务生命周期）
   - `KVS_PATH_PUBLIC=/ws|/remote/v4|/api/v1/client/configs`
@@ -39,7 +42,7 @@ make build
 | 命令 | 说明 |
 |---|---|
 | `kvs help` | 显示帮助信息（也支持 `-h`、`--help`） |
-| `kvs demo` | 生成示例配置文件 `kvs.ini` |
+| `kvs demo [default\|vscode]` | 生成示例配置文件 `kvs.ini`（默认 `kvs.default.ini` 模板，`vscode` 用 `kvs.vscode.ini` 模板） |
 | `kvs mirror -c <config> [version]` | 同步 VS Code 版本到 S3 兼容存储 |
 | `kvs mirror -c default` | 使用内置默认配置同步 latest 版本 |
 | `kvs mirror -c default 1.130.0` | 同步指定版本 |

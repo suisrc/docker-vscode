@@ -236,7 +236,7 @@ func parseIni(path string) (*iniFile, error) {
 }
 
 // parseIniData parses INI content from a byte slice. source is used only for
-// error messages (e.g. "kvs.ini.example:3: ..."). This allows loading config
+// error messages (e.g. "kvs.default.ini:3: ..."). This allows loading config
 // from embedded assets (via -c default) without a temp file.
 func parseIniData(data []byte, source string) (*iniFile, error) {
 	ini := &iniFile{
@@ -553,7 +553,7 @@ func parseProxiesArg(s string) [][2]string {
 
 // loadIni parses the -c flag value and returns the parsed INI file plus the
 // resolved source label (for logging). The special value "default" loads the
-// embedded kvs.ini.example without requiring a file on disk.
+// embedded kvs.default.ini without requiring a file on disk.
 func loadIni() (*iniFile, string) {
 	cfgPath := ""
 	for i, arg := range os.Args[1:] {
@@ -574,9 +574,23 @@ func loadIni() (*iniFile, string) {
 		}
 		cfgPath = "default"
 	}
-
-	// -c zcoded for zcode custom config
-	if cfgPath == "zcoded" {
+	// switch -c by embed fs
+	switch cfgPath {
+	case "default":
+		log.Printf("loading config: default (embedded kvs.default.ini)")
+		ini, err := parseIniData(MustAsset("kvs.default.ini"), "kvs.default.ini")
+		if err != nil {
+			log.Fatalf("parse embedded config: %v", err)
+		}
+		return ini, "default"
+	case "vscode":
+		log.Printf("loading config: vscode (embedded kvs.vscode.ini)")
+		ini, err := parseIniData(MustAsset("kvs.vscode.ini"), "kvs.vscode.ini")
+		if err != nil {
+			log.Fatalf("parse embedded config: %v", err)
+		}
+		return ini, "vscode"
+	case "zcoded":
 		if os.Getenv("KVS_SVC_ENABLE") == "" {
 			os.Setenv("KVS_SVC_ENABLE", "false")
 		}
@@ -590,18 +604,15 @@ func loadIni() (*iniFile, string) {
 		if os.Getenv("KVS_PROXIES") == "" {
 			os.Setenv("KVS_PROXIES", "ws~/ws=wsws://zcode;cc~/api/v1/=https://zcode.z.ai/api/v1/;cc~/remote/v4=https://zcode.z.ai/remote/v4;/=api://zlist")
 		}
-		cfgPath = "default"
-	}
-
-	if cfgPath == "default" {
-		log.Printf("loading config: default (embedded kvs.ini.example)")
-		ini, err := parseIniData(MustAsset("kvs.ini.example"), "kvs.ini.example")
+		// read other config from kvs.default.ini
+		log.Printf("loading config: zcoded (embedded kvs.default.ini)")
+		ini, err := parseIniData(MustAsset("kvs.default.ini"), "kvs.default.ini")
 		if err != nil {
 			log.Fatalf("parse embedded config: %v", err)
 		}
-		return ini, "default"
+		return ini, "zcoded"
 	}
-
+	// -c by local fs
 	resolved := resolveConfigPath(cfgPath)
 	if resolved == "" {
 		if cfgPath != "" {
@@ -678,22 +689,29 @@ func LoadInitConfig() Config {
 		cfg.SvcVersionLatestURL = expandValue(svcStr(ini, "version_latest_url", ""), svcVars)
 		cfg.SvcVersionHashURL = strings.ReplaceAll(svcStr(ini, "version_hash_url", ""), "{SVC_VERSION_BASE_URL}", svcVersionBaseURL)
 
-		var err error
-		cfg.SvcVersion, cfg.SvcVersionHash, err = resolveVersion(cfg.SvcVersion, cfg.SvcVersionLatestURL, cfg.SvcVersionHashURL)
-		if err != nil {
-			cfg.InitError = fmt.Sprintf("resolve version: %v", err)
-			log.Printf("WARNING: %s", cfg.InitError)
-		}
-		svcVars["SVC_VERSION"] = cfg.SvcVersion
-		svcVars["SVC_VERSION_HASH"] = cfg.SvcVersionHash
-		_ = os.Setenv("SVC_VERSION", cfg.SvcVersion)
-		_ = os.Setenv("SVC_VERSION_HASH", cfg.SvcVersionHash)
-
 		// 3. download — re-expand with svcVars (may reference {SVC_VERSION_HASH})
-		cfg.SvcDownload = expandValue(svcStr(ini, "download", ""), svcVars)
-		cfg.SvcDownload = strings.ReplaceAll(cfg.SvcDownload, "SVC_VERSION_HASH", cfg.SvcVersionHash)
-		cfg.SvcDownload = strings.ReplaceAll(cfg.SvcDownload, "SVC_VERSION", cfg.SvcVersion)
-		log.Printf("backend download url: %s", cfg.SvcDownload)
+		if download := expandValue(svcStr(ini, "download", ""), svcVars); download != "" {
+			var err error
+			cfg.SvcVersion, cfg.SvcVersionHash, err = resolveVersion(cfg.SvcVersion, cfg.SvcVersionLatestURL, cfg.SvcVersionHashURL)
+			if err != nil {
+				cfg.InitError = fmt.Sprintf("resolve version: %v", err)
+				log.Printf("WARNING: %s", cfg.InitError)
+			}
+			svcVars["SVC_VERSION"] = cfg.SvcVersion
+			svcVars["SVC_VERSION_HASH"] = cfg.SvcVersionHash
+			_ = os.Setenv("SVC_VERSION", cfg.SvcVersion)
+			_ = os.Setenv("SVC_VERSION_HASH", cfg.SvcVersionHash)
+
+			download = strings.ReplaceAll(download, "SVC_VERSION_HASH", cfg.SvcVersionHash)
+			download = strings.ReplaceAll(download, "SVC_VERSION", cfg.SvcVersion)
+			cfg.SvcDownload = download
+			log.Printf("backend download url: %s", cfg.SvcDownload)
+		} else {
+			svcVars["SVC_VERSION"] = cfg.SvcVersion
+			svcVars["SVC_VERSION_HASH"] = cfg.SvcVersionHash
+			_ = os.Setenv("SVC_VERSION", cfg.SvcVersion)
+			_ = os.Setenv("SVC_VERSION_HASH", cfg.SvcVersionHash)
+		}
 
 		// 4. download_info / download_field_url
 		cfg.SvcDownloadInfo = expandValue(svcStr(ini, "download_info", ""), svcVars)

@@ -79,14 +79,14 @@ type zcodeMeta map[string]any
 // zcodeClientMsg is one inbound frame; fields are shared across message
 // types (Type discriminates).
 type zcodeClientMsg struct {
-	Type      string     `json:"type"`
-	DeviceMid string     `json:"device_mid,omitempty"` // device_register_init
-	PassHash  string     `json:"pass_hash,omitempty"`  // device_register_init
-	Role      zcodeRole  `json:"role,omitempty"`       // auth_init
-	DeviceSid string     `json:"device_sid,omitempty"` // auth_init/auth_response/pair_status_query
-	Proof     string     `json:"proof,omitempty"`      // auth_response
-	Meta      zcodeMeta  `json:"meta,omitempty"`
-	ClientTs  *int64     `json:"client_ts,omitempty"`
+	Type      string          `json:"type"`
+	DeviceMid string          `json:"device_mid,omitempty"` // device_register_init
+	PassHash  string          `json:"pass_hash,omitempty"`  // device_register_init
+	Role      zcodeRole       `json:"role,omitempty"`       // auth_init
+	DeviceSid string          `json:"device_sid,omitempty"` // auth_init/auth_response/pair_status_query
+	Proof     string          `json:"proof,omitempty"`      // auth_response
+	Meta      zcodeMeta       `json:"meta,omitempty"`
+	ClientTs  *int64          `json:"client_ts,omitempty"`
 	Payload   json.RawMessage `json:"payload,omitempty"` // data
 }
 
@@ -157,7 +157,7 @@ type zcodeDeviceRecord struct {
 
 // zcodeStoreFile is the on-disk state file format (version 1, like zrelay).
 type zcodeStoreFile struct {
-	Version int                `json:"version"`
+	Version int                 `json:"version"`
 	Devices []zcodeDeviceRecord `json:"devices"`
 }
 
@@ -293,28 +293,28 @@ func (s *zcodeStore) flush() {
 
 // zcodeConn is one live connection, authenticated or not.
 type zcodeConn struct {
-	id          int64
-	ws          *wsConn
-	remote      string
-	mid         string // ?mid= query parameter
-	role        zcodeRole
-	deviceSid   string
-	authMeta    zcodeMeta
-	pendingNonce string
+	id            int64
+	ws            *wsConn
+	remote        string
+	mid           string // ?mid= query parameter
+	role          zcodeRole
+	deviceSid     string
+	authMeta      zcodeMeta
+	pendingNonce  string
 	authenticated bool
-	detached    bool
-	superseded  bool // replaced by a newer connection; suppresses status churn
+	detached      bool
+	superseded    bool // replaced by a newer connection; suppresses status churn
 }
 
 // zcodeRelay is the in-process pairing relay. One instance serves any number
 // of "wsws://" backends; typically there is exactly one, named by the
 // backend target (e.g. wsws://zcode).
 type zcodeRelay struct {
-	mu     sync.Mutex
-	store  *zcodeStore
+	mu        sync.Mutex
+	store     *zcodeStore
 	stateFile string
-	nextID int64
-	conns  map[int64]*zcodeConn
+	nextID    int64
+	conns     map[int64]*zcodeConn
 	// device_sid → the single live device connection
 	devices map[string]*zcodeConn
 	// device_sid → live terminal connections
@@ -633,7 +633,7 @@ func (r *zcodeRelay) onAuthResponse(conn *zcodeConn, msg *zcodeClientMsg) {
 }
 
 // onPairStatusQuery is the authenticated heartbeat.
-func (r *zcodeRelay) onPairStatusQuery(conn *zcodeConn, msg *zcodeClientMsg) {
+func (r *zcodeRelay) onPairStatusQuery(conn *zcodeConn, _ *zcodeClientMsg) {
 	r.mu.Lock()
 	sid := conn.deviceSid
 	r.mu.Unlock()
@@ -849,8 +849,8 @@ type zcodeDeviceInfo struct {
 	Version    string // desktop app version (from register meta)
 	PassHash   string
 	Online     bool
-	UpdatedAt  int64 // last register/re-register (上线时间)
-	LastSeenAt int64 // last authenticated activity (最后使用)
+	UpdatedAt  int64  // last register/re-register (上线时间)
+	LastSeenAt int64  // last authenticated activity (最后使用)
 	LastIP     string // last connection source IP
 }
 
@@ -955,13 +955,25 @@ func (r *zcodeRelay) ServeZList(w http.ResponseWriter, req *http.Request, pagePr
 		if meta == "" {
 			meta = d.Mid
 		}
-		rows.WriteString(open +
-			`<div class="device-top"><div class="device-name"><span class="dot ` + cls + `"></span><span>` + zcodeHTMLEscape(d.Name) + `</span></div></div>` +
-			`<div class="device-meta">` + zcodeHTMLEscape(meta) + ` · ` + status + `</div>` +
-			`<div class="device-meta">上线 ` + zcodeTime(d.UpdatedAt) + `</div>` +
-			`<div class="device-meta">使用 ` + zcodeTime(d.LastSeenAt) + `</div>` +
-			ipMeta(d.LastIP) +
-			closeTag)
+		rows.WriteString(open)
+		rows.WriteString(`<div class="device-top"><div class="device-name"><span class="dot `)
+		rows.WriteString(cls)
+		rows.WriteString(`"></span><span>`)
+		rows.WriteString(zcodeHTMLEscape(d.Name))
+		rows.WriteString(`</span></div></div>`)
+		rows.WriteString(`<div class="device-meta">`)
+		rows.WriteString(zcodeHTMLEscape(meta))
+		rows.WriteString(` · `)
+		rows.WriteString(status)
+		rows.WriteString(`</div>`)
+		rows.WriteString(`<div class="device-meta">上线 `)
+		rows.WriteString(zcodeTime(d.UpdatedAt))
+		rows.WriteString(`</div>`)
+		rows.WriteString(`<div class="device-meta">使用 `)
+		rows.WriteString(zcodeTime(d.LastSeenAt))
+		rows.WriteString(`</div>`)
+		rows.WriteString(ipMeta(d.LastIP))
+		rows.WriteString(closeTag)
 	}
 
 	html := string(MustAsset("zlist.html"))

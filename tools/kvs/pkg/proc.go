@@ -10,7 +10,20 @@ import (
 	"sync"
 	"syscall"
 	"time"
+	"unsafe"
 )
+
+// restoreForeground gives the controlling terminal's foreground process
+// group back to the kvs process group (TIOCSPGRP). No-op when stdin is
+// not a TTY (daemon / pipe / CI), or when the ioctl fails.
+func restoreForeground() {
+	pgid := syscall.Getpgrp()
+	_, _, errno := syscall.Syscall(syscall.SYS_IOCTL, uintptr(syscall.Stdin),
+		uintptr(syscall.TIOCSPGRP), uintptr(unsafe.Pointer(&pgid)))
+	if errno == 0 {
+		log.Printf("terminal foreground process group restored to %d", pgid)
+	}
+}
 
 // terminateTimeout is how long terminateLocked waits after each signal
 // (SIGTERM, then SIGKILL) before giving up and abandoning the child.
@@ -117,8 +130,10 @@ func (e *Process) startLocked(name, cmds string) error {
 	// Inherit stdout/stderr so backend logs interleave with kvs logs.
 	cmd.Stdout = os.Stdout
 	cmd.Stderr = os.Stderr
-	// Own process group, so signals can be sent to -pgid (whole tree).
-	cmd.SysProcAttr = &syscall.SysProcAttr{Setpgid: true}
+	// New session: detaches the backend from kvs's controlling terminal,
+	// so it cannot tcsetpgrp-steal the foreground and swallow Ctrl+C.
+	// Implies a fresh pgid, so -pgid signaling in Stop still works.
+	cmd.SysProcAttr = &syscall.SysProcAttr{Setsid: true}
 	if err := cmd.Start(); err != nil {
 		log.Printf("[%s] start process: %v", name, err)
 		return err
@@ -144,6 +159,9 @@ func (e *Process) startLocked(name, cmds string) error {
 		} else {
 			log.Printf("[%s] process (pid %d) exited", label, cmd.Process.Pid)
 		}
+		// Backend exit: if it had stolen the terminal foreground group via
+		// tcsetpgrp, give it back to kvs so the next Ctrl+C reaches kvs.
+		restoreForeground()
 	}()
 	e.proc = proc
 	e.cmds = cmds

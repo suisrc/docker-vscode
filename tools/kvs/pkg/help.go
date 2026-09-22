@@ -16,14 +16,16 @@ Usage:
 
 Subcommands:
   kvs help                          show this help
-  kvs demo                          generate a sample kvs.ini config
+  kvs demo [default|vscode]         generate a sample kvs.ini config
+                                    (default: kvs.default.ini template, vscode: kvs.vscode.ini template)
   kvs mirror -c <config> [version]  sync VS Code versions to S3-compatible storage
   kvs mirror -c default             sync the latest version with the built-in config
   kvs mirror -c default 1.130.0     sync a specific version
 
 Startup options:
   -c <path>                         config file path (required)
-  -c default                        use kvs.ini.example from embed
+  -c default                        use kvs.default.ini from embed
+  -c vscode                         use kvs.vscode.ini  from embed
   -n "prefix=url;prefix=url"        inline [proxies] routes, auto-appends -c default
                                     separate entries with ';', each: prefix=url
                                     example: -n "/healthz=text://OK:@now;/=http://127.0.0.1:8080"
@@ -69,19 +71,36 @@ Examples:
 `)
 }
 
-// DemoCommand writes a copy of the embedded kvs.ini.example to ./kvs.ini in
-// the current directory. If kvs.ini already exists, it prints an error and
-// exits non-zero so the operator's existing config is never overwritten.
-func DemoCommand() {
+// DemoCommand writes a copy of an embedded config template to ./kvs.ini in
+// the current directory. The optional arg selects the template:
+//
+//	demo          (or "default")  → kvs.default.ini
+//	demo vscode                   → kvs.vscode.ini
+//
+// If kvs.ini already exists, it prints an error and exits non-zero so the
+// operator's existing config is never overwritten.
+func DemoCommand(args []string) {
+	asset := "kvs.default.ini"
+	if len(args) > 0 {
+		switch args[0] {
+		case "default":
+			asset = "kvs.default.ini"
+		case "vscode":
+			asset = "kvs.vscode.ini"
+		default:
+			fmt.Fprintf(os.Stderr, "error: unknown demo template %q (use default or vscode)\n", args[0])
+			os.Exit(1)
+		}
+	}
 	const dest = "kvs.ini"
 	if _, err := os.Stat(dest); err == nil {
 		fmt.Fprintf(os.Stderr, "error: %s already exists in the current directory\n", dest)
 		os.Exit(1)
 	}
-	data := MustAsset("kvs.ini.example")
+	data := MustAsset(asset)
 	if err := os.WriteFile(dest, data, 0o644); err != nil {
 		fmt.Fprintf(os.Stderr, "error: write %s: %v\n", dest, err)
 		os.Exit(1)
 	}
-	fmt.Printf("created %s (%d bytes)\n", dest, len(data))
+	fmt.Printf("created %s from %s (%d bytes)\n", dest, asset, len(data))
 }
