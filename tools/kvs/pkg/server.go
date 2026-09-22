@@ -194,10 +194,10 @@ func AuthMiddleware(next http.Handler, cfg Config, setCookie func(http.ResponseW
 				return
 			}
 		}
-		// Header-based auth (x-cookie-<cookieName>): replaces the old query
-		// param approach, which leaked into logs/history/Referer.
-		if cfg.LoginTimeout == 0 && cfg.LoginToken != "" {
-			if tkn := r.Header.Get("x-cookie-" + cfg.CookieName); tkn != "" {
+		// Query-param auth (?<query_token_key>=<token>): grants access when the
+		// value matches loginToken. Only enabled when query_token_key is set.
+		if cfg.QueryTokenKey != "" && cfg.LoginToken != "" {
+			if tkn := r.URL.Query().Get(cfg.QueryTokenKey); tkn != "" {
 				if subtle.ConstantTimeCompare([]byte(tkn), []byte(cfg.LoginToken)) != 1 {
 					http.Error(w, "403 Forbidden", http.StatusForbidden)
 					return
@@ -206,7 +206,19 @@ func AuthMiddleware(next http.Handler, cfg Config, setCookie func(http.ResponseW
 				return
 			}
 		}
-		ckn, err := r.Cookie(cfg.CookieName)
+		// Header-based auth (x-cookie-<cookieName>): replaces the old query
+		// param approach, which leaked into logs/history/Referer.
+		if cfg.LoginTimeout == 0 && cfg.LoginToken != "" {
+			if tkn := r.Header.Get("x-cookie-" + cfg.CookieTknName); tkn != "" {
+				if subtle.ConstantTimeCompare([]byte(tkn), []byte(cfg.LoginToken)) != 1 {
+					http.Error(w, "403 Forbidden", http.StatusForbidden)
+					return
+				}
+				next.ServeHTTP(w, r)
+				return
+			}
+		}
+		ckn, err := r.Cookie(cfg.CookieTknName)
 		if err != nil || ckn.Value == "" {
 			ServeLoginAsset(w, "")
 			return

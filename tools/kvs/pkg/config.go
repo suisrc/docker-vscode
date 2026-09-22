@@ -54,7 +54,8 @@ type Config struct {
 	Actions map[string]string // Actions maps the [actions] section: action name → one-shot command
 	// top-level
 	Port         string
-	CookieName   string            // cookie, default "kvs"
+	CookieTknName   string // cookie_token_key, default "kvs" (legacy key: cookie)
+	QueryTokenKey string           // query_token_key — when set, ?<key>=<token> grants access
 	LoginAuthz   bool              // login_authz — enable auth redirect + logout button injection
 	LoginToken   string            // login_token; when set, cookie value must match it
 	LoginTimeout int               // login_timeout (seconds); 0=session; >0=hashed+expiring; <0=error
@@ -829,7 +830,8 @@ func LoadInitConfig() Config {
 
 	// Top-level fields (always resolved, even in -n mode).
 	cfg.Port = expandValue(strProp(ini, "port", "7080"), svcVars)
-	cfg.CookieName = expandValue(strProp(ini, "cookie", "kvs"), svcVars)
+	cfg.CookieTknName = expandValue(strProp(ini, "cookie_token_key", strProp(ini, "cookie", "kvs")), svcVars)
+	cfg.QueryTokenKey = expandValue(strProp(ini, "query_token_key", ""), svcVars)
 	cfg.LoginAuthz = parseBool(expandValue(strProp(ini, "login_authz", ""), svcVars), false)
 	cfg.LoginToken = expandValue(strProp(ini, "login_token", ""), svcVars)
 	cfg.LoginTimeout = parseTimeout(expandValue(strProp(ini, "login_timeout", "0"), svcVars))

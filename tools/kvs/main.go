@@ -93,7 +93,7 @@ func main() {
 	// setCookie writes a cookie with the given value and MaxAge.
 	setCookie := func(w http.ResponseWriter, value string, maxAge int) {
 		http.SetCookie(w, &http.Cookie{
-			Name:     cfg.CookieName,
+			Name:     cfg.CookieTknName,
 			Value:    value,
 			Path:     "/",
 			MaxAge:   maxAge,
@@ -132,7 +132,7 @@ func main() {
 		}
 		setCookie(w, cookieVal, maxAge)
 		back := pkg.SafeReferer(r.Referer(), r.Host)
-		log.Printf("login ok, cookie %s set, reloading: %s", cfg.CookieName, back)
+		log.Printf("login ok, cookie %s set, reloading: %s", cfg.CookieTknName, back)
 		http.Redirect(w, r, back, http.StatusSeeOther)
 	})
 
@@ -141,7 +141,7 @@ func main() {
 	// The caller is responsible for reloading/redirecting after logout.
 	mux.HandleFunc("/__logout", func(w http.ResponseWriter, r *http.Request) {
 		setCookie(w, "", -1)
-		log.Printf("logout: cleared cookie %s", cfg.CookieName)
+		log.Printf("logout: cleared cookie %s", cfg.CookieTknName)
 		w.Header().Set("Content-Type", "application/json")
 		_, _ = w.Write([]byte(`{"success":true,"message":"logout success"}`))
 	})
@@ -534,13 +534,13 @@ func main() {
 	}
 
 	log.Printf("proxy starting: %s", pkg.ServerAddrs(servers))
-	log.Printf("cookie name: %s", cfg.CookieName)
+	log.Printf("cookie name: %s", cfg.CookieTknName)
 	if cfg.LoginToken != "" {
 		mode := "session"
 		if cfg.LoginTimeout > 0 {
 			mode = fmt.Sprintf("expiring (%ds, auto-renew at 1/4)", cfg.LoginTimeout)
 		}
-		log.Printf("cookie auth: enabled (cookie %s, mode: %s)", cfg.CookieName, mode)
+		log.Printf("cookie auth: enabled (cookie %s, mode: %s)", cfg.CookieTknName, mode)
 	}
 	log.Printf("backends: %d", len(cfg.Proxies))
 	for i, b := range cfg.Proxies {
