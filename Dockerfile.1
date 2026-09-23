@@ -11,6 +11,7 @@ RUN mkdir /app/ && mv /kvs/kvs /kas/kas /app/
 
 FROM ghcr.io/suisrc/webtop:${BASE_IMAGE_TAG}
 
+ENV KVS_ZCODEX_DEF=0
 
 COPY --from=builder  /app/  /usr/bin/
 COPY rootfs/ /

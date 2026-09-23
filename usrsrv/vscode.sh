@@ -145,4 +145,4 @@ fi
 echo 'start vscode server. wss need set env: KVS_SVC_HEADER_X_FORWARDED_PORT=443'
 KVS_HOME="${KVS_VSCODE_HOME}" KVS_LOGIN_AUTHZ=true KVS_SVC_SOCK_FILE="${KVS_VSCODE_HOME}/kvs.sock" \
 KVS_PORT="${KVS_VSCODE_PORT:-7080}" KVS_COOKIE=vscode-tkn KVS_LOGIN_TOKEN="${PASSWORD}" \
-exec kvs -c default
+exec kvs -c vscode

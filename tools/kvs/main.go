@@ -464,6 +464,13 @@ func main() {
 				}
 			}
 			if rt.isService {
+				// Finished with error? Return it as 500 (no re-trigger, so
+				// the client gets the final error instead of looping on the
+				// 503 loading page). /__restart resets the state to retry.
+				if done, err := srvState.Result(); done && err != nil {
+					http.Error(w, "service preparation failed: "+err.Error(), http.StatusInternalServerError)
+					return
+				}
 				// Trigger preparation if not already running or succeeded.
 				if srvState.Begin() {
 					go func() {

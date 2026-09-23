@@ -447,7 +447,7 @@ func extractExt(base string) string {
 		base = base[:i]
 	}
 	dotIdx := strings.Index(base, ".")
-	if dotIdx < 0 {
+	if dotIdx < 0 || strings.HasSuffix(base[dotIdx+1:], ".tar.gz") {
 		log.Printf("[prepare] no extension found in %q, defaulting to tar.gz", base)
 		return "tar.gz" // sensible default for compressed tarballs
 	}

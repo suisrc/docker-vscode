@@ -158,7 +158,7 @@ func resolveConfigPath(flagPath string) string {
 // valid identifier (letters/digits/underscores). Anything else (e.g. JSON
 // like `{ "commit": "{SVC_VERSION_HASH}" }`) is emitted verbatim, though
 // inner valid placeholders are still expanded.
-func expandValue(v string, svcVars map[string]string) string {
+func expandValue(v string, svcVars map[string]string, excludes ...string) string {
 	// validPlaceholderName reports whether s is a bare identifier
 	// (letters, digits, underscores), required before/inside {VAR} and
 	// {VAR:-default} placeholders.
@@ -201,6 +201,14 @@ func expandValue(v string, svcVars map[string]string) string {
 				continue
 			}
 			i += end + 1
+			// pass: exclude strings is pass
+			for _, ex := range excludes {
+				if ex == name {
+					sb.WriteByte('{')
+					sb.WriteString(name)
+					sb.WriteByte('}')
+				}
+			}
 			// Lookup: svcVars first (internal), then os env.
 			val, ok := svcVars[name]
 			if !ok {
@@ -716,7 +724,7 @@ func LoadInitConfig() Config {
 		// 2. version / version_latest_url / version_hash_url → SVC_VERSION, SVC_VERHASH
 		cfg.SvcVersion = expandValue(svcStr(ini, "version", ""), svcVars)
 		cfg.SvcVersionLatestURL = expandValue(svcStr(ini, "version_latest_url", ""), svcVars)
-		cfg.SvcVersionHashURL = strings.ReplaceAll(svcStr(ini, "version_hash_url", ""), "{SVC_VERSION_BASE_URL}", svcVersionBaseURL)
+		cfg.SvcVersionHashURL = expandValue(svcStr(ini, "version_hash_url", ""), svcVars, "SVC_VERSION")
 
 		// 3. download — re-expand with svcVars (may reference {SVC_VERSION_HASH})
 		if download := expandValue(svcStr(ini, "download", ""), svcVars); download != "" {
@@ -734,12 +742,14 @@ func LoadInitConfig() Config {
 			download = strings.ReplaceAll(download, "SVC_VERSION_HASH", cfg.SvcVersionHash)
 			download = strings.ReplaceAll(download, "SVC_VERSION", cfg.SvcVersion)
 			cfg.SvcDownload = download
-			log.Printf("backend download url: %s", cfg.SvcDownload)
+			log.Printf("backend download url: %s, version: %s, hash: %s", cfg.SvcDownload, cfg.SvcVersion, cfg.SvcVersionHash)
 		} else {
 			svcVars["SVC_VERSION"] = cfg.SvcVersion
 			svcVars["SVC_VERSION_HASH"] = cfg.SvcVersionHash
 			_ = os.Setenv("SVC_VERSION", cfg.SvcVersion)
 			_ = os.Setenv("SVC_VERSION_HASH", cfg.SvcVersionHash)
+
+			log.Printf("backend download url: empty")
 		}
 
 		// 4. download_info / download_field_url
