@@ -74,6 +74,29 @@ make build
 | `kvs mirror -c <config> [version]` | 同步 VS Code 版本到 S3 兼容存储 |
 | `kvs mirror -c default` | 使用内置默认配置同步 latest 版本 |
 | `kvs mirror -c default 1.130.0` | 同步指定版本 |
+| `kvs syncto <src> <dst>` | 本地 ↔ S3 文件同步（仅认环境变量，缺失直接报错，见下方说明） |
+
+### `kvs syncto` — 本地 ↔ S3 文件同步
+
+与 `mirror` 不同，`syncto` 是通用文件同步命令：**只读环境变量，不读 kvs.ini**，缺少必需变量时直接报错退出。
+
+```bash
+# 必需环境变量（KVS_S3_REGION 可选，默认 us-east-1）
+export KVS_S3_PREFIX=https://oss.example.com   # S3 兼容服务基础 URL（bucket 根）
+export KVS_S3_ACCESS=<access key id>
+export KVS_S3_SECRET=<secret access key>
+export KVS_S3_REGION=us-east-1
+
+# 上传：本地文件/目录 → S3（同名覆盖，目录递归）
+kvs syncto /zcode s3:/vsc/zcode        # 本地 zcode 目录推送到 s3:/vsc/zcode/ 下
+
+# 下载：S3 → 本地（对象或前缀递归）
+kvs syncto s3:/vsc/zcode /zcode
+```
+
+- source/target 二选一为 `s3:` 地址（前缀格式 `s3:/bucket内的key路径`），另一侧为本地路径；不支持两个 S3 对拷（可先下载到本地再上传）
+- 单文件时 `s3:` 目标若与本地文件名不同则自动追加文件名；目录同步按相对路径 1:1 映射为对象 key
+- 下载端：key 存在则按单对象下载，否则按前缀列出全部对象递归拉取到本地目录
 
 ---
 

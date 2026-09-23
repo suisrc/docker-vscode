@@ -21,6 +21,11 @@ Subcommands:
   kvs mirror -c <config> [version]  sync VS Code versions to S3-compatible storage
   kvs mirror -c default             sync the latest version with the built-in config
   kvs mirror -c default 1.130.0     sync a specific version
+  kvs syncto <src> <dst>            sync files between local and S3 (env-configured)
+                                    kvs syncto /local/path s3:/bucket/key    upload
+                                    kvs syncto s3:/bucket/key /local/path    download
+                                    env: KVS_S3_PREFIX, KVS_S3_ACCESS,
+                                         KVS_S3_SECRET, [KVS_S3_REGION]
 
 Startup options:
   -c <path>                         config file path (required)

@@ -39,6 +39,12 @@ func main() {
 		return
 	}
 
+	// Subcommand: "syncto" — generic local <-> S3 file sync (env-configured).
+	if len(os.Args) > 1 && os.Args[1] == "syncto" {
+		pkg.SynctoCommand(os.Args[2:])
+		return
+	}
+
 	cfg := pkg.LoadInitConfig()
 
 	// Apply cache_dir as the proxy cache root (disk storage).

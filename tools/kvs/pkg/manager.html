@@ -531,11 +531,29 @@ body.drag-in-progress .card.openable, body.drag-in-progress .mrow.openable { cur
   transition: border-color .15s;
 }
 .field textarea { resize: vertical; min-height: 64px; font-family: var(--mono); font-size: 12.5px; }
-/* 备注输入：宽高均可自由拉伸 */
-.field textarea.note {
-  font-family: var(--font); font-size: 13.5px; min-height: 118px;
-  resize: both; max-width: 100%; min-width: 0;
+.field textarea.note { font-family: var(--font); font-size: 13.5px; min-height: 118px; }
+
+/* 备注弹窗整体可拉伸（宽×高，拖右下角把手），输入区随弹窗伸缩 */
+#noteModal .modal {
+  display: flex; flex-direction: column;
+  width: 430px; min-width: 280px; min-height: 250px;
+  max-width: min(720px, calc(100vw - 44px));
+  resize: both;
 }
+#noteModal .modal > h2,
+#noteModal .modal > .modal-sub,
+#noteModal .modal > .modal-acts { flex: none; }
+#noteModal .field { flex: 1; }
+#noteModal textarea.note { flex: 1; width: 100%; resize: none; }
+
+/* 添加/编辑应用 · 编辑标记 · 常用工具：弹窗可左右拉伸宽度（拖右下角） */
+#addModal .modal, #tagsModal .modal, #toolsModal .modal {
+  min-width: 300px;
+  max-width: min(720px, calc(100vw - 44px));
+  resize: horizontal;
+}
+#addModal .modal, #toolsModal .modal { width: 430px; }
+#tagsModal .modal { width: 360px; }
 .field input:focus, .field textarea:focus { outline: none; border-color: var(--vsc-bd); }
 .field input::placeholder, .field textarea::placeholder { color: var(--text-3); }
 
@@ -582,6 +600,9 @@ body.drag-in-progress .card.openable, body.drag-in-progress .mrow.openable { cur
     padding: 20px 20px calc(20px + env(safe-area-inset-bottom));
     animation: sheetIn .26s cubic-bezier(.2, .9, .3, 1);
   }
+  /* 触屏底部抽屉不拉伸，保持整宽 */
+  #noteModal .modal,
+  #addModal .modal, #tagsModal .modal, #toolsModal .modal { resize: none; width: 100%; min-width: 0; }
   @keyframes sheetIn { from { transform: translateY(40%); opacity: .4; } }
   .toast { bottom: calc(22px + env(safe-area-inset-bottom)); max-width: calc(100vw - 48px); }
 }
@@ -1503,8 +1524,17 @@ $('btnRetry').addEventListener('click', function () { loadApps(true); });
 /* ---------------------------------------------------------------- 弹窗 */
 function openModal(id) { $(id).hidden = false; }
 function closeModal(id) { $(id).hidden = true; }
+/* 记录 pointerdown 位置：拖拽（如拉伸备注弹窗）结束后合成的 click 不视为点击 */
+var mgrDownXY = null;
+document.addEventListener('pointerdown', function (e) {
+  mgrDownXY = { x: e.clientX, y: e.clientY };
+}, true);
 document.querySelectorAll('.modal-mask').forEach(function (mask) {
-  mask.addEventListener('click', function (e) { if (e.target === mask) mask.hidden = true; });
+  mask.addEventListener('click', function (e) {
+    if (e.target !== mask) return;
+    if (mgrDownXY && (Math.abs(e.clientX - mgrDownXY.x) > 5 || Math.abs(e.clientY - mgrDownXY.y) > 5)) return;
+    mask.hidden = true;
+  });
 });
 document.addEventListener('keydown', function (e) {
   if (e.key === 'Escape') {
@@ -1539,7 +1569,10 @@ $('cfOk').addEventListener('click', function () {
   cfResolve(true);
 });
 $('confirmModal').addEventListener('click', function (e) {
-  if (e.target === this) { closeModal('confirmModal'); cfResolve(false); }
+  if (e.target !== this) return;
+  if (mgrDownXY && (Math.abs(e.clientX - mgrDownXY.x) > 5 || Math.abs(e.clientY - mgrDownXY.y) > 5)) return;
+  closeModal('confirmModal');
+  cfResolve(false);
 });
 
 /* ---- 添加应用 ---- */
