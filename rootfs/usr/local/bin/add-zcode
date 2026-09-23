@@ -39,9 +39,9 @@ for f in /usr/share/applications/zcode.desktop $HD/Desktop/zcode.desktop; do
     [ -f "$f" ] || continue
     grep -q '\--no-sandbox' "$f" 2>/dev/null && continue
     if grep -q '"/opt/ZCode/zcode"' "$f"; then
-        sed -i 's#"/opt/ZCode/zcode"#"/opt/ZCode/zcode" --no-sandbox#' "$f"
+        sed -i 's#"/opt/ZCode/zcode"#env ZCODE_WEB_REMOTE_CONTROL_RELAY_WS_URL=ws://127.0.0.1:7088/remote/ws "/opt/ZCode/zcode" --no-sandbox#' "$f"
     else
-        sed -i 's#/opt/ZCode/zcode#/opt/ZCode/zcode --no-sandbox#' "$f"
+        sed -i 's#/opt/ZCode/zcode#env ZCODE_WEB_REMOTE_CONTROL_RELAY_WS_URL=ws://127.0.0.1:7088/remote/ws /opt/ZCode/zcode --no-sandbox#' "$f"
     fi
 done
 

@@ -4,7 +4,7 @@
 ## 软件位置 ls /wsc/.vsc/zcode
 # source /etc/profile
 
-KVS_ZCODEX_DEF="sims" # 测试临时打开
+# KVS_ZCODEX_DEF="sims" # commit前 必须注释，必须注释，必须注释
 # 测试 使用 KVS_SVC_VERSION， KVS_ZCODEX_HOME， KVS_ZCODEX_NODE，
 if [[ "${KVS_ZCODEX_DEF:-}" == "sims" ]]; then
     KVS_ZCODEX_VERSION_LATEST_URL=https://oss.vsc.sims-cn.com/vsc/zcode/latest.json#version
