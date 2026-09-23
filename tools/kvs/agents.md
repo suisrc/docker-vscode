@@ -21,7 +21,7 @@
 | `pkg/server.go` | 服务器构建（HTTP + HTTPS=port+1 自签 ECDSA P-256）、静态资产/登录页服务、`isBrowserRequest` |
 | `pkg/vscode.go` | VS Code 专有：web-extension-resource 本地化（上游乱码 issue microsoft/vscode#299425）、语言包/汉化链路 |
 | `pkg/vagent.go` | agent 端点：`vsc_agent_cmds` 预设表（JSON）、端点目录扫描（*.json） |
-| `pkg/zcode.go` | `wsws://` 进程内中继（设备注册/心跳/远程控制）；`zcodeStore`（zcodex.json 持久化 + 旧版迁移 + 防抖原子落盘）；`KVS_ZCODEX_NODE` 懒启动 |
+| `pkg/zcode.go` | `wsws://` 进程内中继（设备注册/心跳/远程控制）；`zcodeStore`（zcodex.json 持久化 + 旧版迁移 + 防抖原子落盘）；`ZCODEX_NODE` 懒启动 |
 | `pkg/manager.go` | 应用中心：合并视图组装、REST API、在线探测（45s 缓存）、`registerAPI("manager")` |
 | `pkg/manager.html` | 管理页单文件前端（客户端渲染，PC 卡片/移动行双布局） |
 | `pkg/wsconn.go` | 最小 RFC 6455 WebSocket 服务端（stdlib 实现） |
@@ -134,7 +134,7 @@ Update 菜单注入（vscode.go + logout.vsc.js）：`login_authz = true` 且代
 - 联调模板（全程用自有端口与临时 HOME）：
   ```bash
   (cd pkg && KVS_DEBUG=1 KVS_PORT=7189 KVS_HOME=../temp/.vsc-test \
-    KVS_LOGIN_TOKEN=123456 KVS_ZCODEX_NODE=/bin/false ../kvs -c zcodex)
+    KVS_LOGIN_TOKEN=123456 ZCODEX_NODE=/bin/false ../kvs -c zcodex)
   # curl 鉴权：-H 'Cookie: kvs=123456'
   ```
 - **只 kill 自己启动的 PID**（记录 pid 文件；测试完删除临时 KVS_HOME）。生产实例（如 7080/7088/7090）属 owner，勿动、勿 pkill 按模式匹配

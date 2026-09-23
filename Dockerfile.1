@@ -13,8 +13,9 @@ FROM ghcr.io/suisrc/webtop:${BASE_IMAGE_TAG}
 
 COPY --from=builder  /app/  /usr/bin/
 
-ENV KVS_ZCODEX_DEF=0 \
-    KAS_ZCODEX=1
+ENV KAS_ZCODEX=0 \
+    ZCODEX_DEF=0 \
+    ZCODEX_PORT=7088 
 
 COPY script/webtop.kas.ini /etc/kas.ini
 COPY rootfs/ /
