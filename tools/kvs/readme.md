@@ -1,368 +1,90 @@
 # kvs — 反向代理网关
 
-kai vscode   
+kai vscode
 
-轻量级 Go 反向代理。提供 **Cookie 认证**、**多后端路由（前缀/正则）**、**服务自动部署**、**外部资源代理（带缓存）**、**退出按钮 + Update 菜单注入（VS Code专有）**、**S3 镜像同步（VS Code专有）**。
-
-仅依赖 Go 标准库 + `embed`，无第三方依赖。**完全通过 `kvs.ini` 配置文件驱动**。
-
----
+轻量级 Go 反向代理。提供 **Cookie 认证**、**多后端路由（前缀/正则）**、**服务自动部署**、**外部资源代理（带缓存）**、**退出按钮 + Update 菜单注入（VS Code专有）**、**S3 镜像同步（VS Code专有）**。仅依赖 Go 标准库 + `embed`，无第三方依赖，**完全通过 `kvs.ini` 配置文件驱动**。
 
 ## 快速开始
 
 ```bash
 make build
 ./kvs help                          # 查看帮助
-./kvs demo                          # 生成示例配置 ./kvs.ini (kvs.default.ini 模板)
-./kvs demo vscode                   # 生成示例配置 ./kvs.ini (kvs.vscode.ini 模板)
-# 编辑 kvs.ini
+./kvs demo                          # 生成示例配置 ./kvs.ini（kvs.default.ini 模板）
+./kvs demo vscode                   # 生成示例配置 ./kvs.ini（kvs.vscode.ini 模板）
+# 编辑 kvs.ini —— 各键说明见模板内注释
 ./kvs -c kvs.ini                    # 指定配置文件启动
-./kvs -c default                    # 使用 embed 中的 kvs.default.ini
-./kvs -c vscode                     # 使用 embed 中的 kvs.vscode.ini (VS Code 专用配置)
-./kvs -c zcodex                     # 应用中心预设（zcode 本地/远程 + manager，见下方说明）
+./kvs -c default|vscode|zcodex      # 内置预设，无需磁盘文件（zcodex=应用中心，见 agents.md）
 ./kvs -n "/=http://127.0.0.1:8080"  # 内联路由，自动补充 -c default
 ```
 
-**`-c` 为必填项**，不指定直接报错退出。特殊值：
-
-- `default`：使用 embed 中的 `kvs.default.ini`，无需磁盘文件
-- `vscode`：使用 embed 中的 `kvs.vscode.ini`，VS Code Server 专用配置，无需磁盘文件
-- `zcodex`：应用中心预设，等效于内置默认 + 以下环境变量（已显式设置的环境变量优先，不会被覆盖）：
-  - `KVS_PATH_PUBLIC=/remote/ws|/remote/v4|/api/v1/client/configs`
-  - `KVS_SVC_CHECK_URL=http://127.0.0.1:{KVS_ZCODE_PORT:-7587}/api/server-info`
-  - `KVS_SVC_COMMAND=…zcode.mjs --web --workspace ${HOME} …`（本地 zcode 服务）
-  - `KVS_PROXIES=…&/zcode=http://127.0.0.1:{port};/=api://manager`（`/zcode` 本地应用，`/` 为应用中心）
-
-### 应用中心（manager，`-c zcodex`）
-
-`/=api://manager` 挂载的通用管理页，聚合多种接入段（zcode 只是其中一种）：
-
-- `[ZCD]local`：本机 zcode 应用（`/zcode`，kvs 懒启动，始终可点）
-- `[ZCD]xxx`：通过 wsws 中继注册的远程 zcode 桌面端（在线时点击打开远程控制终端）
-- `[VSC]zzz`：手动添加的 VS Code 应用；同一设备的不同文件（工作区）以快捷方式挂在同一卡片内，访问地址为 `{卡片同host}/?folder=<工作区路径>`，支持编辑/删除
-- `[APP]`/`[LNX]`：「其他」类型设备（如 Linux 桌面），自选 Logo（VS Code / ZCode / Linux / 其他四选一）
-
-卡片顺序固定（不按访问时间排序），可拖拽调整并通过 `POST /__manager/order` 持久化到 `zcodex.json` 的 `order` 段；新出现的条目追加在末尾。
-
-页面由 `manager.html` 客户端渲染，数据接口（`manager.go`，随页面一同鉴权）：
-
-| 接口 | 说明 |
-|---|---|
-| `GET /__manager` | 合并视图：默认应用 + 中继设备 + 自定义应用（含版本/系统/在线探测，45s 缓存；内置条目 `url` 均为相对 path，如 `/zcode`、`/remote/v4?...`，由页面按当前 origin 打开，协议/主机与访问入口一致） |
-| `POST /__manager` | 添加自定义应用 `{type,icon?,name,url,folders?}`，type=vsc（VS Code，可带工作区）/ other（其他设备，选 Logo：vsc/zcd/linux/other） |
-| `DELETE /__manager?id=` | 删除自定义应用（默认应用与中继设备不可删） |
-| `POST /__manager/visit` | 点击打开时上报 `{id}`，记录首次接入/最近访问时间 |
-| `POST /__manager/order` | 保存拖拽后的卡片顺序 `{ids}` |
-| `POST /__manager/tags` | 设置条目自定义标记 `{id,tags}`（最多 6 个，状态为自动标签不可删） |
-| `POST /__manager`（带 `id`） | 编辑自定义应用（名称/地址/Logo/工作区），仅自定义应用可编辑 |
-| `POST /__manager/tool` / `DELETE /__manager/tool?name=` | 底部工具栏快捷方式增改删 `{name,addr,old?}`（无默认，用户自定义；点击新标签页打开） |
-| `POST /__manager/folder` / `DELETE /__manager/folder?id=&name=` | 工作区快捷方式增删（仅 VS Code 应用，请求 `{id,name,path}`，打开为 `{base}/?folder=<path>`） |
-| `GET /__manager/note?id=` / `POST /__manager/note` | 条目备注读取与保存/清除 `{id,note}`（单独接口，不随列表返回；PC 端点击卡片 Logo 编辑，移动端 Logo 仅展示，存 `notes` 段，上限 500 字） |
-
-持久化数据存于 `{KVS_HOME}/zcodex.json`（`version/devices/apps/order/tools/notes` 段；旧 `zcodex.json` 自动迁移加载）。PC 端为卡片网格 + 底部工具栏（常用工具下载地址，移动端隐藏），移动端为列表行（点击行展开工作区；编辑/删除仅 PC 卡片提供），支持深浅色主题；顶栏「ZCode控制」一键复制 `ZCODE_WEB_REMOTE_CONTROL_RELAY_WS_URL=wss://<host>/remote/ws`。
-
-`-n` 出现时自动补充 `-c default`，用内联路由替代 `[proxies]` 段；设置 `KVS_PROXIES` 环境变量同样生效（与 `-n` 等价，同样自动补充 `-c default` 并禁用 [service]）。详见 [内联路由 `-n`](#内联路由--n)。
-
----
+**`-c` 为必填项**，不指定直接报错退出。`-n` 用 `;` 分割多条 `prefix=url` 替代 `[proxies]` 段（支持 `&` 前缀），自动补充 `-c default` 并禁用 `[service]`；环境变量 `KVS_PROXIES` 与 `-n` 等价。`-c zcodex` 应用中心（`api://manager`）的页面功能与内部机制见 [agents.md](agents.md)。
 
 ## 子命令
 
 | 命令 | 说明 |
 |---|---|
 | `kvs help` | 显示帮助信息（也支持 `-h`、`--help`） |
-| `kvs demo [default\|vscode]` | 生成示例配置文件 `kvs.ini`（默认 `kvs.default.ini` 模板，`vscode` 用 `kvs.vscode.ini` 模板） |
-| `kvs mirror -c <config> [version]` | 同步 VS Code 版本到 S3 兼容存储 |
-| `kvs mirror -c default` | 使用内置默认配置同步 latest 版本 |
-| `kvs mirror -c default 1.130.0` | 同步指定版本 |
-| `kvs syncto <src> <dst>` | 本地 ↔ S3 文件同步（仅认环境变量，缺失直接报错，见下方说明） |
+| `kvs demo [default\|vscode]` | 生成示例配置文件 `kvs.ini`（默认 default 模板） |
+| `kvs mirror -c <config> [version]` | 同步 VS Code 版本到 S3 兼容存储（配置见 `demo vscode` 模板 `[mirror]` 段） |
+| `kvs syncto <src> <dst>` | 本地 ↔ S3 文件同步（见下方说明） |
 
-### `kvs syncto` — 本地 ↔ S3 文件同步
-
-与 `mirror` 不同，`syncto` 是通用文件同步命令：**只读环境变量，不读 kvs.ini**，缺少必需变量时直接报错退出。
+`kvs syncto` **只读环境变量，不读 kvs.ini**，缺少必需变量直接报错：`KVS_S3_PREFIX`（S3 兼容服务基础 URL，bucket 根）、`KVS_S3_ACCESS`、`KVS_S3_SECRET` 必需，`KVS_S3_REGION` 可选（默认 us-east-1）。
 
 ```bash
-# 必需环境变量（KVS_S3_REGION 可选，默认 us-east-1）
-export KVS_S3_PREFIX=https://oss.example.com   # S3 兼容服务基础 URL（bucket 根）
-export KVS_S3_ACCESS=<access key id>
-export KVS_S3_SECRET=<secret access key>
-export KVS_S3_REGION=us-east-1
-
-# 上传：本地文件/目录 → S3（同名覆盖，目录递归）
-kvs syncto /zcode s3:/vsc/zcode        # 本地 zcode 目录推送到 s3:/vsc/zcode/ 下
-
-# 下载：S3 → 本地（对象或前缀递归）
-kvs syncto s3:/vsc/zcode /zcode
+kvs syncto /zcode s3:/vsc/zcode   # 上传：本地文件/目录 → S3（递归，同名覆盖）
+kvs syncto s3:/vsc/zcode /zcode   # 下载：S3 → 本地（对象或前缀递归）
 ```
 
-- source/target 二选一为 `s3:` 地址（前缀格式 `s3:/bucket内的key路径`），另一侧为本地路径；不支持两个 S3 对拷（可先下载到本地再上传）
-- 单文件时 `s3:` 目标若与本地文件名不同则自动追加文件名；目录同步按相对路径 1:1 映射为对象 key
-- 下载端：key 存在则按单对象下载，否则按前缀列出全部对象递归拉取到本地目录
+- `s3:` 与本地路径二选一（`s3:/bucket内的key路径`）；不支持两个 S3 对拷
+- 目录按相对路径 1:1 映射为对象 key；单文件时 `s3:` 目标名不同则自动追加文件名
 
----
+## 配置文件
 
-## 配置文件 (`kvs.ini`)
+**各配置键的完整说明以示例模板注释为准**（`./kvs demo` 生成后直接阅读 `kvs.ini`；`[headers]` 请求头改写、`[service]` 服务自动部署、`[mirror]` S3 镜像（VS Code 专有）均见模板注释）。
 
-### 值模板语法
-
-所有值支持以下占位符展开：
+值模板语法（所有值支持）：
 
 | 语法 | 说明 |
 |---|---|
-| `{VAR}` | 取环境变量 VAR，空则返回空 |
-| `{VAR:-default}` | 取环境变量 VAR，空则返回 default |
+| `{VAR}` / `{VAR:-default}` | 取环境变量 VAR，空则返回空 / default |
 | `${VAR}` / `$VAR` | 标准 os.ExpandEnv |
-| `@now` | 运行时时间戳（仅 text 后端），格式 RFC3339 |
-| `{SVC_HOME}` 等 | 应用内部环境变量（见 [service] 段） |
+| `@now` | 运行时时间戳（仅 text 后端），RFC3339 |
+| `{SVC_HOME}` 等 | [service] 内部变量，见模板注释与 [agents.md](agents.md) |
 
-### 基础配置
+### 路由 `[proxies]` 段（必填）
 
-| 键 | 默认 | 说明 |
-|---|---|---|
-| `port` | `7080` | 监听端口（SSL 时 HTTPS = port+1） |
-| `use_ssl` | `false` | 启用自签名 HTTPS |
-| `login_authz` | `false` | 启用 401/403→登录页重定向 + 退出按钮注入（响应阶段） |
-| `login_token` | 空 | Cookie 校验值；非空时启用请求阶段拦截 |
-| `login_timeout` | `0` | Cookie 有效期（秒）；`0`=session 明文模式，`>0`=哈希+过期+自动续期，`<0` 启动报错 |
-| `cookie` | `kvs` | Cookie 名 |
+每行一个路由 `prefix = url`，**按文件顺序匹配**。前缀标记：普通 `/path/` 前缀匹配；`&/path/` kvs 托管服务（触发自动部署、loading 页，**必须显式标记**）；`^pattern` 正则；`http(s)://`、`ws(s)://` 开头为全域名匹配。
 
-### `[proxies]` 段（必填）
-
-每行一个路由 `prefix = url`，**按文件顺序匹配**。
-
-前缀标记：
-- 普通 `/path/` → 前缀匹配
-- `&/path/` → kvs 托管的服务后端（触发自动部署、loading 页）
-- `^pattern` → 正则表达式匹配
-- `http://` 或 `https://` 开头 → 全域名匹配
-- `ws://` 或者 `wss://` 开头 → 全域名匹配
-
-> **服务后端必须以 `&` 开头显式标记**，无隐式提升。
-
-#### 后端协议
-
-`url` 的 scheme 决定后端类型，支持 4 种：
-
-| 协议 | 格式 | 说明 |
-|---|---|---|
-| `http` / `https` | `http://host:port` | 反向代理到 HTTP 后端 |
-| `ws` / `wss` | `ws://host:port` | 反向代理到 HTTP 后端 |
-| `unix` | `unix:///path/to/sock` | 反向代理到 Unix domain socket |
-| `file` | `file:///var/www` | 静态文件服务器（`http.FileServer`） |
-| `text` | `text://任意文本` | 直接返回文本内容；支持 `@now` 替换为当前时间（RFC3339） |
-
-```ini
-[proxies]
-/__healthz=text://OK:@now
-/api/=http://api:8080
-/cdn/=file:///var/www
-&/=unix:///var/run/app.sock
-```
-
-### 内联路由 `-n`
-
-`-n` 参数用 `;` 分割多条 `prefix=url`，替代配置文件的 `[proxies]` 段。出现 `-n` 时自动补充 `-c default`，且跳过 `[service]` 段的服务生命周期（版本解析、下载、command 启动）。
-
-```bash
-# 单后端
-kvs -n "/=http://127.0.0.1:8080"
-
-# 多后端，; 分割
-kvs -n "/healthz=text://OK:@now;/=unix:///var/run/vscode.sock"
-
-# 带 service 后端 (& 前缀)
-kvs -n "&/=unix:///var/run/app.sock"
-
-# 环境变量形式（与 -n 等价，自动补充 -c default 并禁用 [service]）
-KVS_PROXIES="/=http://127.0.0.1:8080" kvs
-```
-
-### `[service]` 段
-
-服务自动部署配置。值支持 `{VAR}` 展开，其中 `SVC_*` 为内部环境变量。
-
-| 键 | 内部变量 | 说明 |
-|---|---|---|
-| `enable` | | `true`（默认）启用服务生命周期；`false` 跳过整个 [service] 段（版本解析/下载/命令启动），仅作纯代理。可用 `KVS_SVC_ENABLE` 环境变量控制 |
-| `check` | | 防重复启动检测（http/unix/file 协议） |
-| `home` | `SVC_HOME` | 工作目录基准，最先加载 |
-| `version_base_url` | `SVC_VERSION_BASE_URL` | 版本 API 基础 URL |
-| `version` | `SVC_VERSION` | 版本号；留空则用 `version_latest_url` 获取。可通过 `KVS_VSCODE_VERSION` 环境变量指定 |
-| `version_latest_url` | | 获取最新版本的 URL；`#field` 后缀提取 JSON 字段 |
-| `version_hash_url` | `SVC_VERSION_HASH` | 获取版本哈希的 URL；支持 `{SVC_VERSION}` 占位；`#field` 提取 JSON 字段；留空则 hash=version |
-| `download` | | 下载地址（优先级最高） |
-| `download_info` | | 版本信息 API（返回 JSON） |
-| `download_field_url` | | download_info JSON 中 URL 字段名，默认 `url` |
-| `download_proxy` | | 下载代理（留空=直连）；支持 `http://`、`https://`、`socks5://` |
-| `cache_dir` | | 缓存目录 |
-| `cache_sed` | | cc~ 缓存内容替换规则 `file\|old\|new\|\|...`（见下方 cache_sed 一节；可用 `{KVS_CC_SED}` 引用环境变量） |
-| `proxy_path` | | 外部资源代理缓存路径前缀；默认空（禁用），设为 `/__cache/` 启用 |
-| `bin_home` | `SVC_BIN_HOME` | 解压后 bin 目录 |
-| `once_shell` | | 一次性脚本（每个部署只执行一次，由 `{bin_home}/__once__` 标记文件记录时间；`file://` 走脚本文件，否则 `sh -c`；留空跳过） |
-| `init_shell` | | 启动脚本（每次 kvs 启动执行；`file://` 走脚本文件，否则 `sh -c`；留空跳过） |
-| `stop_shell` | | 退出前脚本（每次终止执行一次，仅 kvs 管理的后端） |
-| `command` | | 后端子进程启动命令 |
-| `vsc_agents_cmd` | | agent host 启动命令（环境变量前缀 + argv）；可通过 `VSC_VSC_AGENTS_CMD` 环境变量指定 |
-| `vsc_agent_cmds` | | 命令预设表（JSON：`name → command`），命令内支持 `{SVC_HOME}`/`{SVC_BIN_HOME}` 占位符；Agents 对话框下拉选择后填入命令框 |
-| `vsc_agents_dir` | | agent 端点目录（扫描 *.json） |
-| `vsc_agent_args` | | 追加到 command 的 agent 连接参数 |
-
-#### 自动部署流程
-
-1. `check` 检测后端是否已存在（http/unix/file）→ 存在则视为外部系统服务，kvs 不启动/停止该进程，仅代理转发
-2. `bin_home` 目录存在且非空 → 跳过下载解压
-3. 解析下载地址：`download` 优先，否则 `download_info` + `download_field_url`
-4. 跟随重定向获取 `.ext` → `SVC_PACKAGE_EXT`
-5. 下载到 `{cache_dir}/cache/version/{version}_{version_hash}.{ext}`
-6. 解压到 `bin_home`
-7. 执行 `init_shell`
-
-#### 内部环境变量
-
-在 `[service]` 段中可引用的内部变量（按加载顺序）：
-
-| 变量 | 来源 |
+| scheme | 说明 |
 |---|---|
-| `SVC_HOME` | `home` |
-| `SVC_VERSION_BASE_URL` | `version_base_url` |
-| `SVC_VERSION` | `version`（URL 时 fetch 后取字段） |
-| `SVC_VERSION_HASH` | `version_hash_url`（留空则 = `SVC_VERSION`） |
-| `SVC_PACKAGE_EXT` | download 重定向 URL 的扩展名 |
-| `SVC_BIN_HOME` | `bin_home` |
-
-### `[headers]` 段
-
-请求头改写：`Xxx=Val` 设置/覆盖，`Xxx=` 删除。
-
-```ini
-[headers]
-x-forwarded-port = 443
-X-Real-IP = ${REMOTE_ADDR}
-```
-
-### `[mirror]` 段
-
-S3 镜像同步配置 **（VS Code专有）**，供 `kvs mirror` 命令使用。
-
-| 键 | 说明 |
-|---|---|
-| `vsc_platform` | VS Code 平台标识（默认 `server-linux-x64-web`） |
-| `vsc_base_url` | API 基础 URL（默认 `https://update.code.visualstudio.com`） |
-| `vsc_download` | 下载 URL 模板，支持 `{name}` 和 `{hash}` 占位；留空则用 API 返回的 url |
-| `s3_prefix` | S3 存储前缀（如 `https://oss.example.com/vsc`）；留空则禁用 mirror |
-| `s3_access` | S3 access key ID |
-| `s3_secret` | S3 secret access key |
-| `s3_region` | S3 region（默认空） |
-
----
-
-## Cookie 认证
-
-### 1. 请求阶段拦截（`login_token` 非空时生效）
-
-设置 `login_token` 后，所有非 `/__` 前缀路径校验 Cookie。`/__login`、`/__logout`、`/__version`、`/__restart` 等内置端点、`/__cache/` 等始终放行。常数时间比较防时序攻击。
-
-`login_timeout` 控制两种模式：
-
-| 值 | Cookie 格式 | 校验方式 | 过期 |
-|---|---|---|---|
-| `0` / 空 | `login_token` 明文 | 直接比对 | session 生命周期 |
-| `>0` | `<hash>.<ts>.<salt>` | `sha256(ts+salt+login_token)[:24]` 比对 + 过期检查 | 剩余 ≤1/4 时间自动续期 |
-
-哈希模式下，`salt` 为 16 位随机 hex，`ts` 为签发时间戳（秒）。续期时重新签发 cookie，实现滑动过期。
-
-`<0` 启动报错。
-
-### 2. 响应阶段重定向（需 `login_authz = true`）
-
-后端返回 401/403 → 替换为登录页。`/__logout` 清除 Cookie。
-
-> **注意**：`login_token` 为空时请求阶段无拦截，`login_authz` 仅在后端自身返回 401/403 时生效。
-
----
-
-## 内置端点
-
-kvs 暴露以下 `/__` 前缀的内部控制端点：
-
-| 端点 | 认证 | 说明 |
-|---|---|---|
-| `/__login` | 公开 | 登录页（GET）/ 处理登录表单（POST） |
-| `/__logout` | 公开 | 清除 Cookie，返回 JSON |
-| `/__version` | 需认证 | 返回 service 应用版本（纯文本，无版本返回 `0.0.0`） |
-| `/__restart` | 需认证 | 重启后端服务，见下文 |
-| `/__logout.vsc.js` | 公开 | 退出按钮 + Update 菜单注入脚本 |
-| `/favicon.ico` | 公开 | 内联 SVG 图标 |
-
-> “需认证”的端点仅在 `login_token` 非空时被拦截；否则直接放行。
-
-### `/__version`
-
-返回已解析的 service 应用版本（即 `[service]` 段的 `SVC_VERSION`，含 `/__restart?v=` 覆盖后的值），`Content-Type: text/plain`。未配置或解析失败时返回 `0.0.0`。
-
-### `/__restart`
-
-杀掉后端子进程并重置服务状态，下一次请求会重新触发版本解析、下载、解压与启动。仅当存在 kvs 托管的 service 后端时有效。
-
-- `/__restart` → 简单重启，清除之前的版本覆盖
-- `/__restart?v=1.133.0` → 指定版本重启（写入版本覆盖，优先于 `version` / `version_latest_url`）
-
----
-
-## Update 菜单注入（VS Code Web）
-
-当 `login_authz = true` 且代理的 VS Code Server 页面被识别时，kvs 会注入 `/__logout.vsc.js` 脚本，在界面中注入两处 UI：
-
-1. **活动栏退出按钮**（`Logout`）：点击后 `fetch /__logout` 清除 Cookie 并刷新页面。
-2. **Help 菜单「Update」项**（位于 `About` 之后）：点击弹出对话框，展示当前版本（`/__version`），输入框默认为空（= 保持当前版本），可手动输入指定版本号；确定后跳转 `/__restart`（空）或 `/__restart?v=<版本>`，完成应用升级/重启。
-
-对话框使用自定义模态框（VS Code Web 不支持原生 `window.prompt`），颜色实时读取当前主题变量，跟随深浅色主题切换。
-
----
+| `http`/`https`、`ws`/`wss` | 反向代理到 HTTP 后端（升级请求透传） |
+| `unix` | Unix domain socket |
+| `file` | 静态文件服务器（br/gz/zst 预压缩优选） |
+| `text` | 直接返回文本；支持 `@now` 替换当前时间（RFC3339） |
+| `wsws://` / `api://` | 进程内 zcode 中继 / handler 注册表（zcodex 预设使用，见 [agents.md](agents.md)） |
 
 ## 外部资源代理 (`/__cache/`)
 
-需同时设置 `cache_dir`（磁盘目录）和 `proxy_path`（路由前缀，默认空=禁用）。
+需同时设置 `cache_dir`（磁盘目录）和 `proxy_path`（路由前缀，默认空=禁用，设为 `/__cache/` 启用）。
 
 ```
 /__cache/[cc~]{scheme}:{host}[/path][?query]
 ```
 
-- `cc~` 前缀 = 缓存（仅 GET 2xx）
-- 缓存布局：`{cache_dir}/cache/ccproxy/{scheme}:{host}/path`
-
-### cache_sed（缓存内容替换）
-
-针对 cc~ 缓存的静态资源做内容替换，规则格式（`|` 分隔字段，`||` 分隔规则组）：
-
-```
-<文件名，支持一个 *>|<原始内容>|<替换内容>||...
-```
-
-替换内容中的 `>host<` 会展开为当前请求的 Host。规则在**首次写入缓存时**分类，处理模式持久化到元数据（`_.json` 的 `sed` 字段），之后命中缓存只按元数据处理：
-
-| 模式 | 触发条件 | 写入时 | 命中时 |
-|---|---|---|---|
-| `once` | 替换与请求无关（new 不含 `>host<`） | 解压→替换→重新压缩存储，原文备份为 `<file>_.bak1` | 直接返回存储内容 |
-| `each` | 某条替换含 `>host<` 且（once 替换后的）原文中存在 old | once 规则先替换并烤入存储体，原始（once 后的）内容以明文存储；实际生效的 each 规则按数组持久化到元数据 `sed.each` | 按元数据 `sed.each` 数组 + 当前 Host 重新替换后返回；响应是否 gzip 跟随原始响应（`src_gzip`），不强制压缩 |
-| `none` | 规则匹配文件名但内容未变化 | 原样存储 | 直接返回 |
-
-同一文件可同时有 once 与 each 规则：once 先替换保存，文件仍标记为 `each`，每次请求补上 each 部分。each 规则持久化为数组（old/new），命中时只靠元数据处理，不反查运行时规则。
-
-```
-{cache_dir}/ccproxy/{scheme}:{host}/path            → 存储体（once 已替换；each 为明文）
-{cache_dir}/ccproxy/{scheme}:{host}/path_.json      → 元数据（status/headers + sed: mode/gzipped/src_gzip/each[]）
-{cache_dir}/ccproxy/{scheme}:{host}/path_.bak1      → once 模式的原文备份（仅一次）
-```
-
----
+`cc~` 前缀 = 缓存（仅 GET 2xx），布局 `{cache_dir}/cache/ccproxy/{scheme}:{host}/path`。`cache_sed` 缓存内容替换（规则格式、once/each 动态 Host 模式）见 demo 模板注释与 [agents.md](agents.md)。
 
 ## HTTPS / TLS
 
 `use_ssl = true`：ECDSA P-256 自签名证书，HTTPS 端口 = `port + 1`。
 
----
-
 ## 已知限制
 
 - `command` 不支持带空格的参数
 - 外部代理缓存无大小限制
+
+## 感谢
+
+- [Go](https://go.dev/) 标准库 —— 零第三方依赖，全部能力的基础
+- [Visual Studio Code](https://code.visualstudio.com/) 及其开源生态 —— mirror 同步、Update 菜单注入、web-extension 资源本地化的服务对象；简体中文语言包来自 [MS-CEINTL/vscode-language-pack-zh-hans](https://github.com/MS-CEINTL/vscode-language-pack-zh-hans)
+- [ZCode](https://z.ai/)（Z.ai 桌面端）—— zcodex 应用中心接入与中继的远程控制目标
+- S3 兼容存储生态（MinIO 等）—— `mirror` / `syncto` 的存储后端
