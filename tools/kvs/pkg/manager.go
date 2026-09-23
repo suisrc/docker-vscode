@@ -837,6 +837,7 @@ func managerDeleteApp(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 	store.appDelete(id)
+	store.noteSet(id, "") // 同步清理该应用的备注，避免 notes 段残留孤儿数据
 	log.Printf("[manager] app removed: %s (%s)", app.Name, id)
 	mgrWriteJSON(w, http.StatusOK, map[string]bool{"success": true})
 }
@@ -909,6 +910,25 @@ func managerToolDel(w http.ResponseWriter, r *http.Request) {
 	mgrWriteJSON(w, http.StatusOK, map[string]bool{"success": true})
 }
 
+// mgrStubApp synthesizes an app record for a default entry that has never
+// been persisted (zcd-local or a registered relay device), so tag / visit
+// writes have something to attach to. ok=false when id names no known entry.
+func mgrStubApp(store *zcodeStore, id string, now int64) (managerApp, bool) {
+	if id == mgrIDZcdLocal {
+		return managerApp{ID: id, Type: "zcd", Name: "local", CreatedAt: now}, true
+	}
+	if sid, ok := strings.CutPrefix(id, "zcd-"); ok {
+		if rec := store.get(sid); rec != nil {
+			app := managerApp{ID: id, Type: "zcd", CreatedAt: now}
+			if name, _ := rec.Meta["name"].(string); name != "" {
+				app.Name = name
+			}
+			return app, true
+		}
+	}
+	return managerApp{}, false
+}
+
 // managerSaveTags replaces the user-defined label chips of an entry {id,tags}.
 // Works for every entry kind (default / relay device / custom app); tags are
 // stored on the entry's record.
@@ -928,16 +948,7 @@ func managerSaveTags(w http.ResponseWriter, r *http.Request) {
 	store := zcodeState()
 	app, ok := store.appFind(id)
 	if !ok {
-		if id == mgrIDZcdLocal {
-			app = managerApp{ID: id, Type: "zcd", Name: "local", CreatedAt: time.Now().UnixMilli()}
-		} else if sid, isDev := strings.CutPrefix(id, "zcd-"); isDev && store.get(sid) != nil {
-			app = managerApp{ID: id, Type: "zcd"}
-			if rec := store.get(sid); rec != nil {
-				if name, _ := rec.Meta["name"].(string); name != "" {
-					app.Name = name
-				}
-			}
-		} else {
+		if app, ok = mgrStubApp(store, id, time.Now().UnixMilli()); !ok {
 			http.Error(w, "unknown app id", http.StatusNotFound)
 			return
 		}
@@ -985,11 +996,12 @@ func managerNoteGet(w http.ResponseWriter, r *http.Request) {
 		http.Error(w, "id required", http.StatusBadRequest)
 		return
 	}
-	if !mgrEntryExists(zcodeState(), id) {
+	store := zcodeState()
+	if !mgrEntryExists(store, id) {
 		http.Error(w, "unknown app id", http.StatusNotFound)
 		return
 	}
-	mgrWriteJSON(w, http.StatusOK, map[string]string{"id": id, "note": zcodeState().noteGet(id)})
+	mgrWriteJSON(w, http.StatusOK, map[string]string{"id": id, "note": store.noteGet(id)})
 }
 
 // managerNoteSet stores (or clears, when empty) an entry's note {id,note}.
@@ -1012,11 +1024,12 @@ func managerNoteSet(w http.ResponseWriter, r *http.Request) {
 		http.Error(w, fmt.Sprintf("note too long (max %d chars)", mgrNoteMax), http.StatusBadRequest)
 		return
 	}
-	if !mgrEntryExists(zcodeState(), req.ID) {
+	store := zcodeState()
+	if !mgrEntryExists(store, req.ID) {
 		http.Error(w, "unknown app id", http.StatusNotFound)
 		return
 	}
-	zcodeState().noteSet(req.ID, req.Note)
+	store.noteSet(req.ID, req.Note)
 	if req.Note == "" {
 		log.Printf("[manager] note cleared: %s", req.ID)
 	} else {
@@ -1048,20 +1061,7 @@ func managerVisit(w http.ResponseWriter, r *http.Request) {
 	now := time.Now().UnixMilli()
 	app, _ := store.appFind(id)
 	if app.ID == "" {
-		app = managerApp{ID: id, CreatedAt: now}
-		switch id {
-		case mgrIDZcdLocal:
-			app.Type, app.Name = "zcd", "local"
-		default:
-			if sid, ok := strings.CutPrefix(id, "zcd-"); ok {
-				if rec := store.get(sid); rec != nil {
-					app.Type = "zcd"
-					if name, _ := rec.Meta["name"].(string); name != "" {
-						app.Name = name
-					}
-				}
-			}
-		}
+		app, _ = mgrStubApp(store, id, now) // id 已通过 mgrEntryExists 校验
 	}
 	app.LastSeen = now
 	store.appSave(app)

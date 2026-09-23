@@ -533,27 +533,24 @@ body.drag-in-progress .card.openable, body.drag-in-progress .mrow.openable { cur
 .field textarea { resize: vertical; min-height: 64px; font-family: var(--mono); font-size: 12.5px; }
 .field textarea.note { font-family: var(--font); font-size: 13.5px; min-height: 118px; }
 
-/* 备注弹窗整体可拉伸（宽×高，拖右下角把手），输入区随弹窗伸缩 */
+/* 可拉伸弹窗：蒙层带 .xw，拖右下角把手左右调宽；
+   初始 430（标记弹窗 360），范围 300 ~ min(720px, 视口-44px) */
+.modal-mask.xw .modal {
+  width: 430px; min-width: 300px;
+  max-width: min(720px, calc(100vw - 44px));
+  resize: horizontal;
+}
+#tagsModal .modal { width: 360px; }
+/* 备注弹窗：宽高双向，输入区随弹窗伸缩 */
 #noteModal .modal {
   display: flex; flex-direction: column;
-  width: 430px; min-width: 280px; min-height: 250px;
-  max-width: min(720px, calc(100vw - 44px));
-  resize: both;
+  min-height: 250px; resize: both;
 }
 #noteModal .modal > h2,
 #noteModal .modal > .modal-sub,
 #noteModal .modal > .modal-acts { flex: none; }
 #noteModal .field { flex: 1; }
 #noteModal textarea.note { flex: 1; width: 100%; resize: none; }
-
-/* 添加/编辑应用 · 编辑标记 · 常用工具：弹窗可左右拉伸宽度（拖右下角） */
-#addModal .modal, #tagsModal .modal, #toolsModal .modal {
-  min-width: 300px;
-  max-width: min(720px, calc(100vw - 44px));
-  resize: horizontal;
-}
-#addModal .modal, #toolsModal .modal { width: 430px; }
-#tagsModal .modal { width: 360px; }
 .field input:focus, .field textarea:focus { outline: none; border-color: var(--vsc-bd); }
 .field input::placeholder, .field textarea::placeholder { color: var(--text-3); }
 
@@ -601,8 +598,7 @@ body.drag-in-progress .card.openable, body.drag-in-progress .mrow.openable { cur
     animation: sheetIn .26s cubic-bezier(.2, .9, .3, 1);
   }
   /* 触屏底部抽屉不拉伸，保持整宽 */
-  #noteModal .modal,
-  #addModal .modal, #tagsModal .modal, #toolsModal .modal { resize: none; width: 100%; min-width: 0; }
+  .modal-mask.xw .modal { resize: none; width: 100%; min-width: 0; }
   @keyframes sheetIn { from { transform: translateY(40%); opacity: .4; } }
   .toast { bottom: calc(22px + env(safe-area-inset-bottom)); max-width: calc(100vw - 48px); }
 }
@@ -668,7 +664,7 @@ body.drag-in-progress .card.openable, body.drag-in-progress .mrow.openable { cur
 </main>
 
 <!-- 添加应用 -->
-<div class="modal-mask" id="addModal" hidden>
+<div class="modal-mask xw" id="addModal" hidden>
   <div class="modal" role="dialog" aria-modal="true" aria-label="添加应用">
     <h2 id="addTitle">添加应用</h2>
     <p class="modal-sub" id="addSub">接入一台 VS Code 或其他任意设备（如 Linux 桌面）</p>
@@ -702,7 +698,7 @@ body.drag-in-progress .card.openable, body.drag-in-progress .mrow.openable { cur
 </div>
 
 <!-- 添加 / 编辑工作区 -->
-<div class="modal-mask" id="folderModal" hidden>
+<div class="modal-mask xw" id="folderModal" hidden>
   <div class="modal" role="dialog" aria-modal="true" aria-label="工作区">
     <h2 id="folderTitle">添加工作区</h2>
     <p class="modal-sub" id="folderSub">同一设备的不同文件夹，通过 ?folder 参数打开</p>
@@ -732,7 +728,7 @@ body.drag-in-progress .card.openable, body.drag-in-progress .mrow.openable { cur
 </div>
 
 <!-- 常用工具管理 -->
-<div class="modal-mask" id="toolsModal" hidden>
+<div class="modal-mask xw" id="toolsModal" hidden>
   <div class="modal" role="dialog" aria-modal="true" aria-label="常用工具">
     <h2>常用工具</h2>
     <p class="modal-sub">配置工具下载地址，点击底部工具栏按钮将在新标签页打开（下载或页面展示由浏览器决定）</p>
@@ -751,7 +747,7 @@ body.drag-in-progress .card.openable, body.drag-in-progress .mrow.openable { cur
 </div>
 
 <!-- 标记编辑 -->
-<div class="modal-mask" id="tagsModal" hidden>
+<div class="modal-mask xw" id="tagsModal" hidden>
   <div class="modal small" role="dialog" aria-modal="true" aria-label="编辑标记">
     <h2>编辑标记</h2>
     <p class="modal-sub" id="tagsSub"></p>
@@ -766,7 +762,7 @@ body.drag-in-progress .card.openable, body.drag-in-progress .mrow.openable { cur
 </div>
 
 <!-- 备注（点击卡片 Logo） -->
-<div class="modal-mask" id="noteModal" hidden>
+<div class="modal-mask xw" id="noteModal" hidden>
   <div class="modal" role="dialog" aria-modal="true" aria-label="编辑备注">
     <h2>备注</h2>
     <p class="modal-sub" id="noteSub"></p>
@@ -987,21 +983,7 @@ function buildCard(a) {
   }
 
   var head = el('div', 'card-head');
-  var ico = el('span', 'app-ico i-' + icoKey + ' note-btn');
-  ico.title = '备注';
-  ico.setAttribute('role', 'button');
-  ico.setAttribute('aria-label', '编辑「' + (a.name || a.id) + '」的备注');
-  ico.tabIndex = 0;
-  ico.innerHTML = I[icoKey];
-  ico.addEventListener('click', function (e) {
-    e.stopPropagation();
-    if (suppressClick) return;   // 刚结束一次拖拽，吞掉误触
-    openNoteModal(a);
-  });
-  ico.addEventListener('keydown', function (e) {
-    if (e.key === 'Enter' || e.key === ' ') { e.preventDefault(); openNoteModal(a); }
-  });
-  head.appendChild(ico);
+  head.appendChild(noteLogo(a, icoKey));
 
   var mid = el('div', 'head-mid');
   mid.appendChild(el('div', 'app-name', a.name || a.id));
@@ -1159,17 +1141,7 @@ function buildRow(a) {
   var frag = document.createDocumentFragment();
 
   var row = el('div', 'mrow i-' + icoKey + (a.url ? ' openable' : ''));
-  var ico = el('span', 'app-ico i-' + icoKey + ' note-btn');
-  ico.title = '备注';
-  ico.setAttribute('role', 'button');
-  ico.setAttribute('aria-label', '编辑「' + (a.name || a.id) + '」的备注');
-  ico.innerHTML = I[icoKey];
-  ico.addEventListener('click', function (e) {
-    e.stopPropagation();
-    if (suppressClick) return;   // 刚结束一次拖拽，吞掉误触
-    openNoteModal(a);
-  });
-  row.appendChild(ico);
+  row.appendChild(noteLogo(a, icoKey));
 
   var main = el('div', 'mrow-main');
   var l1 = el('div', 'mrow-l1');
@@ -1524,16 +1496,20 @@ $('btnRetry').addEventListener('click', function () { loadApps(true); });
 /* ---------------------------------------------------------------- 弹窗 */
 function openModal(id) { $(id).hidden = false; }
 function closeModal(id) { $(id).hidden = true; }
-/* 记录 pointerdown 位置：拖拽（如拉伸备注弹窗）结束后合成的 click 不视为点击 */
+/* 记录 pointerdown 位置：拖拽（如拉伸弹窗）结束后合成的 click 不视为点击 */
 var mgrDownXY = null;
 document.addEventListener('pointerdown', function (e) {
   mgrDownXY = { x: e.clientX, y: e.clientY };
 }, true);
+function clickMoved(e) {
+  return !!mgrDownXY && (Math.abs(e.clientX - mgrDownXY.x) > 5 || Math.abs(e.clientY - mgrDownXY.y) > 5);
+}
+/* 点击蒙层空白处关闭弹窗（确认框随关闭取消） */
 document.querySelectorAll('.modal-mask').forEach(function (mask) {
   mask.addEventListener('click', function (e) {
-    if (e.target !== mask) return;
-    if (mgrDownXY && (Math.abs(e.clientX - mgrDownXY.x) > 5 || Math.abs(e.clientY - mgrDownXY.y) > 5)) return;
+    if (e.target !== mask || clickMoved(e)) return;
     mask.hidden = true;
+    if (mask.id === 'confirmModal') cfResolve(false);
   });
 });
 document.addEventListener('keydown', function (e) {
@@ -1567,12 +1543,6 @@ $('cfCancel').addEventListener('click', function () {
 $('cfOk').addEventListener('click', function () {
   closeModal('confirmModal');
   cfResolve(true);
-});
-$('confirmModal').addEventListener('click', function (e) {
-  if (e.target !== this) return;
-  if (mgrDownXY && (Math.abs(e.clientX - mgrDownXY.x) > 5 || Math.abs(e.clientY - mgrDownXY.y) > 5)) return;
-  closeModal('confirmModal');
-  cfResolve(false);
 });
 
 /* ---- 添加应用 ---- */
@@ -1790,6 +1760,26 @@ $('inpTag').addEventListener('keydown', function (e) {
 /* --------------------------------------------------- 备注（点击卡片 Logo） ---- */
 var noteApp = null;
 var noteSeq = 0;
+
+/* 卡片/列表行的 Logo = 备注按钮（PC 与移动共用，含键盘操作） */
+function noteLogo(a, icoKey) {
+  var ico = el('span', 'app-ico i-' + icoKey + ' note-btn');
+  ico.title = '备注';
+  ico.setAttribute('role', 'button');
+  ico.setAttribute('aria-label', '编辑「' + (a.name || a.id) + '」的备注');
+  ico.tabIndex = 0;
+  ico.innerHTML = I[icoKey];
+  ico.addEventListener('click', function (e) {
+    e.stopPropagation();
+    if (suppressClick) return;   // 刚结束一次拖拽，吞掉误触
+    openNoteModal(a);
+  });
+  ico.addEventListener('keydown', function (e) {
+    if (e.key === 'Enter' || e.key === ' ') { e.preventDefault(); openNoteModal(a); }
+  });
+  return ico;
+}
+
 function openNoteModal(a) {
   noteApp = a;
   var seq = ++noteSeq;
@@ -1801,7 +1791,7 @@ function openNoteModal(a) {
   fetch('/__manager/note?id=' + encodeURIComponent(a.id), { credentials: 'include' })
     .then(function (res) { if (!res.ok) throw new Error('HTTP ' + res.status); return res.json(); })
     .then(function (d) {
-      if (seq !== noteSeq || noteApp !== a) return;   // 弹窗已切换或关闭
+      if (seq !== noteSeq) return;   // 弹窗已切换
       $('inpNote').value = d.note || '';
     })
     .catch(function () { toast('备注加载失败', true); });
