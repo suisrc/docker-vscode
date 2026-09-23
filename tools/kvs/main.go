@@ -51,7 +51,7 @@ func main() {
 	// cc~ marked backends always have disk caching available, defaulting to
 	// /cache when cache_dir is not configured.
 	pkg.SetCacheDir(cfg.SvcCacheDir)
-	// zcode relay state file lives under the service home ({home}/zcoded.json).
+	// zcode relay state file lives under the service home ({home}/zcodex.json).
 	pkg.SetZcodeHome(cfg.SvcHome)
 	// cache_sed: rewrite cc~ cached bodies (file|old|new||... rules).
 	pkg.SetCacheSed(cfg.SvcCacheSed)
@@ -107,7 +107,7 @@ func main() {
 	// /__login – serves login page (GET) or processes form (POST).
 	mux.HandleFunc("/__login", func(w http.ResponseWriter, r *http.Request) {
 		if r.Method != http.MethodPost {
-			pkg.ServeLoginAsset(w, "")
+			pkg.ServeLoginAsset(w, r, "")
 			return
 		}
 		if err := r.ParseForm(); err != nil {
@@ -121,7 +121,7 @@ func main() {
 			// (the form action), but the login page JS restores it to the
 			// original URL via history.replaceState(document.referrer) so the
 			// next correct submission has a valid Referer.
-			pkg.ServeLoginAsset(w, "Invalid access token, please try again")
+			pkg.ServeLoginAsset(w, r, "Invalid access token, please try again")
 			return
 		}
 		// Generate cookie value based on login_timeout mode.

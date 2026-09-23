@@ -19,7 +19,7 @@ make build
 ./kvs -c kvs.ini                    # 指定配置文件启动
 ./kvs -c default                    # 使用 embed 中的 kvs.default.ini
 ./kvs -c vscode                     # 使用 embed 中的 kvs.vscode.ini (VS Code 专用配置)
-./kvs -c zcoded                     # zcode 中继默认配置（内置，见下方说明）
+./kvs -c zcodex                     # 应用中心预设（zcode 本地/远程 + manager，见下方说明）
 ./kvs -n "/=http://127.0.0.1:8080"  # 内联路由，自动补充 -c default
 ```
 
@@ -27,11 +27,39 @@ make build
 
 - `default`：使用 embed 中的 `kvs.default.ini`，无需磁盘文件
 - `vscode`：使用 embed 中的 `kvs.vscode.ini`，VS Code Server 专用配置，无需磁盘文件
-- `zcoded`：zcode 中继预设，等效于内置默认 + 以下环境变量（已显式设置的环境变量优先，不会被覆盖）：
-  - `KVS_SVC_ENABLE=false`（禁用 [service] 服务生命周期）
-  - `KVS_PATH_PUBLIC=/ws|/remote/v4|/api/v1/client/configs`
-  - `KVS_CC_SED=src-*.js|\`wss://zcode.z.ai/ws\`|\`wss://>host</ws\`||src-*.js|\`/api/v1/client/configs\`,ff(e).origin|\`/api/v1/client/configs\``
-  - `KVS_PROXIES=ws~/ws=wsws://zcode-clients;cc~/api/v1/=https://zcode.z.ai/api/v1/;cc~/remote/v4=https://zcode.z.ai/remote/v4;/=api://manager`
+- `zcodex`：应用中心预设，等效于内置默认 + 以下环境变量（已显式设置的环境变量优先，不会被覆盖）：
+  - `KVS_PATH_PUBLIC=/remote/ws|/remote/v4|/api/v1/client/configs`
+  - `KVS_SVC_CHECK_URL=http://127.0.0.1:{KVS_ZCODE_PORT:-7587}/api/server-info`
+  - `KVS_SVC_COMMAND=…zcode.mjs --web --workspace ${HOME} …`（本地 zcode 服务）
+  - `KVS_PROXIES=…&/zcode=http://127.0.0.1:{port};/=api://manager`（`/zcode` 本地应用，`/` 为应用中心）
+
+### 应用中心（manager，`-c zcodex`）
+
+`/=api://manager` 挂载的通用管理页，聚合多种接入段（zcode 只是其中一种）：
+
+- `[ZCD]local`：本机 zcode 应用（`/zcode`，kvs 懒启动，始终可点）
+- `[ZCD]xxx`：通过 wsws 中继注册的远程 zcode 桌面端（在线时点击打开远程控制终端）
+- `[VSC]zzz`：手动添加的 VS Code 应用；同一设备的不同文件（工作区）以快捷方式挂在同一卡片内，访问地址为 `{卡片同host}/?folder=<工作区路径>`，支持编辑/删除
+- `[APP]`/`[LNX]`：「其他」类型设备（如 Linux 桌面），自选 Logo（VS Code / ZCode / Linux / 其他四选一）
+
+卡片顺序固定（不按访问时间排序），可拖拽调整并通过 `POST /__manager/order` 持久化到 `zcodex.json` 的 `order` 段；新出现的条目追加在末尾。
+
+页面由 `manager.html` 客户端渲染，数据接口（`manager.go`，随页面一同鉴权）：
+
+| 接口 | 说明 |
+|---|---|
+| `GET /__manager` | 合并视图：默认应用 + 中继设备 + 自定义应用（含版本/系统/在线探测，45s 缓存） |
+| `POST /__manager` | 添加自定义应用 `{type,icon?,name,url,folders?}`，type=vsc（VS Code，可带工作区）/ other（其他设备，选 Logo：vsc/zcd/linux/other） |
+| `DELETE /__manager?id=` | 删除自定义应用（默认应用与中继设备不可删） |
+| `POST /__manager/visit` | 点击打开时上报 `{id}`，记录首次接入/最近访问时间 |
+| `POST /__manager/order` | 保存拖拽后的卡片顺序 `{ids}` |
+| `POST /__manager/tags` | 设置条目自定义标记 `{id,tags}`（最多 6 个，状态为自动标签不可删） |
+| `POST /__manager`（带 `id`） | 编辑自定义应用（名称/地址/Logo/工作区），仅自定义应用可编辑 |
+| `POST /__manager/tool` / `DELETE /__manager/tool?name=` | 底部工具栏快捷方式增改删 `{name,addr,old?}`（无默认，用户自定义；点击新标签页打开） |
+| `POST /__manager/folder` / `DELETE /__manager/folder?id=&name=` | 工作区快捷方式增删（仅 VS Code 应用，请求 `{id,name,path}`，打开为 `{base}/?folder=<path>`） |
+| `GET /__manager/note?id=` / `POST /__manager/note` | 条目备注读取与保存/清除 `{id,note}`（单独接口，不随列表返回；点击卡片 Logo 编辑，存 `notes` 段，上限 500 字） |
+
+持久化数据存于 `{KVS_HOME}/zcodex.json`（`version/devices/apps/order/tools/notes` 段；旧 `zcodex.json` 自动迁移加载）。PC 端为卡片网格 + 底部工具栏（常用工具下载地址，移动端隐藏），移动端为列表行（点击行展开工作区），支持深浅色主题；顶栏「ZCode控制」一键复制 `ZCODE_WEB_REMOTE_CONTROL_RELAY_WS_URL=wss://<host>/remote/ws`。
 
 `-n` 出现时自动补充 `-c default`，用内联路由替代 `[proxies]` 段；设置 `KVS_PROXIES` 环境变量同样生效（与 `-n` 等价，同样自动补充 `-c default` 并禁用 [service]）。详见 [内联路由 `-n`](#内联路由--n)。
 

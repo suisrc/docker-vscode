@@ -162,7 +162,7 @@ func newBackend(prefix, rawURL string) *Backend {
 
 // apiHandleMap is the registry for "api://" backends: handler name →
 // http.Handler. Modules register their handlers via registerAPI at init
-// time (e.g. zcode.go registers "manager"); api://<name> looks the handler
+// time (e.g. manager.go registers "manager"); api://<name> looks the handler
 // up here directly.
 var apiHandleMap = map[string]http.Handler{}
 
@@ -274,7 +274,7 @@ func CreateBackendHandler(b Backend, cacheHeaders map[string]string, loginAuthz 
 		// In-process API backend: the target names a handler registered in
 		// apiHandleMap; the response is rendered directly by Go code
 		// (no subprocess). Handlers are registered via registerAPI from
-		// their owning modules (e.g. zcode.go registers "manager").
+		// their owning modules (e.g. manager.go registers "manager").
 		if h, ok := apiHandleMap[b.Target]; ok {
 			log.Printf("backend api handler: %s", b.Target)
 			return h

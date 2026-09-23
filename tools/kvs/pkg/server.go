@@ -120,12 +120,26 @@ func ServeStaticAsset(w http.ResponseWriter, name string) {
 // ServeLoginAsset renders login.html with an optional error message.
 // The {{ERROR}} placeholder in login.html is replaced with the message
 // (HTML-escaped). When msg is empty the placeholder becomes empty too.
-func ServeLoginAsset(w http.ResponseWriter, msg string) {
+// Non-browser requests (Accept without text/html: curl, API clients, XHR,
+// websocket upgrades...) get a plain 401 instead of the HTML page.
+func ServeLoginAsset(w http.ResponseWriter, r *http.Request, msg string) {
+	if !isBrowserRequest(r) {
+		http.Error(w, "401 Unauthorized", http.StatusUnauthorized)
+		return
+	}
 	html := string(MustAsset("login.html"))
 	escaped := htmlEscape(msg)
 	html = strings.Replace(html, "{{ERROR}}", escaped, 1)
 	w.Header().Set("Content-Type", "text/html; charset=utf-8")
 	_, _ = w.Write([]byte(html))
+}
+
+// isBrowserRequest reports whether the request looks like browser
+// navigation. Browsers send "Accept: text/html,application/xhtml+xml,...";
+// programmatic clients (curl, fetch/XHR, API tools) typically send "*/*"
+// or no Accept header at all.
+func isBrowserRequest(r *http.Request) bool {
+	return strings.Contains(r.Header.Get("Accept"), "text/html")
 }
 
 // htmlEscape escapes a string for safe inclusion in HTML text content.
@@ -197,21 +211,21 @@ func AuthMiddleware(next http.Handler, cfg Config, setCookie func(http.ResponseW
 		// Query-param auth (?<query_token_key>=<token>): grants access when the
 		// value matches loginToken. Only enabled when query_token_key is set.
 		if cfg.QueryTokenKey != "" && cfg.LoginToken != "" {
-			if tkn := r.URL.Query().Get(cfg.QueryTokenKey); tkn != "" {
+			if tkn := GetReqestParam(r, cfg.QueryTokenKey, ""); tkn != "" {
 				if subtle.ConstantTimeCompare([]byte(tkn), []byte(cfg.LoginToken)) != 1 {
-					http.Error(w, "403 Forbidden", http.StatusForbidden)
+					http.Error(w, "401 Unauthorized", http.StatusUnauthorized)
 					return
 				}
 				next.ServeHTTP(w, r)
 				return
 			}
 		}
-		// Header-based auth (x-cookie-<cookieName>): replaces the old query
+		// Header-based auth (x-request-<cookieName>): replaces the old query
 		// param approach, which leaked into logs/history/Referer.
 		if cfg.LoginTimeout == 0 && cfg.LoginToken != "" {
-			if tkn := r.Header.Get("x-cookie-" + cfg.CookieTknName); tkn != "" {
+			if tkn := r.Header.Get("x-request-" + cfg.CookieTknName); tkn != "" {
 				if subtle.ConstantTimeCompare([]byte(tkn), []byte(cfg.LoginToken)) != 1 {
-					http.Error(w, "403 Forbidden", http.StatusForbidden)
+					http.Error(w, "401 Unauthorized", http.StatusUnauthorized)
 					return
 				}
 				next.ServeHTTP(w, r)
@@ -220,13 +234,13 @@ func AuthMiddleware(next http.Handler, cfg Config, setCookie func(http.ResponseW
 		}
 		ckn, err := r.Cookie(cfg.CookieTknName)
 		if err != nil || ckn.Value == "" {
-			ServeLoginAsset(w, "")
+			ServeLoginAsset(w, r, "")
 			return
 		}
 		if cfg.LoginTimeout <= 0 {
 			// Plain mode: direct comparison.
 			if subtle.ConstantTimeCompare([]byte(ckn.Value), []byte(cfg.LoginToken)) != 1 {
-				ServeLoginAsset(w, "")
+				ServeLoginAsset(w, r, "")
 				return
 			}
 			next.ServeHTTP(w, r)
@@ -236,7 +250,7 @@ func AuthMiddleware(next http.Handler, cfg Config, setCookie func(http.ResponseW
 		ok, refresh := validateHashedCookie(ckn.Value, cfg.LoginToken, cfg.LoginTimeout)
 		if !ok {
 			log.Printf("[authz] cookie validation failed: %q", ckn.Value)
-			ServeLoginAsset(w, "")
+			ServeLoginAsset(w, r, "")
 			return
 		}
 		if refresh {

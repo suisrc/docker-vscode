@@ -569,7 +569,7 @@ func HandleCCBackend(b Backend) http.Handler {
 		// gets its own "/" (the marker carried none).
 		cacheHost := upstreamHost
 		if verKey != "" {
-			cacheHost = verPrefix + ccVersion(r, verKey) + "/" + verSuffix
+			cacheHost = verPrefix + GetReqestParam(r, verKey, "0.0.0") + "/" + verSuffix
 		}
 
 		targetURL := buildTargetURL(scheme, upstreamHost, rest, r.URL.RawQuery)
@@ -588,22 +588,18 @@ func HandleCCBackend(b Backend) http.Handler {
 	})
 }
 
-// ccVersion resolves the version value used by a "[v=key]" target marker.
-// Lookup order: the request's own query string, then the Referer URL's query
-// (sub-resource requests rarely carry the app version themselves, but the
-// page that referenced them does), then "0.0.0" as the unknown-version default.
-func ccVersion(r *http.Request, key string) string {
+func GetReqestParam(r *http.Request, key, def string) string {
 	if v := r.URL.Query().Get(key); v != "" {
 		return v
 	}
-	if ref := r.Header.Get("Referer"); ref != "" {
+	if ref := r.Header.Get("referer"); ref != "" {
 		if u, err := url.Parse(ref); err == nil {
 			if v := u.Query().Get(key); v != "" {
 				return v
 			}
 		}
 	}
-	return "0.0.0"
+	return def
 }
 
 // =============================================================================

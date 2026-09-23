@@ -26,10 +26,10 @@ vscode:
 	KVS_HOME=../../temp/.vsc \
 	go run main.go -c default
 
-zcoded:
+zcodex:
 	KVS_DEBUG=1 KVS_PORT=7188 KVS_LOGIN_AUTHZ=true KVS_LOGIN_TOKEN=123456 \
 	KVS_HOME=../../temp/.vsc \
-	go run main.go -c zcoded
+	go run main.go -c zcodex
 	
 zcode:
 	ZCODE_DESKTOP_USER_DATA_DIR=/root/.config/ZCode2 \

@@ -13,7 +13,8 @@ package pkg
 // Protocol: JSON text frames; device registers once then authenticates via
 // HMAC-SHA256 challenge/response; terminal authenticates with the device_sid
 // + pass_hash from the QR URL; when both online ("matched"), data frames are
-// forwarded verbatim. State file is zrelay-state.json (v1) compatible.
+// forwarded verbatim. State (device registry + manager app records) lives in
+// zcodex.json, managed by the shared store singleton (see zcodeState).
 
 import (
 	"crypto/hmac"
@@ -26,7 +27,6 @@ import (
 	"log"
 	"net"
 	"net/http"
-	"net/url"
 	"os"
 	"path/filepath"
 	"strings"
@@ -155,31 +155,49 @@ type zcodeDeviceRecord struct {
 	LastIP     string    `json:"last_ip,omitempty"` // last connection source IP
 }
 
-// zcodeStoreFile is the on-disk state file format (version 1, like zrelay).
+// zcodeStoreFile is the on-disk state file format (version 1, zrelay-compatible).
 type zcodeStoreFile struct {
 	Version int                 `json:"version"`
 	Devices []zcodeDeviceRecord `json:"devices"`
+	Apps    []managerApp        `json:"apps,omitempty"`  // manager app records (zcode is one app type among several)
+	Order   []string            `json:"order,omitempty"` // manager card order (user-arranged entry ids)
+	Tools   []managerTool       `json:"tools,omitempty"` // manager toolbar quick links (name → addr)
+	Notes   map[string]string   `json:"notes,omitempty"` // manager per-entry remarks (entry id → note text)
 }
 
-// zcodeStore is a JSON-file backed device registry with two in-memory
-// indexes (sid → record, mid → sid). Writes are atomic and debounced by the
-// relay (flush on change, at most once per second).
+// zcodeStore is a JSON-file backed registry with two in-memory indexes
+// (sid → record, mid → sid) plus the manager app list. Writes are atomic and
+// debounced (flush on change, at most once per second).
 type zcodeStore struct {
-	file  string
-	mu    sync.Mutex
-	bySid map[string]*zcodeDeviceRecord
-	byMid map[string]string
-	dirty bool
+	file   string
+	mu     sync.Mutex
+	bySid  map[string]*zcodeDeviceRecord
+	byMid  map[string]string
+	apps   []managerApp
+	order  []string          // manager card order (user-arranged entry ids)
+	tools  []managerTool     // manager toolbar quick links
+	notes  map[string]string // manager per-entry remarks (entry id → note)
+	notify chan struct{}
+	dirty  bool
 }
 
-// zcodeLoadStore opens (or creates) the state file.
+// zcodeLoadStore opens (or creates) the state file. When the file is absent
+// and it is the new zcodex.json name, the legacy zcoded.json (devices only)
+// is loaded instead so registrations survive the rename; the next flush
+// writes the new name.
 func zcodeLoadStore(file string) *zcodeStore {
 	s := &zcodeStore{
-		file:  file,
-		bySid: make(map[string]*zcodeDeviceRecord),
-		byMid: make(map[string]string),
+		file:   file,
+		bySid:  make(map[string]*zcodeDeviceRecord),
+		byMid:  make(map[string]string),
+		notify: make(chan struct{}, 1),
 	}
 	data, err := os.ReadFile(file)
+	if err != nil && filepath.Base(file) == "zcodex.json" {
+		if legacy, lerr := os.ReadFile(filepath.Join(filepath.Dir(file), "zcoded.json")); lerr == nil {
+			data, err = legacy, nil
+		}
+	}
 	if err != nil {
 		return s // missing file → empty store
 	}
@@ -196,6 +214,10 @@ func zcodeLoadStore(file string) *zcodeStore {
 		s.bySid[r.DeviceSid] = &r
 		s.byMid[r.DeviceMid] = r.DeviceSid
 	}
+	s.apps = parsed.Apps
+	s.order = parsed.Order
+	s.tools = parsed.Tools
+	s.notes = parsed.Notes
 	return s
 }
 
@@ -271,7 +293,14 @@ func (s *zcodeStore) flush() {
 	if !s.dirty {
 		return
 	}
-	out := zcodeStoreFile{Version: 1, Devices: make([]zcodeDeviceRecord, 0, len(s.bySid))}
+	out := zcodeStoreFile{
+		Version: 1,
+		Devices: make([]zcodeDeviceRecord, 0, len(s.bySid)),
+		Apps:    append([]managerApp(nil), s.apps...),
+		Order:   append([]string(nil), s.order...),
+		Tools:   append([]managerTool(nil), s.tools...),
+		Notes:   s.notes,
+	}
 	for _, r := range s.bySid {
 		out.Devices = append(out.Devices, *r)
 	}
@@ -285,6 +314,22 @@ func (s *zcodeStore) flush() {
 		return
 	}
 	s.dirty = false
+}
+
+// flushLoop debounces state-file writes (at most one per second).
+func (s *zcodeStore) flushLoop() {
+	for range s.notify {
+		time.Sleep(time.Second)
+		s.flush()
+	}
+}
+
+// requestFlush asks the flush loop to persist state soon.
+func (s *zcodeStore) requestFlush() {
+	select {
+	case s.notify <- struct{}{}:
+	default:
+	}
 }
 
 // ---------------------------------------------------------------------------
@@ -308,18 +353,17 @@ type zcodeConn struct {
 
 // zcodeRelay is the in-process pairing relay. One instance serves any number
 // of "wsws://" backends; typically there is exactly one, named by the
-// backend target (e.g. wsws://zcode-clients).
+// backend target (e.g. wsws://zcode-clients). All relays share one device
+// store (the zcodex.json singleton).
 type zcodeRelay struct {
-	mu        sync.Mutex
-	store     *zcodeStore
-	stateFile string
-	nextID    int64
-	conns     map[int64]*zcodeConn
+	mu     sync.Mutex
+	store  *zcodeStore
+	nextID int64
+	conns  map[int64]*zcodeConn
 	// device_sid → the single live device connection
 	devices map[string]*zcodeConn
 	// device_sid → live terminal connections
 	terminals map[string]map[int64]*zcodeConn
-	flushCh   chan struct{}
 }
 
 var (
@@ -329,55 +373,52 @@ var (
 	// zcodeHome is the kvs working directory (Config.SvcHome), injected
 	// via SetZcodeHome from main() before backends are built.
 	zcodeHome string
+
+	// zcodeStateOnce guards the shared zcodex.json store singleton, used by
+	// every relay AND the manager so both always see the same data.
+	zcodeStateOnce sync.Once
+	zcodeStateInst *zcodeStore
 )
 
-// SetZcodeHome sets the base directory for the relay state file
-// ({home}/zcoded.json). Call once from main() with cfg.SvcHome.
+// SetZcodeHome sets the base directory for the state file
+// ({home}/zcodex.json). Call once from main() with cfg.SvcHome.
 func SetZcodeHome(home string) { zcodeHome = home }
 
+// zcodeState returns the shared zcodex.json store singleton, creating it (and
+// its flush loop) on first use. The device registry must persist across
+// restarts (otherwise the desktop's saved credentials become unknown and it
+// gets AUTH_FAILED), so the state file lives under the kvs home directory:
+// {KVS_HOME:-.}/zcodex.json (legacy zcoded.json is loaded as a fallback).
+func zcodeState() *zcodeStore {
+	zcodeStateOnce.Do(func() {
+		zcodeStateInst = zcodeLoadStore(filepath.Join(zcodeHome, "zcodex.json"))
+		log.Printf("[manager] state store ready: %s (devices: %d, apps: %d)",
+			zcodeStateInst.file, zcodeStateInst.size(), len(zcodeStateInst.apps))
+		go zcodeStateInst.flushLoop()
+	})
+	return zcodeStateInst
+}
+
 // zcodeGetRelay returns (creating on first use) the named relay instance.
-// The name is the wsws:// target (e.g. "zcode"). The device registry must
-// persist across restarts (otherwise the desktop's saved credentials become
-// unknown and it gets AUTH_FAILED), so the state file lives under the
-// kvs home directory: {KVS_HOME:-.}/zcoded.json.
+// The name is the wsws:// target (e.g. "zcode-clients").
 func zcodeGetRelay(name string) *zcodeRelay {
 	if name == "" {
 		name = "zcode"
 	}
-	stateFile := filepath.Join(zcodeHome, "zcoded.json")
 	zcodeRelaysMu.Lock()
 	defer zcodeRelaysMu.Unlock()
 	if r, ok := zcodeRelays[name]; ok {
 		return r
 	}
 	r := &zcodeRelay{
-		store:     zcodeLoadStore(stateFile),
-		stateFile: stateFile,
+		store:     zcodeState(),
 		conns:     make(map[int64]*zcodeConn),
 		devices:   make(map[string]*zcodeConn),
 		terminals: make(map[string]map[int64]*zcodeConn),
-		flushCh:   make(chan struct{}, 1),
 	}
 	zcodeRelays[name] = r
-	log.Printf("[zcode] relay %q ready (state: %s, devices: %d)", name, stateFile, r.store.size())
-	go r.flushLoop()
+	log.Printf("[zcode] relay %q ready (state: %s, devices: %d)", name, r.store.file, r.store.size())
 	return r
-}
-
-// flushLoop debounces state-file writes (at most one per second).
-func (r *zcodeRelay) flushLoop() {
-	for range r.flushCh {
-		time.Sleep(time.Second)
-		r.store.flush()
-	}
-}
-
-// scheduleFlush asks the flush loop to persist state soon.
-func (r *zcodeRelay) scheduleFlush() {
-	select {
-	case r.flushCh <- struct{}{}:
-	default:
-	}
 }
 
 // Handle upgrades the request and runs the connection until it closes.
@@ -533,7 +574,7 @@ func (r *zcodeRelay) onRegisterInit(conn *zcodeConn, msg *zcodeClientMsg) {
 	r.mu.Unlock()
 
 	r.send(conn, zcodeServerMsg{Type: "device_register_ack", DeviceSid: record.DeviceSid})
-	r.scheduleFlush()
+	r.store.requestFlush()
 }
 
 // onAuthInit starts the challenge/response for both roles.
@@ -593,7 +634,7 @@ func (r *zcodeRelay) onAuthResponse(conn *zcodeConn, msg *zcodeClientMsg) {
 	}
 
 	r.store.touch(sid, conn.remote)
-	r.scheduleFlush()
+	r.store.requestFlush()
 
 	r.mu.Lock()
 	conn.pendingNonce = ""
@@ -834,167 +875,4 @@ func clientRemoteAddr(req *http.Request) string {
 		return req.RemoteAddr
 	}
 	return host
-}
-
-// ---------------------------------------------------------------------------
-// api://manager — device list page (non-core: presentation only)
-// ---------------------------------------------------------------------------
-
-// zcodeDeviceInfo is one row of the device list page.
-type zcodeDeviceInfo struct {
-	Sid        string
-	Mid        string
-	Name       string
-	Platform   string
-	Version    string // desktop app version (from register meta)
-	PassHash   string
-	Online     bool
-	UpdatedAt  int64  // last register/re-register (上线时间)
-	LastSeenAt int64  // last authenticated activity (最后使用)
-	LastIP     string // last connection source IP
-}
-
-// deviceList returns the registered device list with live online status.
-func (r *zcodeRelay) deviceList() []zcodeDeviceInfo {
-	r.mu.Lock()
-	online := make(map[string]bool, len(r.devices))
-	for sid := range r.devices {
-		online[sid] = true
-	}
-	r.mu.Unlock()
-
-	var out []zcodeDeviceInfo
-	for _, rec := range r.store.list() {
-		name, _ := rec.Meta["name"].(string)
-		if name == "" {
-			name = "ZCode-" + rec.DeviceMid[max(0, len(rec.DeviceMid)-4):]
-		}
-		platform, _ := rec.Meta["platform"].(string)
-		version, _ := rec.Meta["version"].(string)
-		out = append(out, zcodeDeviceInfo{
-			Sid:        rec.DeviceSid,
-			Mid:        rec.DeviceMid,
-			Name:       name,
-			Platform:   platform,
-			Version:    version,
-			PassHash:   rec.PassHash,
-			Online:     online[rec.DeviceSid],
-			UpdatedAt:  rec.UpdatedAt,
-			LastSeenAt: rec.LastSeenAt,
-			LastIP:     rec.LastIP,
-		})
-	}
-	return out
-}
-
-// zcodeHTMLEscape escapes s for safe inclusion in HTML text/attribute content.
-func zcodeHTMLEscape(s string) string {
-	r := strings.NewReplacer("&", "&amp;", "<", "&lt;", ">", "&gt;", `"`, "&#34;", "'", "&#39;")
-	return r.Replace(s)
-}
-
-// zcodeTime renders a concrete local date-time label ("2006-01-02 15:04").
-// Zero timestamps render as "-".
-func zcodeTime(t int64) string {
-	if t <= 0 {
-		return "-"
-	}
-	return time.UnixMilli(t).Format("2006-01-02 15:04")
-}
-
-// ipMeta renders the device's last known IP as a card meta line
-// (omitted entirely when never seen).
-func ipMeta(ip string) string {
-	if ip == "" {
-		return ""
-	}
-	return `<div class="device-meta">IP ` + zcodeHTMLEscape(ip) + `</div>`
-}
-
-// ServeZList renders the zlist.html device-list page: every registered
-// device as a flat card; online devices link to the remote-control terminal
-// page using the official QR-URL query shape:
-//
-//	{pagePrefix}?sid=<device_sid>&hash=<pass_hash>&t=<ts>&mid=<device_mid>
-//	          &name=<name>&app_version=<version>
-//
-// (values URL-escaped exactly like the desktop's QR code; the page prefix
-// defaults to "/remote/v4" — the injected zcode web bundle).
-func (r *zcodeRelay) ServeZList(w http.ResponseWriter, req *http.Request, pagePrefix string) {
-	// Public URL base from the request Host so links work behind whatever
-	// domain/proxy fronts kvs. Links are always https — the endpoints are
-	// TLS-terminated in front of kvs, plain http links would fail there.
-	base := "https://" + req.Host + pagePrefix
-
-	list := r.deviceList()
-	now := time.Now().UnixMilli()
-	var rows strings.Builder
-	onlineCount := 0
-	for _, d := range list {
-		status, cls := "离线", "off"
-		open, closeTag := `<div class="device off-device">`, `</div>`
-		if d.Online {
-			status, cls = "在线", "on"
-			onlineCount++
-			q := url.Values{}
-			q.Set("sid", d.Sid)
-			q.Set("hash", d.PassHash)
-			q.Set("t", fmt.Sprint(now))
-			q.Set("mid", d.Mid)
-			q.Set("name", d.Name)
-			if d.Version != "" {
-				q.Set("app_version", d.Version)
-			}
-			link := base + "?" + q.Encode()
-			open, closeTag = `<a class="device" href="`+link+`" target="_blank" rel="noopener">`, `</a>`
-		}
-		meta := d.Platform
-		if d.Version != "" {
-			meta = d.Version + " · " + meta
-		}
-		if meta == "" {
-			meta = d.Mid
-		}
-		rows.WriteString(open)
-		rows.WriteString(`<div class="device-top"><div class="device-name"><span class="dot `)
-		rows.WriteString(cls)
-		rows.WriteString(`"></span><span>`)
-		rows.WriteString(zcodeHTMLEscape(d.Name))
-		rows.WriteString(`</span></div></div>`)
-		rows.WriteString(`<div class="device-meta">`)
-		rows.WriteString(zcodeHTMLEscape(meta))
-		rows.WriteString(` · `)
-		rows.WriteString(status)
-		rows.WriteString(`</div>`)
-		rows.WriteString(`<div class="device-meta">上线 `)
-		rows.WriteString(zcodeTime(d.UpdatedAt))
-		rows.WriteString(`</div>`)
-		rows.WriteString(`<div class="device-meta">使用 `)
-		rows.WriteString(zcodeTime(d.LastSeenAt))
-		rows.WriteString(`</div>`)
-		rows.WriteString(ipMeta(d.LastIP))
-		rows.WriteString(closeTag)
-	}
-
-	html := string(MustAsset("manager.html"))
-	html = strings.Replace(html, "{{DEVICES}}", rows.String(), 1)
-	html = strings.Replace(html, "{{TOTAL}}", fmt.Sprint(len(list)), 1)
-	html = strings.Replace(html, "{{ONLINE}}", fmt.Sprint(onlineCount), 1)
-	empty := "none"
-	if len(list) == 0 {
-		empty = "block"
-	}
-	html = strings.Replace(html, "{{EMPTY_DISPLAY}}", empty, 1)
-
-	w.Header().Set("Content-Type", "text/html; charset=utf-8")
-	w.Header().Set("Cache-Control", "no-store")
-	_, _ = w.Write([]byte(html))
-}
-
-// api://manager handler registration: "manager" serves the device list linking
-// to the injected zcode web bundle (cc~ proxied /remote/v4).
-func init() {
-	registerAPI("manager", http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
-		zcodeGetRelay("zcode-clients").ServeZList(w, r, "/remote/v4")
-	}))
 }

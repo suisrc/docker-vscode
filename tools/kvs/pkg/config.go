@@ -53,16 +53,16 @@ type Config struct {
 
 	Actions map[string]string // Actions maps the [actions] section: action name → one-shot command
 	// top-level
-	Port         string
-	CookieTknName   string // cookie_token_key, default "kvs" (legacy key: cookie)
-	QueryTokenKey string           // query_token_key — when set, ?<key>=<token> grants access
-	LoginAuthz   bool              // login_authz — enable auth redirect + logout button injection
-	LoginToken   string            // login_token; when set, cookie value must match it
-	LoginTimeout int               // login_timeout (seconds); 0=session; >0=hashed+expiring; <0=error
-	UseSSL       bool              // use_ssl — enable HTTPS with a self-signed cert
-	Headers      map[string]string // [headers] section: Xxx=Val → set/override; Xxx= → delete
-	PathPublic   []string          // path_public — |-separated paths reachable without auth
-	InitError    string            // non-fatal init error (e.g. version resolve failure); shown on loading page
+	Port          string
+	CookieTknName string            // cookie_token_key, default "kvs" (legacy key: cookie)
+	QueryTokenKey string            // query_token_key — when set, ?<key>=<token> grants access
+	LoginAuthz    bool              // login_authz — enable auth redirect + logout button injection
+	LoginToken    string            // login_token; when set, cookie value must match it
+	LoginTimeout  int               // login_timeout (seconds); 0=session; >0=hashed+expiring; <0=error
+	UseSSL        bool              // use_ssl — enable HTTPS with a self-signed cert
+	Headers       map[string]string // [headers] section: Xxx=Val → set/override; Xxx= → delete
+	PathPublic    []string          // path_public — |-separated paths reachable without auth
+	InitError     string            // non-fatal init error (e.g. version resolve failure); shown on loading page
 }
 
 // Backend describes a single proxy target with its routing prefix.
@@ -612,7 +612,7 @@ func loadIni() (*iniFile, string) {
 			os.Setenv("KVS_SVC_COMMAND", "${KVS_ZCODEX_NODE} {SVC_BIN_HOME}/bin/zcode.mjs --web --workspace ${HOME} --no-token --no-open --host=127.0.0.1 --port="+zport)
 		}
 		if os.Getenv("KVS_PATH_PUBLIC") == "" {
-			os.Setenv("KVS_PATH_PUBLIC", "/remote/ws|/remote/v4|/api/v1/client/configs")
+			os.Setenv("KVS_PATH_PUBLIC", "/remote/ws|/api/v1/client/configs")
 		}
 		if os.Getenv("KVS_CC_SED") == "" {
 			// KVS_CC_SED='index-*.js|overrideUrl:void 0|overrideUrl:`wss://>host</ws`'
@@ -749,6 +749,9 @@ func LoadInitConfig() Config {
 
 		// 6. bin_home → SVC_BIN_HOME
 		cfg.SvcBinHome = expandValue(svcStr(ini, "bin_home", ""), svcVars)
+		if strings.ContainsRune(cfg.SvcBinHome, '{') {
+			cfg.SvcBinHome = expandValue(cfg.SvcBinHome, svcVars)
+		}
 		svcVars["SVC_BIN_HOME"] = cfg.SvcBinHome
 		_ = os.Setenv("SVC_BIN_HOME", cfg.SvcBinHome)
 
