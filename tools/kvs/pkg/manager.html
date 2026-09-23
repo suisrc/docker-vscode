@@ -344,10 +344,6 @@ a { color: inherit; }
 .chev-btn { width: 36px; height: 36px; border-radius: 9px; display: grid; place-items: center; color: var(--text-3); transition: transform .22s ease, color .14s; }
 .chev-btn svg { width: 16px; height: 16px; }
 .chev-btn.open { transform: rotate(90deg); color: var(--text-2); }
-.mrow-edit, .mrow-del { width: 38px; height: 38px; border-radius: 9px; display: grid; place-items: center; color: var(--text-3); }
-.mrow-edit svg, .mrow-del svg { width: 17px; height: 17px; }
-.mrow-edit:active { color: var(--text); background: var(--surface-2); }
-.mrow-del:active { color: var(--danger); background: var(--danger-bg); }
 
 .mrow-fold { display: grid; grid-template-rows: 0fr; transition: grid-template-rows .26s ease; }
 .mrow-fold.open { grid-template-rows: 1fr; }
@@ -400,6 +396,7 @@ a { color: inherit; }
 .logo-opt.active { border-color: var(--vsc-bd); background: var(--vsc-bg); color: var(--text); }
 
 .foot-hint { margin-top: 26px; text-align: center; font-size: 12px; color: var(--text-3); }
+.only-m { display: none; }
 
 /* --------------------------------------------------------------- 骨架 --- */
 .skel-grid { display: grid; grid-template-columns: repeat(auto-fill, minmax(305px, 1fr)); gap: 16px; }
@@ -589,6 +586,8 @@ body.drag-in-progress .card.openable, body.drag-in-progress .mrow.openable { cur
   .fchip { flex: none; padding: 7px 13px; }
   .sync-time { display: none; }
   .sync-zone { gap: 0; }
+  .only-pc { display: none; }
+  .only-m { display: inline; }
   .act-btn.refresh span { display: none; }
   .act-btn.refresh { padding: 0 9px; }
   .modal-mask { place-items: end; padding: 0; align-items: end; }
@@ -660,7 +659,10 @@ body.drag-in-progress .card.openable, body.drag-in-progress .mrow.openable { cur
     <button class="btn" id="btnRetry" type="button">重试</button>
   </div>
 
-  <p class="foot-hint">点击卡片打开应用 · 点击 Logo 写备注 · 拖拽卡片调整顺序 · 每 15 秒自动刷新</p>
+  <p class="foot-hint">
+    <span class="only-pc">点击卡片打开应用 · 点击 Logo 写备注 · 拖拽卡片调整顺序 · 每 15 秒自动刷新</span>
+    <span class="only-m">点击行打开应用 · 长按拖动调整顺序 · 每 15 秒自动刷新</span>
+  </p>
 </main>
 
 <!-- 添加应用 -->
@@ -945,7 +947,9 @@ function visibleApps() {
   });
 }
 
-/* 打开应用：先同步 window.open（保证不被拦截），再上报访问时间 */
+/* 打开应用：先同步 window.open（保证不被拦截），再上报访问时间。
+   契约：服务端只给 path（如 /zcode、/remote/v4?...），origin（协议+主机）
+   由浏览器在此处按当前页面补全 —— 与 location.origin 始终一致 */
 function openApp(a, url) {
   if (suppressClick) return;   // 刚结束一次拖拽，吞掉误触
   var target = url || a.url;
@@ -1141,7 +1145,7 @@ function buildRow(a) {
   var frag = document.createDocumentFragment();
 
   var row = el('div', 'mrow i-' + icoKey + (a.url ? ' openable' : ''));
-  row.appendChild(noteLogo(a, icoKey));
+  row.appendChild(logoNode(icoKey));
 
   var main = el('div', 'mrow-main');
   var l1 = el('div', 'mrow-l1');
@@ -1177,26 +1181,7 @@ function buildRow(a) {
   dot.appendChild(el('span', 'dot ' + st.cls));
   end.appendChild(dot);
 
-  if (a.custom) {
-    var editBtn = el('button', 'mrow-edit');
-    editBtn.type = 'button';
-    editBtn.title = '编辑';
-    editBtn.innerHTML = I.pencil;
-    editBtn.addEventListener('click', function (e) {
-      e.stopPropagation();
-      openAddModal(a);
-    });
-    end.appendChild(editBtn);
-    var del = el('button', 'mrow-del');
-    del.type = 'button';
-    del.title = '删除';
-    del.innerHTML = I.trash;
-    del.addEventListener('click', function (e) {
-      e.stopPropagation();
-      deleteApp(a);
-    });
-    end.appendChild(del);
-  }
+  /* 移动端不提供编辑/删除入口，管理操作在 PC 卡片上完成 */
   if (hasFolders) {
     var chev = el('button', 'chev-btn' + (state.expanded[a.id] ? ' open' : ''));
     chev.type = 'button';
@@ -1761,14 +1746,21 @@ $('inpTag').addEventListener('keydown', function (e) {
 var noteApp = null;
 var noteSeq = 0;
 
-/* 卡片/列表行的 Logo = 备注按钮（PC 与移动共用，含键盘操作） */
+/* 应用 Logo（纯展示）：移动端列表行使用 */
+function logoNode(icoKey) {
+  var ico = el('span', 'app-ico i-' + icoKey);
+  ico.innerHTML = I[icoKey];
+  return ico;
+}
+
+/* PC 卡片的 Logo = 备注按钮（含键盘操作）；移动端 Logo 不可点击 */
 function noteLogo(a, icoKey) {
-  var ico = el('span', 'app-ico i-' + icoKey + ' note-btn');
+  var ico = logoNode(icoKey);
+  ico.classList.add('note-btn');
   ico.title = '备注';
   ico.setAttribute('role', 'button');
   ico.setAttribute('aria-label', '编辑「' + (a.name || a.id) + '」的备注');
   ico.tabIndex = 0;
-  ico.innerHTML = I[icoKey];
   ico.addEventListener('click', function (e) {
     e.stopPropagation();
     if (suppressClick) return;   // 刚结束一次拖拽，吞掉误触

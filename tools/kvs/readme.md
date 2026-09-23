@@ -48,7 +48,7 @@ make build
 
 | 接口 | 说明 |
 |---|---|
-| `GET /__manager` | 合并视图：默认应用 + 中继设备 + 自定义应用（含版本/系统/在线探测，45s 缓存） |
+| `GET /__manager` | 合并视图：默认应用 + 中继设备 + 自定义应用（含版本/系统/在线探测，45s 缓存；内置条目 `url` 均为相对 path，如 `/zcode`、`/remote/v4?...`，由页面按当前 origin 打开，协议/主机与访问入口一致） |
 | `POST /__manager` | 添加自定义应用 `{type,icon?,name,url,folders?}`，type=vsc（VS Code，可带工作区）/ other（其他设备，选 Logo：vsc/zcd/linux/other） |
 | `DELETE /__manager?id=` | 删除自定义应用（默认应用与中继设备不可删） |
 | `POST /__manager/visit` | 点击打开时上报 `{id}`，记录首次接入/最近访问时间 |
@@ -57,9 +57,9 @@ make build
 | `POST /__manager`（带 `id`） | 编辑自定义应用（名称/地址/Logo/工作区），仅自定义应用可编辑 |
 | `POST /__manager/tool` / `DELETE /__manager/tool?name=` | 底部工具栏快捷方式增改删 `{name,addr,old?}`（无默认，用户自定义；点击新标签页打开） |
 | `POST /__manager/folder` / `DELETE /__manager/folder?id=&name=` | 工作区快捷方式增删（仅 VS Code 应用，请求 `{id,name,path}`，打开为 `{base}/?folder=<path>`） |
-| `GET /__manager/note?id=` / `POST /__manager/note` | 条目备注读取与保存/清除 `{id,note}`（单独接口，不随列表返回；点击卡片 Logo 编辑，存 `notes` 段，上限 500 字） |
+| `GET /__manager/note?id=` / `POST /__manager/note` | 条目备注读取与保存/清除 `{id,note}`（单独接口，不随列表返回；PC 端点击卡片 Logo 编辑，移动端 Logo 仅展示，存 `notes` 段，上限 500 字） |
 
-持久化数据存于 `{KVS_HOME}/zcodex.json`（`version/devices/apps/order/tools/notes` 段；旧 `zcodex.json` 自动迁移加载）。PC 端为卡片网格 + 底部工具栏（常用工具下载地址，移动端隐藏），移动端为列表行（点击行展开工作区），支持深浅色主题；顶栏「ZCode控制」一键复制 `ZCODE_WEB_REMOTE_CONTROL_RELAY_WS_URL=wss://<host>/remote/ws`。
+持久化数据存于 `{KVS_HOME}/zcodex.json`（`version/devices/apps/order/tools/notes` 段；旧 `zcodex.json` 自动迁移加载）。PC 端为卡片网格 + 底部工具栏（常用工具下载地址，移动端隐藏），移动端为列表行（点击行展开工作区；编辑/删除仅 PC 卡片提供），支持深浅色主题；顶栏「ZCode控制」一键复制 `ZCODE_WEB_REMOTE_CONTROL_RELAY_WS_URL=wss://<host>/remote/ws`。
 
 `-n` 出现时自动补充 `-c default`，用内联路由替代 `[proxies]` 段；设置 `KVS_PROXIES` 环境变量同样生效（与 `-n` 等价，同样自动补充 `-c default` 并禁用 [service]）。详见 [内联路由 `-n`](#内联路由--n)。
 

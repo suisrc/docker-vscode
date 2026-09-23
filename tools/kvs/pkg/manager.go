@@ -440,23 +440,6 @@ func (r *zcodeRelay) deviceList() []zcodeDeviceInfo {
 	return out
 }
 
-// mgrProto guesses the public scheme for absolute links: honor
-// X-Forwarded-Proto (first token) from the front proxy, then r.TLS.
-func mgrProto(r *http.Request) string {
-	if p := r.Header.Get("X-Forwarded-Proto"); p != "" {
-		if i := strings.IndexByte(p, ','); i >= 0 {
-			p = p[:i]
-		}
-		if p = strings.TrimSpace(p); p != "" {
-			return p
-		}
-	}
-	if r.TLS != nil {
-		return "https"
-	}
-	return "http"
-}
-
 // mgrFolderURL builds a workspace quick-link: {base}/?folder=<path> — the
 // folder opens on the SAME host as the card, selected by the ?folder query
 // parameter (VS Code web's workspace selector). Returns "" when either side
@@ -487,9 +470,8 @@ func mgrApplyProbe(e *mgrEntry, target string) {
 }
 
 // mgrBuildEntries merges every app source into the client-facing list.
-func mgrBuildEntries(r *http.Request) []mgrEntry {
+func mgrBuildEntries() []mgrEntry {
 	store := zcodeState()
-	proto := mgrProto(r)
 	now := time.Now().UnixMilli()
 	out := make([]mgrEntry, 0, 8)
 
@@ -507,6 +489,8 @@ func mgrBuildEntries(r *http.Request) []mgrEntry {
 	// [ZCD]<name> — relay devices (remote zcode desktops). Online devices get
 	// the remote-control terminal URL (official QR-URL query shape); the
 	// pass_hash never leaves the server as data — only inside the link.
+	// The link stays RELATIVE so the browser opens it on the page's own
+	// origin (https/http, current host) — no server-side scheme guessing.
 	liveSids := make(map[string]bool)
 	for _, d := range zcodeGetRelay("zcode-clients").deviceList() {
 		liveSids[d.Sid] = true
@@ -535,7 +519,7 @@ func mgrBuildEntries(r *http.Request) []mgrEntry {
 			if d.Version != "" {
 				q.Set("app_version", d.Version)
 			}
-			e.URL = proto + "://" + r.Host + "/remote/v4?" + q.Encode()
+			e.URL = "/remote/v4?" + q.Encode()
 		}
 		out = append(out, e)
 	}
@@ -688,7 +672,7 @@ func mgrWriteJSON(w http.ResponseWriter, status int, v any) {
 func managerListApps(w http.ResponseWriter, r *http.Request) {
 	mgrWriteJSON(w, http.StatusOK, map[string]any{
 		"now":   time.Now().UnixMilli(),
-		"apps":  mgrBuildEntries(r),
+		"apps":  mgrBuildEntries(),
 		"tools": zcodeState().toolsList(),
 	})
 }
