@@ -56,7 +56,7 @@ if [ ! -f "${KVS_VSCODE_HOME}/data/Machine/settings.json" ]; then
       "defaultReasoningEffort": ""
     }
   },
-  "kaicustomendpoint.models": {
+  "kaicustomendpoint.secrets": {
     "alibaba": "sk-xxx",
     "deepseek": "sk-xxx",
     "bigmodel": "xx.xxx"

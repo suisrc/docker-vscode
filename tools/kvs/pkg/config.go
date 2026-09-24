@@ -7,6 +7,7 @@ import (
 	"log"
 	"net/http"
 	"os"
+	"slices"
 	"strconv"
 	"strings"
 	"time"
@@ -202,12 +203,11 @@ func expandValue(v string, svcVars map[string]string, excludes ...string) string
 			}
 			i += end + 1
 			// pass: exclude strings is pass
-			for _, ex := range excludes {
-				if ex == name {
-					sb.WriteByte('{')
-					sb.WriteString(name)
-					sb.WriteByte('}')
-				}
+			if slices.Contains(excludes, name) {
+				sb.WriteByte('{')
+				sb.WriteString(name)
+				sb.WriteByte('}')
+				continue
 			}
 			// Lookup: svcVars first (internal), then os env.
 			val, ok := svcVars[name]
