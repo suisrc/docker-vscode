@@ -151,32 +151,6 @@ func htmlEscape(s string) string {
 	return s
 }
 
-// GenerateCookieValue builds the cookie value for a successful login.
-//
-// login_timeout == 0: cookie value = loginToken (plain, session lifetime).
-// login_timeout > 0:  cookie value = "<hash>.<ts>.<salt>" where
-//   - ts    = current unix timestamp (seconds)
-//   - salt  = 16-char random hex string
-//   - hash  = sha256(ts + salt + loginToken)[:24] (hex)
-//
-// The ts and salt are embedded so the gateway can re-derive the hash and
-// check expiry without keeping server-side state.
-func GenerateCookieValue(loginToken string, loginTimeout int) string {
-	if loginTimeout <= 0 {
-		return loginToken
-	}
-	ts := time.Now().Unix()
-	salt := randomHex(8) // 8 bytes → 16 hex chars
-	return computeCookieHash(ts, salt, loginToken)
-}
-
-// computeCookieHash returns "<hash>.<ts>.<salt>".
-// hash = sha256(ts+salt+loginToken) truncated to 12 bytes (24 hex chars).
-func computeCookieHash(ts int64, salt, loginToken string) string {
-	h := sha256.Sum256(fmt.Appendf(nil, "%d%s%s", ts, salt, loginToken))
-	return fmt.Sprintf("%x.%d.%s", h[:12], ts, salt) // 12 bytes → 24 hex chars
-}
-
 // randomHex returns n random bytes as a hex string (2n chars).
 func randomHex(n int) string {
 	b := make([]byte, n)
@@ -208,28 +182,31 @@ func AuthMiddleware(next http.Handler, cfg Config, setCookie func(http.ResponseW
 				return
 			}
 		}
-		// Query-param auth (?<query_token_key>=<token>): grants access when the
-		// value matches loginToken. Only enabled when query_token_key is set.
-		if cfg.QueryTokenKey != "" && cfg.LoginToken != "" {
-			if tkn := GetReqestParam(r, cfg.QueryTokenKey, ""); tkn != "" {
-				if subtle.ConstantTimeCompare([]byte(tkn), []byte(cfg.LoginToken)) != 1 {
-					http.Error(w, "401 Unauthorized", http.StatusUnauthorized)
+		if cfg.LoginTimeout == 0 && cfg.LoginToken != "" {
+			// Header-based auth (x-request-<cookieName>): replaces the old query
+			// param approach, which leaked into logs/history/Referer.
+			if tkn := r.Header.Get("x-request-" + cfg.CookieTknName); tkn != "" {
+				if subtle.ConstantTimeCompare([]byte(tkn), []byte(cfg.LoginToken)) == 1 {
+					next.ServeHTTP(w, r)
 					return
 				}
-				next.ServeHTTP(w, r)
+				http.Error(w, "401 Unauthorized", http.StatusUnauthorized)
 				return
 			}
-		}
-		// Header-based auth (x-request-<cookieName>): replaces the old query
-		// param approach, which leaked into logs/history/Referer.
-		if cfg.LoginTimeout == 0 && cfg.LoginToken != "" {
-			if tkn := r.Header.Get("x-request-" + cfg.CookieTknName); tkn != "" {
-				if subtle.ConstantTimeCompare([]byte(tkn), []byte(cfg.LoginToken)) != 1 {
+			// Query-param auth (?<query_token_key>=<token>): grants access when the
+			// value matches loginToken. Only enabled when query_token_key is set.
+			if cfg.QueryTokenKey != "" {
+				if tkn := GetReqestParam(r, cfg.QueryTokenKey, ""); tkn != "" {
+					if subtle.ConstantTimeCompare([]byte(tkn), []byte(cfg.LoginToken)) == 1 {
+						next.ServeHTTP(w, r)
+						return
+					} else if rok, _ := validateHashedToken(tkn, cfg.LoginToken, cfg.TokenTimeout); rok {
+						next.ServeHTTP(w, r)
+						return
+					}
 					http.Error(w, "401 Unauthorized", http.StatusUnauthorized)
 					return
 				}
-				next.ServeHTTP(w, r)
-				return
 			}
 		}
 		ckn, err := r.Cookie(cfg.CookieTknName)
@@ -247,25 +224,28 @@ func AuthMiddleware(next http.Handler, cfg Config, setCookie func(http.ResponseW
 			return
 		}
 		// Hashed mode: parse "<hash>.<ts>.<salt>".
-		ok, refresh := validateHashedCookie(ckn.Value, cfg.LoginToken, cfg.LoginTimeout)
+		ok, refresh := validateHashedToken(ckn.Value, cfg.LoginToken, cfg.LoginTimeout)
 		if !ok {
 			log.Printf("[authz] cookie validation failed: %q", ckn.Value)
 			ServeLoginAsset(w, r, "")
 			return
 		}
 		if refresh {
-			newVal := GenerateCookieValue(cfg.LoginToken, cfg.LoginTimeout)
+			newVal := GenerateTokenValue(cfg.LoginToken, cfg.LoginTimeout)
 			setCookie(w, newVal, cfg.LoginTimeout)
 		}
 		next.ServeHTTP(w, r)
 	})
 }
 
-// validateHashedCookie checks a "<hash>.<ts>.<salt>" cookie value.
+// validateHashedToken checks a "<hash>.<ts>.<salt>" cookie value.
 // Returns (valid, needsRefresh). needsRefresh is true when the remaining
 // time is ≤ 1/4 of the timeout (sliding renewal).
-func validateHashedCookie(cookieVal, loginToken string, loginTimeout int) (bool, bool) {
-	parts := strings.SplitN(cookieVal, ".", 3)
+func validateHashedToken(loginValue, loginToken string, timeout int) (bool, bool) {
+	if timeout <= 0 {
+		return false, false
+	}
+	parts := strings.SplitN(loginValue, ".", 3)
 	if len(parts) != 3 {
 		return false, false
 	}
@@ -275,7 +255,7 @@ func validateHashedCookie(cookieVal, loginToken string, loginTimeout int) (bool,
 		return false, false
 	}
 	// Re-derive hash and compare.
-	expected := computeCookieHash(ts, salt, loginToken)
+	expected := computeTokenHash(ts, salt, loginToken)
 	// Compare only the hash portion (first 24 hex chars).
 	expectedHash := strings.SplitN(expected, ".", 2)[0]
 	if subtle.ConstantTimeCompare([]byte(gotHash), []byte(expectedHash)) != 1 {
@@ -284,13 +264,39 @@ func validateHashedCookie(cookieVal, loginToken string, loginTimeout int) (bool,
 	// Check expiry.
 	now := time.Now().Unix()
 	age := now - ts
-	if age >= int64(loginTimeout) {
+	if age >= int64(timeout) {
 		return false, false
 	}
 	// Refresh when ≤ 1/4 of timeout remains.
-	remaining := int64(loginTimeout) - age
-	needsRefresh := remaining <= int64(loginTimeout)/4
+	remaining := int64(timeout) - age
+	needsRefresh := remaining < int64(timeout)/4
 	return true, needsRefresh
+}
+
+// GenerateTokenValue builds the cookie value for a successful login.
+//
+// timeout == 0: value = token (plain, session lifetime).
+// timeout > 0:  value = "<hash>.<ts>.<salt>" where
+//   - ts    = current unix timestamp (seconds)
+//   - salt  = 16-char random hex string
+//   - hash  = sha256(ts + salt + token)[:24] (hex)
+//
+// The ts and salt are embedded so the gateway can re-derive the hash and
+// check expiry without keeping server-side state.
+func GenerateTokenValue(token string, timeout int) string {
+	if timeout <= 0 {
+		return token
+	}
+	ts := time.Now().Unix()
+	salt := randomHex(8) // 8 bytes → 16 hex chars
+	return computeTokenHash(ts, salt, token)
+}
+
+// computeCookieHash returns "<hash>.<ts>.<salt>".
+// hash = sha256(ts+salt+loginToken) truncated to 12 bytes (24 hex chars).
+func computeTokenHash(ts int64, salt, loginToken string) string {
+	h := sha256.Sum256(fmt.Appendf(nil, "%d%s%s", ts, salt, loginToken))
+	return fmt.Sprintf("%x.%d.%s", h[:12], ts, salt) // 12 bytes → 24 hex chars
 }
 
 // isPublicAuthPath reports whether path is reachable without a valid token

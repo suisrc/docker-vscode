@@ -131,7 +131,7 @@ func main() {
 			return
 		}
 		// Generate cookie value based on login_timeout mode.
-		cookieVal := pkg.GenerateCookieValue(cfg.LoginToken, cfg.LoginTimeout)
+		cookieVal := pkg.GenerateTokenValue(cfg.LoginToken, cfg.LoginTimeout)
 		maxAge := 0 // session lifetime
 		if cfg.LoginTimeout > 0 {
 			maxAge = cfg.LoginTimeout
@@ -165,6 +165,38 @@ func main() {
 		// }
 		w.Header().Set("Content-Type", "text/plain; charset=utf-8")
 		_, _ = io.WriteString(w, v)
+	})
+
+	// /__open_tkn – returns a short-lived access token for API/script use.
+	// Requires a valid login cookie (NOT in isPublicAuthPath), so it cannot be
+	// abused to mint tokens anonymously.
+	mux.HandleFunc("/__open_tkn", func(w http.ResponseWriter, r *http.Request) {
+		w.Header().Set("Content-Type", "text/plain; charset=utf-8")
+		if cfg.TokenTimeout <= 0 {
+			_, _ = io.WriteString(w, "") // no config temp token
+		}
+		_, _ = io.WriteString(w, pkg.GenerateTokenValue(cfg.LoginToken, cfg.TokenTimeout))
+	})
+
+	// /__open_url  - use application open current windows url
+	mux.HandleFunc("/__open_url", func(w http.ResponseWriter, r *http.Request) {
+		w.Header().Set("Content-Type", "text/plain; charset=utf-8")
+		if cfg.VscOpenURL == "" || !strings.Contains(cfg.VscOpenURL, "://") {
+			// disable by vscode app
+			_, _ = io.WriteString(w, "error:disable open in application")
+			return
+		}
+		if cfg.TokenTimeout <= 0 || cfg.QueryTokenKey == "" {
+			// Go back directly
+			_, _ = io.WriteString(w, cfg.VscOpenURL)
+			return
+		}
+		tkn := pkg.GenerateTokenValue(cfg.LoginToken, cfg.TokenTimeout)
+		if strings.Contains(cfg.VscOpenURL, "?") {
+			_, _ = io.WriteString(w, cfg.VscOpenURL+"&"+cfg.QueryTokenKey+tkn)
+			return
+		}
+		_, _ = io.WriteString(w, cfg.VscOpenURL+"?"+cfg.QueryTokenKey+tkn)
 	})
 
 	// /__restart – kills the backend subprocess and resets the service state so

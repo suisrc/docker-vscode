@@ -57,6 +57,7 @@ Environment variables:
   KVS_LOGIN_AUTHZ                   enable 401/403→login-page redirect (default false)
   KVS_LOGIN_TOKEN                   cookie validation value (empty disables validation)
   KVS_LOGIN_TIMEOUT                 cookie lifetime seconds (0=session, >0=hash+expiry)
+  KVS_TOKEN_TIMEOUT                 temp token lifetime seconds issued by /__open_tkn (default 300)
   KVS_COOKIE                        cookie name (default kvs)
   KVS_HOME                          service working directory (default /app/.vsc)
   KVS_SVC_SOCK_FILE                 backend socket path (default ./kvs.sock)

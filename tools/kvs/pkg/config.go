@@ -51,6 +51,7 @@ type Config struct {
 	VscAgentsDir string            // vsc_agents_dir — directory scanned for *.json agent endpoint entries
 	VscAgentArgs string            // SvcCommnand suffix, vscode agents connect config
 	VscLanguage  map[string]string // vsc_language — lang→langpack mapping (e.g. zh-cn→zh-hans)
+	VscOpenURL   string            // vsc_open_url - use vscode app open current windows url
 
 	Actions map[string]string // Actions maps the [actions] section: action name → one-shot command
 	// top-level
@@ -60,6 +61,7 @@ type Config struct {
 	LoginAuthz    bool              // login_authz — enable auth redirect + logout button injection
 	LoginToken    string            // login_token; when set, cookie value must match it
 	LoginTimeout  int               // login_timeout (seconds); 0=session; >0=hashed+expiring; <0=error
+	TokenTimeout  int               // check_timeout (seconds); default: 300
 	UseSSL        bool              // use_ssl — enable HTTPS with a self-signed cert
 	Headers       map[string]string // [headers] section: Xxx=Val → set/override; Xxx= → delete
 	PathPublic    []string          // path_public — |-separated paths reachable without auth
@@ -807,6 +809,7 @@ func LoadInitConfig() Config {
 		}
 		cfg.VscAgentsDir = expandValue(svcStr(ini, "vsc_agents_dir", ""), svcVars)
 		cfg.VscAgentArgs = expandValue(svcStr(ini, "vsc_agent_args", ""), svcVars)
+		cfg.VscOpenURL = expandValue(svcStr(ini, "vsc_open_url", ""), svcVars)
 
 		// 7c. [actions] — named one-shot commands (name → command). Loaded
 		//     generically: kvs has no idea what any action does, it just runs
@@ -848,6 +851,7 @@ func LoadInitConfig() Config {
 	cfg.LoginAuthz = parseBool(expandValue(strProp(ini, "login_authz", ""), svcVars), false)
 	cfg.LoginToken = expandValue(strProp(ini, "login_token", ""), svcVars)
 	cfg.LoginTimeout = parseTimeout(expandValue(strProp(ini, "login_timeout", "0"), svcVars))
+	cfg.TokenTimeout = parseTimeout(expandValue(strProp(ini, "token_timeout", "300"), svcVars))
 	cfg.UseSSL = parseBool(expandValue(strProp(ini, "use_ssl", ""), svcVars), false)
 	// path_public — |-separated list of paths reachable without auth
 	// (e.g. /api/v1/public|/remote/v4). Non-empty entries are kept as-is;

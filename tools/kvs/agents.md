@@ -119,6 +119,7 @@ manager.html 约定：
 | `/__login` | 公开 | 登录页（GET）/ 处理登录表单（POST） |
 | `/__logout` | 公开 | 清除 Cookie，返回 JSON |
 | `/__version` | 需认证 | 返回 service 应用版本（`SVC_VERSION`，含 `?v=` 覆盖值；纯文本，无版本返回 `0.0.0`） |
+| `/__open_tkn` | 需认证 | 签发临时访问令牌（纯文本）。`GenerateTokenValue(login_token, token_timeout)`：`login_timeout=0` 时返回 `login_token` 明文；`>0` 时返回以当前时间为 ts 的 `<hash>.<ts>.<salt>`，有效期 `token_timeout` 秒（默认 300）。令牌可通过 `?<query_token_key>=<令牌>` 或请求头 `x-request-<cookie_token_key>` 使用，供 curl/脚本在 Cookie 不可用时访问受保护接口 |
 | `/__restart` | 需认证 | 杀后端子进程并重置服务状态，下次请求重新触发部署流程：`/__restart` 清除版本覆盖；`/__restart?v=<版本>` 写 `GOverrideVersion` 指定版本重启（优先于 `version`/`version_latest_url`）。仅 kvs 托管的 service 后端有效 |
 | `/__logout.vsc.js` | 公开 | 退出按钮 + Update 菜单注入脚本 |
 | `/favicon.ico` | 公开 | 内联 SVG 图标 |
