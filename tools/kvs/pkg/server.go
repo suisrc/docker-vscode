@@ -182,9 +182,30 @@ func AuthMiddleware(next http.Handler, cfg Config, setCookie func(http.ResponseW
 				return
 			}
 		}
+		// Query-param auth (?<query_token_key>=<token>): grants access when the
+		// value matches loginToken. Only enabled when query_token_key is set.
+		if cfg.QueryTokenKey != "" && cfg.LoginToken != "" {
+			// if tkn := GetReqestParam(r, cfg.QueryTokenKey, ""); tkn != "" {
+			tkn := ""
+			if tkn = r.URL.Query().Get(cfg.QueryTokenKey); tkn == "" {
+				// try from by header
+				tkn = r.Header.Get("x-request-" + cfg.QueryTokenKey)
+			}
+			if tkn != "" {
+				if subtle.ConstantTimeCompare([]byte(tkn), []byte(cfg.LoginToken)) == 1 {
+					next.ServeHTTP(w, r)
+					return
+				} else if rok, _ := validateHashedToken(tkn, cfg.LoginToken, cfg.TokenTimeout); rok {
+					next.ServeHTTP(w, r)
+					return
+				}
+				http.Error(w, "401 Unauthorized", http.StatusUnauthorized)
+				return
+			}
+		}
+		// Header-based auth (x-request-<cookieName>): replaces the old query
+		// param approach, which leaked into logs/history/Referer.
 		if cfg.LoginTimeout == 0 && cfg.LoginToken != "" {
-			// Header-based auth (x-request-<cookieName>): replaces the old query
-			// param approach, which leaked into logs/history/Referer.
 			if tkn := r.Header.Get("x-request-" + cfg.CookieTknName); tkn != "" {
 				if subtle.ConstantTimeCompare([]byte(tkn), []byte(cfg.LoginToken)) == 1 {
 					next.ServeHTTP(w, r)
@@ -192,21 +213,6 @@ func AuthMiddleware(next http.Handler, cfg Config, setCookie func(http.ResponseW
 				}
 				http.Error(w, "401 Unauthorized", http.StatusUnauthorized)
 				return
-			}
-			// Query-param auth (?<query_token_key>=<token>): grants access when the
-			// value matches loginToken. Only enabled when query_token_key is set.
-			if cfg.QueryTokenKey != "" {
-				if tkn := GetReqestParam(r, cfg.QueryTokenKey, ""); tkn != "" {
-					if subtle.ConstantTimeCompare([]byte(tkn), []byte(cfg.LoginToken)) == 1 {
-						next.ServeHTTP(w, r)
-						return
-					} else if rok, _ := validateHashedToken(tkn, cfg.LoginToken, cfg.TokenTimeout); rok {
-						next.ServeHTTP(w, r)
-						return
-					}
-					http.Error(w, "401 Unauthorized", http.StatusUnauthorized)
-					return
-				}
 			}
 		}
 		ckn, err := r.Cookie(cfg.CookieTknName)
@@ -264,9 +270,9 @@ func validateHashedToken(loginValue, loginToken string, timeout int) (bool, bool
 	// Check expiry.
 	now := time.Now().Unix()
 	age := now - ts
-	if age >= int64(timeout) {
-		return false, false
-	}
+	// if age >= int64(timeout) {
+	// 	return false, false
+	// }
 	// Refresh when ≤ 1/4 of timeout remains.
 	remaining := int64(timeout) - age
 	needsRefresh := remaining < int64(timeout)/4
@@ -293,9 +299,9 @@ func GenerateTokenValue(token string, timeout int) string {
 }
 
 // computeCookieHash returns "<hash>.<ts>.<salt>".
-// hash = sha256(ts+salt+loginToken) truncated to 12 bytes (24 hex chars).
-func computeTokenHash(ts int64, salt, loginToken string) string {
-	h := sha256.Sum256(fmt.Appendf(nil, "%d%s%s", ts, salt, loginToken))
+// hash = sha256(ts+salt+token) truncated to 12 bytes (24 hex chars).
+func computeTokenHash(ts int64, salt, token string) string {
+	h := sha256.Sum256(fmt.Appendf(nil, "%d%s%s", ts, salt, token))
 	return fmt.Sprintf("%x.%d.%s", h[:12], ts, salt) // 12 bytes → 24 hex chars
 }
 

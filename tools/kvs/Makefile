@@ -24,7 +24,7 @@ vscode:
 	KVS_VSCODE_DOWNLOAD_BASE=https://oss.vsc.sims-cn.com/vsc \
 	KVS_VSCODE_DOWNLOAD_PATH=stable/SVC_VERSION_HASH/vscode-server-linux-x64-web.tar.gz \
 	KVS_HOME=../../temp/.vsc \
-	go run main.go -c default
+	go run main.go -c vscode
 
 zcodex:
 	KVS_DEBUG=1 KVS_PORT=7188 KVS_LOGIN_AUTHZ=true KVS_LOGIN_TOKEN=123456 \

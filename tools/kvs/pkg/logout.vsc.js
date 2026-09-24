@@ -24,6 +24,24 @@
       .then(function () { location.reload(); })
       .catch(function () { location.reload(); });
   }
+  // Ask the server for the local vscode:// deep-link (/__open_url returns the
+  // configured scheme URL, optionally with a token appended) and hand it to
+  // the OS so the current workspace opens in the desktop VS Code app. The
+  // separator depends on what the server returned: it may already carry a
+  // query (?token=...) so we append with & in that case, ? otherwise.
+  function openInVSC() {
+    fetch('/__open_url', { credentials: 'include' })
+      .then(function (r) { return r.text(); })
+      .then(function (u) {
+        u = (u || '').trim();
+        if (u.indexOf('://') === -1) return; // disabled server-side
+        var sep = u.indexOf('?') === -1 ? '?' : '&';
+        var fld = (location.search.match(/[?&]folder=([^&]*)/) || [])[1] || '';
+        location.href = u + sep + 'addr=' + encodeURIComponent(location.origin) +
+          '&folder=' + (fld ? fld : encodeURIComponent('/root'));
+      })
+      .catch(function () {});
+  }
   function item() {
     var li = el('li', 'action-item icon');
     li.id = '__kvs_out';
@@ -35,6 +53,20 @@
     li.appendChild(el('div', 'active-item-indicator'));
     li.addEventListener('click', logout);
     act(li, logout);
+    return li;
+  }
+  // Titlebar button (right of the layout controls) that opens the current
+  // workspace in the desktop VS Code application via the vscode:// handler.
+  function openItem() {
+    var li = el('li', 'action-item menu-entry');
+    li.id = '__kvs_open';
+    at(li, { role: 'presentation', tabindex: '-1' });
+    var a = el('a', 'action-label codicon codicon-vscode');
+    at(a, { role: 'button', 'aria-label': 'Open in vscode', tabindex: '0', title: 'Open in vscode' });
+    li.appendChild(a);
+    a_hover(li);
+    li.addEventListener('click', openInVSC);
+    act(li, openInVSC);
     return li;
   }
   function dialog() {
@@ -526,6 +558,10 @@
   function sync() {
     var tb = document.querySelector('.activitybar ul.actions-container[role="toolbar"]');
     if (tb && !tb.querySelector('#__kvs_out')) tb.insertBefore(item(), tb.firstChild);
+    // Titlebar layout toolbar (locale-independent selector): append the
+    // "Open in vscode" button after the built-in layout controls.
+    var tr = document.querySelector('.titlebar-right .action-toolbar-container ul.actions-container');
+    if (tr && !tr.querySelector('#__kvs_open')) tr.appendChild(openItem());
     var btns = document.querySelectorAll('.menubar-menu-button');
     var help = null;
     for (var i = btns.length - 1; i >= 0; i--) {

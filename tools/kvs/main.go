@@ -174,6 +174,7 @@ func main() {
 		w.Header().Set("Content-Type", "text/plain; charset=utf-8")
 		if cfg.TokenTimeout <= 0 {
 			_, _ = io.WriteString(w, "") // no config temp token
+			return
 		}
 		_, _ = io.WriteString(w, pkg.GenerateTokenValue(cfg.LoginToken, cfg.TokenTimeout))
 	})
@@ -193,10 +194,10 @@ func main() {
 		}
 		tkn := pkg.GenerateTokenValue(cfg.LoginToken, cfg.TokenTimeout)
 		if strings.Contains(cfg.VscOpenURL, "?") {
-			_, _ = io.WriteString(w, cfg.VscOpenURL+"&"+cfg.QueryTokenKey+tkn)
+			_, _ = io.WriteString(w, cfg.VscOpenURL+"&"+cfg.QueryTokenKey+"="+tkn)
 			return
 		}
-		_, _ = io.WriteString(w, cfg.VscOpenURL+"?"+cfg.QueryTokenKey+tkn)
+		_, _ = io.WriteString(w, cfg.VscOpenURL+"?"+cfg.QueryTokenKey+"="+tkn)
 	})
 
 	// /__restart – kills the backend subprocess and resets the service state so
