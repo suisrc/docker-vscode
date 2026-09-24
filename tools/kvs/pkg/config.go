@@ -601,7 +601,7 @@ func loadIni() (*iniFile, string) {
 		}
 		return ini, "vscode"
 	case "zcodex":
-		if home := os.Getenv("ZCODEX_HOME"); home != "" {
+		if home := os.Getenv("KVS_ZCODEX_HOME"); home != "" {
 			if os.Getenv("ZCODE_DATA_BASE_DIR") == "" {
 				os.Setenv("ZCODE_DATA_BASE_DIR", home)
 			}
@@ -617,7 +617,7 @@ func loadIni() (*iniFile, string) {
 			os.Setenv("KVS_SVC_CHECK_URL", "http://127.0.0.1:"+zport+"/api/server-info")
 		}
 		if os.Getenv("KVS_SVC_COMMAND") == "" {
-			os.Setenv("KVS_SVC_COMMAND", "${ZCODEX_NODE} {SVC_BIN_HOME}/bin/zcode.mjs --web --workspace ${HOME} --no-token --no-open --host=127.0.0.1 --port="+zport)
+			os.Setenv("KVS_SVC_COMMAND", "${KVS_ZCODEX_NODE} {SVC_BIN_HOME}/bin/zcode.mjs --web --workspace ${HOME} --no-token --no-open --host=127.0.0.1 --port="+zport)
 		}
 		if os.Getenv("KVS_PATH_PUBLIC") == "" {
 			os.Setenv("KVS_PATH_PUBLIC", "/remote/ws|/api/v1/client/configs")
