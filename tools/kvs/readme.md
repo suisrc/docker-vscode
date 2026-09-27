@@ -57,11 +57,50 @@ kvs syncto s3:/vsc/zcode /zcode   # 下载：S3 → 本地（对象或前缀递�
 
 | scheme | 说明 |
 |---|---|
-| `http`/`https`、`ws`/`wss` | 反向代理到 HTTP 后端（升级请求透传） |
+| `http`/`https`、`ws`/`wss` | 反向代理到 HTTP 后端（升级请求透传；`ws`/`wss` 等同于 `http`/`https`） |
 | `unix` | Unix domain socket |
 | `file` | 静态文件服务器（br/gz/zst 预压缩优选） |
 | `text` | 直接返回文本；支持 `@now` 替换当前时间（RFC3339） |
 | `wsws://` / `api://` | 进程内 zcode 中继 / handler 注册表（zcodex 预设使用，见 [agents.md](agents.md)） |
+
+## WebSocket 升级（性能与正确性）
+
+升级请求走**自研裸连接隧道**（`pkg/wsproxy.go`），不再使用标准库的升级分支：
+
+- 两端都是裸 socket 时用**内核 splice** 搬运数据（标准库因上游 body 是包装类型，结构上用不到 splice），大帧（文件传输、端口转发）用户态 CPU 明显下降；
+- 补齐握手期间已被 `http.Server` 缓冲的客户端字节——客户端把首帧与握手写在同一个 TCP 段时，标准库会**丢掉这一帧**，kvs 现在不会；
+- 可选空闲超时、TCP keepalive；握手任何阶段失败自动回退标准库路径（非升级请求始终走标准库反代，行为不变）。
+
+| 配置键 | 默认 | 说明 |
+|---|---|---|
+| `ws_proxy` | `auto` | `auto`=快路径（失败回退）；`stdlib`=始终旧行为 |
+| `ws_idle_timeout` | `0`（关闭） | 秒；两个方向都静默约 2 倍该值才断开 |
+
+`ws_idle_timeout > 0` 时的两种断开（只影响这一条隧道）：
+
+- **空闲**：两个方向都没有数据流动约 2×`ws_idle_timeout` 秒 → 断开（回收黑洞连接）；
+- **对端停滞**：某一方向有数据可读，但对端在 `max(ws_idle_timeout, 30s)` 内一个字节都没读走
+  （典型：客户端挂起、不再读取）→ 立即断开。这里**不会**"续期后继续拷贝"：写超时时内核
+  splice 管道（或用户态缓冲）里已从源读出、还没写出去的字节会随之丢失，继续拷只会让对端
+  拿到一段悄悄缺了字节的流；断开则对端看到的是明确的连接结束（客户端会自行重连）。
+
+## 反向代理调优
+
+| 配置键 | 默认 | 说明 |
+|---|---|---|
+| `proxy_idle_conns_per_host` | `32` | 每后端空闲连接上限（Go 默认只有 2） |
+| `proxy_max_idle_conns` | `256` | 全局空闲连接上限 |
+| `proxy_disable_compression` | `true` | 原样透传 `Accept-Encoding`，代理不做透明 gzip |
+| `proxy_flush_interval` | `100` | 流式响应刷出间隔（毫秒）；`0`=不主动刷，`-1`=每次写都刷 |
+
+响应体拷贝缓冲是**池化**的（`httputil.BufferPool`，32KB）：标准库默认每个带 body 的响应
+都新分配一块 32KB，池化后稳态零分配（实测 1MiB 响应 47.5KB/op → 15.7KB/op，见
+`pkg/transport_test.go` 的 benchmark）。
+
+## 运行观测
+
+- `/__stats`：JSON 计数（WS 隧道 splice/generic 数量与字节、中继帧数、缓存命中、goroutine/堆），受全局鉴权保护。
+- `KVS_PPROF=1`（或 `=<port>`、`=<addr>`）：额外起一个 pprof 监听，默认只绑 `127.0.0.1`，默认关闭。
 
 ## 外部资源代理 (`/__cache/`)
 

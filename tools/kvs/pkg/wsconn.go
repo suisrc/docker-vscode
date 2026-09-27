@@ -27,6 +27,7 @@ import (
 	"net"
 	"net/http"
 	"strings"
+	"sync"
 	"time"
 )
 
@@ -54,16 +55,39 @@ const (
 
 // wsConn is a hijacked, upgraded connection speaking minimal RFC 6455.
 // It is NOT safe for concurrent use by multiple goroutines; the relay runs
-// one reader goroutine per connection and serializes writes through the
-// relay's mutex.
+// one reader goroutine per connection and serializes writes through writeMu.
 type wsConn struct {
 	conn net.Conn
 	br   *bufio.Reader
 	// writeMu guards frame writes so reader (pongs) and relay sends cannot
-	// interleave half-frames.
-	writeMu chan struct{}
-	closed  bool
+	// interleave half-frames. A plain mutex beats the previous buffered
+	// channel: no scheduler handoff on the uncontended path.
+	writeMu sync.Mutex
+	// wbuf is scratch space for small frames, so header+payload leave in one
+	// write (guarded by writeMu). Frames larger than wbuf use writev instead.
+	wbuf [wsSmallFrameBytes]byte
+	// dlSet is when the write deadline was last pushed out; see writeFrame.
+	dlSet time.Time
+	// rbuf is the reusable read buffer (see wsReadMessage for the lifetime
+	// contract). Frames larger than wsReadReuseMax allocate per call.
+	rbuf   []byte
+	closed bool
 }
+
+// 帧 I/O 参数。
+const (
+	// wsSmallFrameBytes: 小于该值的帧合并到一块缓冲里一次写出（TLS 连接没有
+	// writev，合并写避免"头一个 TLS 记录 + 载荷一个记录"）。
+	wsSmallFrameBytes = 4 << 10
+	// wsReadReuseMax: 读缓冲复用上限，避免每帧 make 造成 GC 压力；更大的帧
+	// （少见）按需分配，不用为了极端帧让每条连接常驻几十 MB。
+	wsReadReuseMax = 1 << 20
+	// wsReadBufSize: hijack 后重新包装读缓冲的大小（server 默认只有 4KB）。
+	wsReadBufSize = 64 << 10
+	// wsWriteTimeout: 单次写的超时；按"过半才刷新"的粗粒度设置 deadline，
+	// 不再每帧两次 SetWriteDeadline。
+	wsWriteTimeout = 30 * time.Second
+)
 
 // wsUpgrade hijacks the connection and completes the server-side WebSocket
 // handshake. Returns nil (and answers 400) when the request is not a valid
@@ -104,10 +128,17 @@ func wsUpgrade(w http.ResponseWriter, r *http.Request) (*wsConn, error) {
 		netConn.Close()
 		return nil, fmt.Errorf("write handshake: %w", err)
 	}
+	// The hijacked bufio.Reader is 4KB. When it holds nothing (the common case:
+	// the client waited for the 101) it can be replaced by a larger one, which
+	// cuts a read syscall for every medium frame. When it does hold bytes they
+	// must be preserved, so the original reader stays.
+	br := brw.Reader
+	if br.Buffered() == 0 {
+		br = bufio.NewReaderSize(netConn, wsReadBufSize)
+	}
 	return &wsConn{
-		conn:    netConn,
-		br:      brw.Reader,
-		writeMu: make(chan struct{}, 1),
+		conn: netConn,
+		br:   br,
 	}, nil
 }
 
@@ -115,6 +146,11 @@ func wsUpgrade(w http.ResponseWriter, r *http.Request) (*wsConn, error) {
 // frames are supported (the zcode clients send one JSON message per frame).
 // Ping is answered inline; close completes the close handshake and returns
 // wsErrClosed. Control frames may interleave legally and are handled here.
+//
+// LIFETIME: the returned payload may alias the connection's reusable read
+// buffer (frames ≤ wsReadReuseMax). It is valid only until the next
+// wsReadMessage call on the same connection — the relay uses it synchronously
+// (forward it, parse it) before reading again, which is exactly the contract.
 func (c *wsConn) wsReadMessage() ([]byte, wsOpcode, error) {
 	for {
 		fin, op, payload, err := c.readFrame()
@@ -192,14 +228,20 @@ func (c *wsConn) readFrame() (fin bool, op wsOpcode, payload []byte, err error) 
 			return
 		}
 	}
-	payload = make([]byte, length)
+	// 复用连接级读缓冲：稳态下每帧零分配（> wsReadReuseMax 的帧才单独分配）。
+	if length <= wsReadReuseMax {
+		if cap(c.rbuf) < int(length) {
+			c.rbuf = make([]byte, length)
+		}
+		payload = c.rbuf[:length]
+	} else {
+		payload = make([]byte, length)
+	}
 	if _, err = io.ReadFull(c.br, payload); err != nil {
 		return
 	}
 	if masked {
-		for i := range payload {
-			payload[i] ^= maskKey[i&3]
-		}
+		wsUnmask(payload, maskKey)
 	} else {
 		// RFC 6455 §5.1: client-to-server frames MUST be masked.
 		err = fmt.Errorf("unmasked client frame")
@@ -207,40 +249,68 @@ func (c *wsConn) readFrame() (fin bool, op wsOpcode, payload []byte, err error) 
 	return
 }
 
+// wsUnmask XORs payload with the 4-byte frame mask key. Word-sized XOR for the
+// bulk of the payload (the byte loop inlined by the compiler is ~1 byte/cycle;
+// this is ~8), byte-wise for the tail.
+func wsUnmask(payload []byte, key [4]byte) {
+	k := uint64(binary.NativeEndian.Uint32(key[:]))
+	mk := k | k<<32
+	i := 0
+	for ; i+8 <= len(payload); i += 8 {
+		v := binary.NativeEndian.Uint64(payload[i:])
+		binary.NativeEndian.PutUint64(payload[i:], v^mk)
+	}
+	for ; i < len(payload); i++ {
+		payload[i] ^= key[i&3]
+	}
+}
+
 // writeFrame writes one frame with the FIN bit set. Server frames are never
-// masked.
+// masked. Header and payload leave in a single syscall:小帧合并进 wbuf 一次
+// Write，大帧用 net.Buffers → writev（TLS 等不支持 writev 的实现退化为两次
+// 顺序写）。写超时按"过半才刷新"维护，稳态下每帧不再调用 SetWriteDeadline。
 func (c *wsConn) writeFrame(op wsOpcode, payload []byte) error {
-	c.writeMu <- struct{}{}
-	defer func() { <-c.writeMu }()
+	c.writeMu.Lock()
+	defer c.writeMu.Unlock()
 	if c.closed {
 		return wsErrClosed
 	}
-	var hdr []byte
+	var hdr [10]byte
 	n := len(payload)
+	var hn int
 	switch {
 	case n < 126:
-		hdr = []byte{byte(0x80 | op), byte(n)}
+		hdr[0], hdr[1] = byte(0x80|op), byte(n)
+		hn = 2
 	case n <= 0xFFFF:
-		hdr = make([]byte, 4)
 		hdr[0], hdr[1] = byte(0x80|op), 126
 		binary.BigEndian.PutUint16(hdr[2:4], uint16(n))
+		hn = 4
 	default:
-		hdr = make([]byte, 10)
 		hdr[0], hdr[1] = byte(0x80|op), 127
 		binary.BigEndian.PutUint64(hdr[2:10], uint64(n))
+		hn = 10
 	}
-	if err := c.conn.SetWriteDeadline(time.Now().Add(30 * time.Second)); err != nil {
-		return err
-	}
-	if _, err := c.conn.Write(hdr); err != nil {
-		return err
-	}
-	if n > 0 {
-		if _, err := c.conn.Write(payload); err != nil {
+	// 只在剩余不足一半时才推写超时（等价语义，稳态零额外调用）。
+	if c.dlSet.IsZero() || time.Since(c.dlSet) >= wsWriteTimeout/2 {
+		if err := c.conn.SetWriteDeadline(time.Now().Add(wsWriteTimeout)); err != nil {
 			return err
 		}
+		c.dlSet = time.Now()
 	}
-	return c.conn.SetWriteDeadline(time.Time{})
+	if hn+n <= len(c.wbuf) {
+		buf := c.wbuf[:0]
+		buf = append(buf, hdr[:hn]...)
+		buf = append(buf, payload...)
+		_, err := c.conn.Write(buf)
+		return err
+	}
+	bufs := net.Buffers{hdr[:hn]} // 局部切片：WriteTo 会推进它，不动底层数组
+	if n > 0 {
+		bufs = append(bufs, payload)
+	}
+	_, err := bufs.WriteTo(c.conn)
+	return err
 }
 
 // wsWriteText sends one text message (single frame, FIN set).
@@ -265,10 +335,10 @@ func (c *wsConn) Abort() { c.close() }
 
 // close tears down the TCP connection exactly once.
 func (c *wsConn) close() {
-	c.writeMu <- struct{}{}
+	c.writeMu.Lock()
 	if !c.closed {
 		c.closed = true
 		_ = c.conn.Close()
 	}
-	<-c.writeMu
+	c.writeMu.Unlock()
 }

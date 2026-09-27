@@ -61,6 +61,11 @@ func main() {
 	pkg.SetZcodeHome(cfg.SvcHome)
 	// cache_sed: rewrite cc~ cached bodies (file|old|new||... rules).
 	pkg.SetCacheSed(cfg.SvcCacheSed)
+	// 反向代理调优 + WebSocket 升级快路径（见 pkg/transport.go / pkg/wsproxy.go）。
+	pkg.SetProxyTuning(cfg.ProxyIdleConnsPerHost, cfg.ProxyMaxIdleConns, cfg.ProxyDisableCompression, cfg.ProxyFlushInterval)
+	pkg.SetWSTunnelOptions(cfg.WSProxy, cfg.WSIdleTimeout)
+	// 可选 pprof（KVS_PPROF=1 | <port> | <addr>），默认关闭。
+	pkg.StartPProfIfEnabled()
 
 	// Service preparation state (for showing loading page during download/extract).
 	srvState := &pkg.ServiceState{}
@@ -86,7 +91,7 @@ func main() {
 			}
 			re = compiled
 		}
-		routes[i] = route{prefix: b.Source, re: re, handler: pkg.CreateBackendHandler(b, cfg.Headers, cfg.LoginAuthz), isService: b.IsService, exact: b.IsWSock}
+		routes[i] = route{prefix: b.Source, re: re, handler: pkg.CreateBackendHandler(b, cfg.Headers, cfg.LoginAuthz), isService: b.IsService, exact: pkg.ExactPathMatch(b)}
 		if b.IsService {
 			servicePrefix = b.Source
 		}
@@ -151,6 +156,11 @@ func main() {
 		w.Header().Set("Content-Type", "application/json")
 		_, _ = w.Write([]byte(`{"success":true,"message":"logout success"}`))
 	})
+
+	// /__stats – 运行计数（JSON）：WS 隧道（splice/generic、字节数）、中继帧、
+	// 缓存命中、goroutine/堆。挂在这里即受全局鉴权保护（login_token 非空时需
+	// 带 Cookie 或令牌）。
+	mux.HandleFunc("/__stats", pkg.StatsHandler)
 
 	// /__version – returns the resolved service application version as plain
 	// text. Falls back to "0.0.0" when no version is resolved (e.g. no service

@@ -536,7 +536,15 @@ func SetCacheDir(cacheDir string) {
 // machinery as the /__cache/ proxy route (only GET 2xx/404 are cached;
 // HITs serve from disk; non-GET passes through uncached).
 func HandleCCBackend(b Backend) http.Handler {
+	// ws/wss 只是 http/https 的别名：缓存客户端用 http.Client 抓上游，不做映射会得到
+	// `unsupported protocol scheme "ws"`（与反代 Director 同一处理）。
 	scheme := b.Scheme
+	switch scheme {
+	case "ws":
+		scheme = "http"
+	case "wss":
+		scheme = "https"
+	}
 	host := b.Target
 	// Version-marker target: "[v=key]" anywhere in the target (e.g.
 	// "zcode.z.ai/[v=app_version]remote/v4"). The marker is removed from

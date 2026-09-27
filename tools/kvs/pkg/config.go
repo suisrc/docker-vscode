@@ -66,6 +66,14 @@ type Config struct {
 	Headers       map[string]string // [headers] section: Xxx=Val → set/override; Xxx= → delete
 	PathPublic    []string          // path_public — |-separated paths reachable without auth
 	InitError     string            // non-fatal init error (e.g. version resolve failure); shown on loading page
+
+	// 反向代理调优（全部可省略；实现见 pkg/transport.go 与 pkg/wsproxy.go）
+	ProxyIdleConnsPerHost   int    // proxy_idle_conns_per_host — 每后端空闲连接上限，默认 32
+	ProxyMaxIdleConns       int    // proxy_max_idle_conns — 全局空闲连接上限，默认 256
+	ProxyDisableCompression bool   // proxy_disable_compression — 代理不做透明 gzip，默认 true
+	ProxyFlushInterval      int    // proxy_flush_interval — 刷出间隔(ms)，默认 100；0=不主动刷，-1=每写必刷
+	WSProxy                 string // ws_proxy — auto|stdlib|off，WebSocket 升级快路径，默认 auto
+	WSIdleTimeout           int    // ws_idle_timeout — WS 隧道空闲超时(秒)，0=关闭（默认）
 }
 
 // Backend describes a single proxy target with its routing prefix.
@@ -415,6 +423,20 @@ func parseBool(s string, def bool) bool {
 		return def
 	}
 	return s == "1" || strings.EqualFold(s, "true")
+}
+
+// parseIntDefault 解析整数配置项：空值或非法值都返回 def（只告警，不中断启动）。
+func parseIntDefault(s string, def int) int {
+	s = strings.TrimSpace(s)
+	if s == "" {
+		return def
+	}
+	n, err := strconv.Atoi(s)
+	if err != nil {
+		log.Printf("WARNING: invalid integer %q, using default %d", s, def)
+		return def
+	}
+	return n
 }
 
 // parseTimeout parses a login_timeout value (seconds). Empty or "0" → 0
@@ -853,6 +875,13 @@ func LoadInitConfig() Config {
 	cfg.LoginTimeout = parseTimeout(expandValue(strProp(ini, "login_timeout", "0"), svcVars))
 	cfg.TokenTimeout = parseTimeout(expandValue(strProp(ini, "token_timeout", "300"), svcVars))
 	cfg.UseSSL = parseBool(expandValue(strProp(ini, "use_ssl", ""), svcVars), false)
+	// 反向代理调优（默认值见 pkg/transport.go / pkg/wsproxy.go）
+	cfg.ProxyIdleConnsPerHost = parseIntDefault(expandValue(strProp(ini, "proxy_idle_conns_per_host", ""), svcVars), 0)
+	cfg.ProxyMaxIdleConns = parseIntDefault(expandValue(strProp(ini, "proxy_max_idle_conns", ""), svcVars), 0)
+	cfg.ProxyDisableCompression = parseBool(expandValue(strProp(ini, "proxy_disable_compression", ""), svcVars), true)
+	cfg.ProxyFlushInterval = parseIntDefault(expandValue(strProp(ini, "proxy_flush_interval", ""), svcVars), 100)
+	cfg.WSProxy = expandValue(strProp(ini, "ws_proxy", ""), svcVars)
+	cfg.WSIdleTimeout = parseIntDefault(expandValue(strProp(ini, "ws_idle_timeout", ""), svcVars), 0)
 	// path_public — |-separated list of paths reachable without auth
 	// (e.g. /api/v1/public|/remote/v4). Non-empty entries are kept as-is;
 	// prefix matching is applied by the auth middleware.

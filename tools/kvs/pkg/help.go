@@ -51,6 +51,25 @@ Config file sections:
   [actions]          named one-shot commands, run via /__agents/action/<name>
   [mirror]           S3 mirror sync config
 
+Proxy tuning (optional, top-level keys):
+  ws_proxy                        WebSocket upgrade handling: auto (raw-conn tunnel,
+                                  kernel splice, keeps the pipelined first frame) |
+                                  stdlib (previous behaviour). default auto
+  ws_idle_timeout                 WS tunnel idle timeout in seconds (default 0=off);
+                                  closes after ~2x this long with no traffic either way,
+                                  or as soon as one side stops reading for max(timeout,30s)
+                                  (a write stall would silently drop already-read bytes)
+  proxy_idle_conns_per_host       idle connections kept per backend (default 32; Go default 2)
+  proxy_max_idle_conns            global idle connection cap (default 256)
+  proxy_disable_compression       pass Accept-Encoding through instead of gzip+gunzip
+                                  inside the proxy (default true)
+  proxy_flush_interval            streaming flush interval in ms (default 100; 0=never, -1=every write)
+
+Built-in endpoints:
+  /__stats           runtime counters as JSON (WS tunnels splice/generic + bytes, relay
+                     frames, cache hits, goroutines/heap); protected by the global auth
+  /debug/pprof/      enabled separately by KVS_PPROF (loopback by default)
+
 Environment variables:
   KVS_PORT                          listen port (default 7080, HTTPS=port+1 when SSL)
   KVS_USESSL                        enable self-signed HTTPS (default false)
@@ -64,6 +83,13 @@ Environment variables:
   KVS_VSCODE_VERSION                VS Code version to use (empty fetches the latest)
   KVS_VSCODE_DOWNLOAD_BASE          VS Code download base URL (default https://update.code.visualstudio.com)
   KVS_VSCODE_DOWNLOAD_PATH          download path prefix (default commit:, used to build the URL, [BASE_URL]/commit:[hash]/~)
+  KVS_WS_PROXY                      ws_proxy value (auto|stdlib), see above
+  KVS_WS_IDLE                       ws_idle_timeout value (seconds)
+  KVS_PROXY_IDLE_CONNS              proxy_idle_conns_per_host value
+  KVS_PROXY_MAX_IDLE                proxy_max_idle_conns value
+  KVS_PROXY_DISABLE_GZIP            proxy_disable_compression value
+  KVS_PROXY_FLUSH_MS                proxy_flush_interval value
+  KVS_PPROF                         1 (127.0.0.1:6060) | <port> | <addr> — enable pprof
   KVS_MIRROR_VSCODE_S3_PREFIX       mirror: S3 storage prefix (e.g. https://oss.example.com/vsc)
   KVS_MIRROR_VSCODE_S3_ACCESS       mirror: S3 access key ID
   KVS_MIRROR_VSCODE_S3_SECRET       mirror: S3 secret access key

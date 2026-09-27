@@ -2,7 +2,6 @@ package pkg
 
 import (
 	"bytes"
-	"context"
 	"crypto/ecdsa"
 	"crypto/elliptic"
 	"crypto/rand"
@@ -14,7 +13,6 @@ import (
 	"io"
 	"log"
 	"math/big"
-	"net"
 	"net/http"
 	"net/http/httputil"
 	"net/url"
@@ -196,34 +194,27 @@ func CreateBackendHandler(b Backend, cacheHeaders map[string]string, loginAuthz 
 		//   none → request path forwarded unchanged (target path ignored);
 		//   -    → replace: strip the routing prefix, join onto target path;
 		//   +    → append: full request path joined after target path.
-		basePath := targetURL.EscapedPath()
 		rp := &httputil.ReverseProxy{
 			Director: func(req *http.Request) {
-				req.URL.Scheme = targetURL.Scheme
-				req.URL.Host = targetURL.Host
-				switch b.PathMode {
-				case "-":
-					req.URL.Path = joinProxyPaths(basePath, strings.TrimPrefix(req.URL.Path, b.Source))
-				case "+":
-					req.URL.Path = joinProxyPaths(basePath, req.URL.Path)
-				}
-				req.URL.RawPath = ""
-				if targetURL.RawQuery != "" && req.URL.RawQuery == "" {
-					req.URL.RawQuery = targetURL.RawQuery
-				}
-				applyCacheHeaders(req, cacheHeaders)
+				rewriteProxyRequest(req, b, targetURL, cacheHeaders)
 			},
+			Transport:     sharedProxyTransport(),
+			FlushInterval: proxyFlushInterval,
+			BufferPool:    sharedProxyBufferPool,
 		}
 		if loginAuthz {
 			rp.ModifyResponse = cacheResponseModifier()
 		}
+		// Upgrade requests take the raw-conn tunnel (pkg/wsproxy.go); every
+		// other request keeps using the standard ReverseProxy.
+		up := &wsUpstream{b: b, target: targetURL, hdrs: cacheHeaders, mods: rp.ModifyResponse}
+		fast := wsUpgradeHandler(up, rp)
 		if b.IsCache {
-			return HandleCCBackend(b)
+			// A cc~ route must never swallow an upgrade (the cache path uses a
+			// plain http.Client, which cannot upgrade): split by request kind.
+			return upgradeAwareHandler(fast, HandleCCBackend(b))
 		}
-		if b.IsWSock {
-			return wsProxyHandler(b, rp)
-		}
-		return rp
+		return fast
 
 	case "unix":
 		socketPath := b.Target
@@ -234,17 +225,19 @@ func CreateBackendHandler(b Backend, cacheHeaders map[string]string, loginAuthz 
 				req.URL.Host = "unix"
 				applyCacheHeaders(req, cacheHeaders)
 			},
-			Transport: &http.Transport{
-				DialContext: func(ctx context.Context, _, _ string) (net.Conn, error) {
-					var d net.Dialer
-					return d.DialContext(ctx, "unix", socketPath)
-				},
-			},
+			Transport:     unixProxyTransport(socketPath),
+			FlushInterval: proxyFlushInterval,
+			BufferPool:    sharedProxyBufferPool,
 		}
 		if loginAuthz {
 			rp.ModifyResponse = cacheResponseModifier()
 		}
-		return rp
+		up := &wsUpstream{b: b, hdrs: cacheHeaders, mods: rp.ModifyResponse}
+		fast := wsUpgradeHandler(up, rp)
+		if b.IsCache {
+			return upgradeAwareHandler(fast, HandleCCBackend(b))
+		}
+		return fast
 
 	case "file":
 		dir := b.Target
@@ -526,18 +519,57 @@ func isWebSocketUpgrade(r *http.Request) bool {
 	return false
 }
 
-// wsProxyHandler wraps the reverse proxy of a ws~ marked backend. Upgrade
-// requests are detected and logged as WS routes (routed through the
-// hijack-capable ReverseProxy transport, which transparently tunnels the
-// 101 Switching Protocols handshake and the bidirectional frames); all other
-// requests fall through as regular HTTP proxying.
-func wsProxyHandler(b Backend, rp http.Handler) http.Handler {
+// rewriteProxyRequest applies the backend's routing rules to req. It is shared
+// by the ReverseProxy Director and the raw-conn WS upgrade path
+// (pkg/wsproxy.go) so both send byte-identical upstream requests.
+func rewriteProxyRequest(req *http.Request, b Backend, targetURL *url.URL, cacheHeaders map[string]string) {
+	// ws/wss 只是 http/https 的别名：http.Transport 只认 http/https，
+	// 不映射的话 ws:// 路由会得到 `unsupported protocol scheme "ws"`。
+	switch targetURL.Scheme {
+	case "ws":
+		req.URL.Scheme = "http"
+	case "wss":
+		req.URL.Scheme = "https"
+	default:
+		req.URL.Scheme = targetURL.Scheme
+	}
+	req.URL.Host = targetURL.Host
+	basePath := targetURL.EscapedPath()
+	switch b.PathMode {
+	case "-":
+		req.URL.Path = joinProxyPaths(basePath, strings.TrimPrefix(req.URL.Path, b.Source))
+	case "+":
+		req.URL.Path = joinProxyPaths(basePath, req.URL.Path)
+	}
+	req.URL.RawPath = ""
+	if targetURL.RawQuery != "" && req.URL.RawQuery == "" {
+		req.URL.RawQuery = targetURL.RawQuery
+	}
+	applyCacheHeaders(req, cacheHeaders)
+}
+
+// upgradeAwareHandler splits upgrade requests from plain ones: WebSocket
+// upgrades go to the upgrade-capable handler, everything else to plain.
+func upgradeAwareHandler(upgrade, plain http.Handler) http.Handler {
 	return http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 		if isWebSocketUpgrade(r) {
-			log.Printf("[ws] upgrade %s%s → %s (scheme=%s)", r.Host, r.URL.Path, b.RawURL, b.Scheme)
+			upgrade.ServeHTTP(w, r)
+			return
 		}
-		rp.ServeHTTP(w, r)
+		plain.ServeHTTP(w, r)
 	})
+}
+
+// ExactPathMatch reports whether a backend's routing prefix must match the
+// request path exactly instead of by prefix. In-process endpoints (the wsws
+// relay, api:// handlers) are single resources where a wider match would be
+// wrong; tunnel-capable schemes (http/https/ws/wss/unix) match by prefix, so a
+// ws~ marked route can cover a whole subtree.
+func ExactPathMatch(b Backend) bool {
+	if !b.IsWSock {
+		return false
+	}
+	return b.Scheme != "http" && b.Scheme != "https" && b.Scheme != "ws" && b.Scheme != "wss" && b.Scheme != "unix"
 }
 
 // precompressedFileServer wraps a file handler with pre-compressed asset

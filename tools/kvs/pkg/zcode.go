@@ -465,6 +465,8 @@ func (r *zcodeRelay) handleConnection(ws *wsConn, req *http.Request) {
 			r.detach(conn)
 			return
 		}
+		kvsStats.relayFramesIn.Add(1)
+		kvsStats.relayBytesIn.Add(int64(len(payload)))
 		if len(payload) > zcodeMaxFrameBytes {
 			log.Printf("[zcode] conn#%d oversize frame dropped (%d bytes)", conn.id, len(payload))
 			continue
@@ -481,21 +483,29 @@ func (r *zcodeRelay) handleConnection(ws *wsConn, req *http.Request) {
 
 // onMessage dispatches one inbound JSON frame.
 func (r *zcodeRelay) onMessage(conn *zcodeConn, frame []byte) error {
+	r.mu.Lock()
+	authed := conn.authenticated
+	r.mu.Unlock()
+
+	// data 帧快路径：payload 对中继不透明，转发即可，不必把整帧（可能几 MB）解析
+	// 一遍再丢掉。只扫描到顶层 "type" 成员为止；判断不出来就走下面的完整解析，
+	// 语义不变（唯一区别：声明为 data 但整体不是合法 JSON 的帧会被原样转发给对端，
+	// 由对端报错——中继对 data 帧的契约本来就是逐字节转发）。
+	if authed && jsonHeadStringIs(frame, "type", "data") {
+		kvsStats.relayDataFast.Add(1)
+		r.onData(conn, frame)
+		return nil
+	}
+	kvsStats.relayFallbacks.Add(1)
+
 	var msg zcodeClientMsg
 	if err := json.Unmarshal(frame, &msg); err != nil || msg.Type == "" {
 		log.Printf("[zcode] conn#%d invalid relay message", conn.id)
-		r.mu.Lock()
-		authed := conn.authenticated
-		r.mu.Unlock()
 		if !authed {
 			r.sendError(conn, zcodeErrWrongParam, "malformed message")
 		}
 		return nil
 	}
-
-	r.mu.Lock()
-	authed := conn.authenticated
-	r.mu.Unlock()
 
 	if authed {
 		switch msg.Type {
@@ -783,6 +793,8 @@ func (r *zcodeRelay) sendRaw(conn *zcodeConn, frame []byte) {
 	if detached {
 		return
 	}
+	kvsStats.relayFramesOut.Add(1)
+	kvsStats.relayBytesOut.Add(int64(len(frame)))
 	if err := conn.ws.wsWriteText(frame); err != nil {
 		log.Printf("[zcode] conn#%d send FAIL: %v", conn.id, err)
 	}
