@@ -78,7 +78,7 @@ func TestProxyTablesAndServices(t *testing.T) {
 		t.Fatalf("parse embedded kvs.ini: %v", err)
 	}
 	tables := ini.proxyTables()
-	want := []string{"zcodex", "default", "zcode", "vscode", "dsh"}
+	want := []string{"zcodex", "default", "zcode", "vscode", "dshweb"}
 	if len(tables) != len(want) {
 		t.Fatalf("proxyTables = %v, want %v", tables, want)
 	}
@@ -93,18 +93,18 @@ func TestProxyTablesAndServices(t *testing.T) {
 	}
 	found := false
 	for _, e := range vscEntries {
-		if e[0] == "/" && e[1] == "svc://vsc" {
+		if e[0] == "/" && e[1] == "svc://vscode" {
 			found = true
 		}
 	}
 	if !found {
-		t.Fatalf("[proxies.vscode] missing /=svc://vsc entry: %v", vscEntries)
+		t.Fatalf("[proxies.vscode] missing /=svc://vscode entry: %v", vscEntries)
 	}
 	var svcNames []string
 	for _, kv := range ini.serviceSections() {
 		svcNames = append(svcNames, kv[0])
 	}
-	if strings.Join(svcNames, ",") != "def,zcode,vsc,dsh" {
+	if strings.Join(svcNames, ",") != "def,zcode,vscode,dshweb" {
 		t.Fatalf("serviceSections = %v", svcNames)
 	}
 }

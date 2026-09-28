@@ -793,6 +793,10 @@ body.drag-in-progress .card.openable, body.drag-in-progress .mrow.openable { cur
 (function () {
 'use strict';
 
+/* 挂载点基准：页面由 api:// 服务在路由前缀上（如 /admin），其 API 一律
+   请求 <挂载点>/__manager*。挂在根上时 MGR_BASE 为空串，路径保持原样。 */
+var MGR_BASE = location.pathname.replace(/\/+$/, '');
+
 /* ======================================================== 图标（内联 SVG） */
 var I = {
   brand:  '<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><rect x="3" y="3" width="7.5" height="7.5" rx="2"/><rect x="13.5" y="3" width="7.5" height="7.5" rx="2"/><rect x="3" y="13.5" width="7.5" height="7.5" rx="2"/><rect x="13.5" y="13.5" width="7.5" height="7.5" rx="2"/></svg>',
@@ -959,7 +963,7 @@ function openApp(a, url) {
 }
 function recordVisit(id) {
   try {
-    navigator.sendBeacon('/__manager/visit',
+    navigator.sendBeacon(MGR_BASE + '/__manager/visit',
       new Blob([JSON.stringify({ id: id })], { type: 'application/json' }));
   } catch (e) { /* 上报失败不影响使用 */ }
 }
@@ -1367,7 +1371,7 @@ function saveOrder(ids) {
   Object.keys(byId).forEach(function (id) { ordered.push(byId[id]); });  // 隐藏条目排后
   state.apps = ordered;
   render();
-  fetch('/__manager/order', {
+  fetch(MGR_BASE + '/__manager/order', {
     method: 'POST', credentials: 'include',
     headers: { 'Content-Type': 'application/json' },
     body: JSON.stringify({ ids: ids })
@@ -1434,7 +1438,7 @@ function hideError() {
 function loadApps(manual) {
   var btn = $('btnRefresh');
   if (manual) btn.classList.add('spin');
-  return fetch('/__manager', { credentials: 'include', headers: { 'Accept': 'application/json' } })
+  return fetch(MGR_BASE + '/__manager', { credentials: 'include', headers: { 'Accept': 'application/json' } })
     .then(function (res) {
       var ct = res.headers.get('content-type') || '';
       if (ct.indexOf('json') < 0) { location.reload(); throw new Error('login'); }
@@ -1626,7 +1630,7 @@ $('addOk').addEventListener('click', function () {
   }
   if (editingApp) body.id = editingApp.id;   // 编辑模式
 
-  fetch('/__manager', {
+  fetch(MGR_BASE + '/__manager', {
     method: 'POST', credentials: 'include',
     headers: { 'Content-Type': 'application/json' },
     body: JSON.stringify(body)
@@ -1662,7 +1666,7 @@ $('folderOk').addEventListener('click', function () {
   if (!path) { toast('请填写工作区路径', true); return; }
   var body = { id: folderApp.id, name: name, path: path };
   if (folderOld) body.old = folderOld;   // 编辑：改名时移除原条目
-  fetch('/__manager/folder', {
+  fetch(MGR_BASE + '/__manager/folder', {
     method: 'POST', credentials: 'include',
     headers: { 'Content-Type': 'application/json' },
     body: JSON.stringify(body)
@@ -1710,7 +1714,7 @@ function pushTags(tags) {
   saveTagsLocal(tags);
   renderTagChips();
   render();
-  fetch('/__manager/tags', {
+  fetch(MGR_BASE + '/__manager/tags', {
     method: 'POST', credentials: 'include',
     headers: { 'Content-Type': 'application/json' },
     body: JSON.stringify({ id: tagsApp.id, tags: tags })
@@ -1780,7 +1784,7 @@ function openNoteModal(a) {
   openModal('noteModal');
   setTimeout(function () { $('inpNote').focus(); }, 60);
   /* 备注单独接口读取，不随列表返回 */
-  fetch('/__manager/note?id=' + encodeURIComponent(a.id), { credentials: 'include' })
+  fetch(MGR_BASE + '/__manager/note?id=' + encodeURIComponent(a.id), { credentials: 'include' })
     .then(function (res) { if (!res.ok) throw new Error('HTTP ' + res.status); return res.json(); })
     .then(function (d) {
       if (seq !== noteSeq) return;   // 弹窗已切换
@@ -1795,7 +1799,7 @@ $('inpNote').addEventListener('keydown', function (e) {
 $('noteOk').addEventListener('click', function () {
   if (!noteApp) return;
   var text = $('inpNote').value.trim();
-  fetch('/__manager/note', {
+  fetch(MGR_BASE + '/__manager/note', {
     method: 'POST', credentials: 'include',
     headers: { 'Content-Type': 'application/json' },
     body: JSON.stringify({ id: noteApp.id, note: text })
@@ -1847,7 +1851,7 @@ function renderToolList() {
     delBtn.addEventListener('click', function () {
       confirmBox({ title: '删除工具', msg: '确定删除「' + t.name + '」？' }).then(function (ok) {
         if (!ok) return;
-        fetch('/__manager/tool?name=' + encodeURIComponent(t.name), { method: 'DELETE', credentials: 'include' })
+        fetch(MGR_BASE + '/__manager/tool?name=' + encodeURIComponent(t.name), { method: 'DELETE', credentials: 'include' })
           .then(function (res) {
             if (!res.ok) throw new Error('HTTP ' + res.status);
             toast('已删除「' + t.name + '」');
@@ -1890,7 +1894,7 @@ $('toolOk').addEventListener('click', function () {
   if (!addr) { toast('请填写地址', true); return; }
   var body = { name: name, addr: addr };
   if (toolOld) body.old = toolOld;
-  fetch('/__manager/tool', {
+  fetch(MGR_BASE + '/__manager/tool', {
     method: 'POST', credentials: 'include',
     headers: { 'Content-Type': 'application/json' },
     body: JSON.stringify(body)
@@ -1910,7 +1914,7 @@ function deleteApp(a) {
   confirmBox({ title: '删除应用', msg: '确定删除「' + a.name + '」？该操作不可恢复。' })
     .then(function (ok) {
       if (!ok) return;
-      fetch('/__manager?id=' + encodeURIComponent(a.id), { method: 'DELETE', credentials: 'include' })
+      fetch(MGR_BASE + '/__manager?id=' + encodeURIComponent(a.id), { method: 'DELETE', credentials: 'include' })
         .then(function (res) {
           if (!res.ok) return res.text().then(function (t) { throw new Error(t || ('HTTP ' + res.status)); });
           toast('已删除「' + a.name + '」');
@@ -1923,7 +1927,7 @@ function deleteFolder(a, f) {
   confirmBox({ title: '删除工作区', msg: '确定删除「' + a.name + '」的工作区「' + f.name + '」？' })
     .then(function (ok) {
       if (!ok) return;
-      fetch('/__manager/folder?id=' + encodeURIComponent(a.id) + '&name=' + encodeURIComponent(f.name),
+      fetch(MGR_BASE + '/__manager/folder?id=' + encodeURIComponent(a.id) + '&name=' + encodeURIComponent(f.name),
         { method: 'DELETE', credentials: 'include' })
         .then(function (res) {
           if (!res.ok) return res.text().then(function (t) { throw new Error(t || ('HTTP ' + res.status)); });

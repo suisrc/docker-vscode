@@ -33,9 +33,9 @@ zcodex:
 	go run main.go -n :zcodex
 
 zcode:
-	ZCODE_DESKTOP_USER_DATA_DIR=/root/.config/ZCode2 \
-	ZCODE_WEB_REMOTE_CONTROL_RELAY_WS_URL=ws://127.0.0.1:7188/ws \
-	ZCODE_WEB_REMOTE_CONTROL_URL=https://leo-7180-wsc.vsc.sims-cn.com/remote/v4 \
+	ZCODE_DATA_BASE_DIR=/wsc/go/github/ws01/docker-vscode/temp/zcode \
+	ZCODE_DESKTOP_USER_DATA_DIR=/wsc/go/github/ws01/docker-vscode/temp/zcode \
+	ZCODE_WEB_REMOTE_CONTROL_RELAY_WS_URL=ws://127.0.0.1:7188/remote/ws \
 	DISPLAY=:1 /opt/ZCode/zcode --no-sandbox
 
 # export KVS_MIRROR_S3_ACCESS=

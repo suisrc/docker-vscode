@@ -291,7 +291,16 @@ func CreateBackendHandler(b Backend, cacheHeaders map[string]string, loginAuthz 
 		// (no subprocess). Handlers are registered via registerAPI from
 		// their owning modules (e.g. manager.go registers "manager").
 		if h, ok := apiHandleMap[b.Target]; ok {
-			log.Printf("backend api handler: %s", b.Target)
+			// Handlers are written against the root ("/"), so mount them at
+			// the route prefix by stripping it from the request path — the
+			// same semantics as file:// backends. This lets an api:// service
+			// live at any path (e.g. /admin=api://manager serves the page at
+			// /admin and its API at /admin/__manager*); root mounts ("/") are
+			// passed through untouched.
+			if b.Source != "" && b.Source != "/" {
+				h = http.StripPrefix(b.Source, h)
+			}
+			log.Printf("backend api handler: %s (mounted at %s)", b.Target, b.Source)
 			return h
 		}
 		log.Fatalf("unknown api handler %q in %q", b.Target, b.RawURL)
