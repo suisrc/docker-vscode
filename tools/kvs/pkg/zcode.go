@@ -712,7 +712,10 @@ func (r *zcodeRelay) onData(conn *zcodeConn, frame []byte) {
 		log.Printf("[zcode] conn#%d data dropped: pair_status=waiting", conn.id)
 		return
 	}
-	var targets []*zcodeConn
+	// 栈上小数组承接目标：设备↔终端典型的对端数是 1~2，data 帧热路径
+	// 每帧省一次堆分配；超过 4 个对端时 append 自动落到堆上（罕见）。
+	var targetsBuf [4]*zcodeConn
+	targets := targetsBuf[:0]
 	if role == zcodeRoleDevice {
 		for _, t := range r.terminals[sid] {
 			targets = append(targets, t)

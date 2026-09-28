@@ -92,6 +92,7 @@ kvs syncto s3:/vsc/zcode /zcode   # 下载：S3 → 本地（对象或前缀递�
 | `proxy_max_idle_conns` | `256` | 全局空闲连接上限 |
 | `proxy_disable_compression` | `true` | 原样透传 `Accept-Encoding`，代理不做透明 gzip |
 | `proxy_flush_interval` | `100` | 流式响应刷出间隔（毫秒）；`0`=不主动刷，`-1`=每次写都刷 |
+| `read_timeout` | `60` | 主 server 读完整请求（含 body）的秒数；`0`=不限（大上传/慢客户端），负值告警保持默认。WebSocket 不受影响（hijack 清空 deadline） |
 
 响应体拷贝缓冲是**池化**的（`httputil.BufferPool`，32KB）：标准库默认每个带 body 的响应
 都新分配一块 32KB，池化后稳态零分配（实测 1MiB 响应 47.5KB/op → 15.7KB/op，见
@@ -110,7 +111,13 @@ kvs syncto s3:/vsc/zcode /zcode   # 下载：S3 → 本地（对象或前缀递�
 /__cache/[cc~]{scheme}:{host}[/path][?query]
 ```
 
-`cc~` 前缀 = 缓存（仅 GET 2xx），布局 `{cache_dir}/cache/ccproxy/{scheme}:{host}/path`。`cache_sed` 缓存内容替换（规则格式、once/each 动态 Host 模式）见 demo 模板注释与 [agents.md](agents.md)。
+`cc~` 前缀 = 缓存（仅 GET 2xx 与 404），布局 `{cache_dir}/cache/ccproxy/{scheme}:{host}/path`。`cache_sed`
+缓存内容替换（规则格式、once/each 动态 Host 模式）见 demo 模板注释与 [agents.md](agents.md)。
+
+缓存**命中**按持久化的 sed 计划选择发码方式：`each`（需按请求重写）读内存重写；其余模式
+（none/once/旧条目）**文件直出**——`http.ServeContent` 走内核 sendfile（零拷贝、零堆分配），
+附带 `Content-Length`、`Accept-Ranges`、Range/If-Modified-Since 支持。元数据（`_.json`）有
+内存缓存，按 size+mtime+inode 判失效（同秒重写也不会漏）。
 
 ## HTTPS / TLS
 

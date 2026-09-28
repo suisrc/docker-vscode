@@ -17,7 +17,7 @@
 | `pkg/config.go` | ini 解析 + 值模板展开、SVC_* 内部变量、版本覆盖（`GOverrideVersion`）、zcodex 预设注入（KVS_PROXIES 拼装 `wsws://`/`api://manager`） |
 | `pkg/backend.go` | `Backend` 抽象；`CreateBackendHandler` 按 scheme 分发；`registerAPI`（api:// 进程内注册表）；ws 代理；`precompressedFileServer`（br/gz/zst 预压缩静态） |
 | `pkg/service.go` | service 生命周期：检测→版本解析→下载→解压→脚本→启停 |
-| `pkg/cache.go` | `/__cache/` 外部资源代理；`cc~` 缓存；cache_sed once/each/none 与 `_.json` 元数据 |
+| `pkg/cache.go` | `/__cache/` 外部资源代理；`cc~` 缓存（命中按 sed 计划直出 sendfile/内存重写，元数据内存缓存 size+mtime+inode 判失效）；cache_sed once/each/none 与 `_.json` 元数据 |
 | `pkg/server.go` | 服务器构建（HTTP + HTTPS=port+1 自签 ECDSA P-256）、静态资产/登录页服务、`isBrowserRequest` |
 | `pkg/vscode.go` | VS Code 专有：web-extension-resource 本地化（上游乱码 issue microsoft/vscode#299425）、语言包/汉化链路 |
 | `pkg/vagent.go` | agent 端点：`vsc_agent_cmds` 预设表（JSON）、端点目录扫描（*.json） |
@@ -115,6 +115,13 @@ ws~ 路由前缀匹配与退避：`ExactPathMatch` = `ws~` 且目标非隧道类
   - `none`：匹配文件名但内容未变 → 原样存取
   - 同一文件可同时有 once+each：once 先替换保存，文件标记 each，每请求补 each 部分
 - 布局：`{cache_dir}/cache/ccproxy/{scheme}:{host}/path`（存储体）、`path_.json`（status/headers + sed）、`path_.bak1`
+- 命中发码：`each` 读内存按 Host 重写（唯一还读整份正文的情况）；none/once/旧条目**文件直出**
+  （`http.ServeContent` → 内核 sendfile，附 Content-Length/Accept-Ranges/Range/If-Modified-Since，
+  Last-Modified 用缓存文件 mtime——条件请求针对"缓存条目是否变化"作答）；非 200 状态（404 也
+  入缓存）退回内存路径保状态码。元数据读入有内存缓存（`ccMetaCache`，上限 4096 条，整表丢弃
+  式淘汰），以 size+mtime+**inode** 判失效——原子写是 temp+rename 必换 inode，同秒重写不漏判。
+- MISS 会先 `WriteHeader(resp.StatusCode)` 再流式转发（上游 404 入缓存时状态码不能被隐式
+  200 吞掉）。`/__stats` 的 cache.hits/misses 在这两处推进。
 
 ### 3.4.1 中继帧路径（wsconn.go / zcode.go）
 
@@ -215,11 +222,8 @@ Update 菜单注入（vscode.go + logout.vsc.js）：`login_authz = true` 且代
 近期方向（消解已知限制）：
 - `command` 不支持带空格参数 → argv 解析或列表形式
 - 外部代理缓存无大小上限 → 容量配额/LRU 淘汰
-- cc~ 缓存命中仍是 `os.ReadFile` 整文件进内存（8MiB 实测：1016MiB/s、每次 8MiB 堆、10 次 GC）；
-  改为 `os.Open`+`io.Copy`（sendfile）实测 2759MiB/s、零堆分配、零 GC。改动面：仅 `cache_sed`
-  模式 ≠ `each` 的条目可直出（`each` 需按 Host 重写正文），并按模式决定是否补 `Content-Length`
-- 主 HTTP server 的 `ReadTimeout=60s`（server.go）会限制**大文件上传**（非 WS，WS 已 hijack）；
-  真要传大文件应改为可配置或按路由豁免
-- `ws~` + 隧道 scheme 的前缀匹配放宽后，若配 `ws~/=ws://...`（前缀 `/`）会覆盖后续路由：
-  可加启动期告警，避免静默遮蔽
+- cc~ 缓存命中 sendfile 直出、元数据内存缓存、MISS 状态码修复、`/__stats` cache 计数接线：
+  **本轮已落地**（`temp/audit/ccserve` 实测 readfile 1016MiB/s → sendfile 2759MiB/s、零堆分配）
+- 大上传：`read_timeout` 配置键已落地（0=不限，默认 60 保持旧行为）
+- `ws~/=ws://...`（前缀 `/`）遮蔽后续路由：已加启动期 WARNING
 - 扩展点索引：新后端协议 = `CreateBackendHandler` 分发 + （进程内实现时）`registerAPI`；manager 新条目类型 = `mgrBuildEntries` + 前端 `iconOf`/`TAGS`；新内置端点 = main.go mux 挂 `/__` 前缀（自动免鉴权）；新预设 = config.go zcodex 注入处模式

@@ -13,8 +13,10 @@ import (
 	"os"
 	"os/exec"
 	"path/filepath"
+	"strconv"
 	"strings"
 	"sync"
+	"syscall"
 	"time"
 )
 
@@ -129,9 +131,35 @@ func cachePaths(root, scheme, host, rest string) (bodyPath, metaPath string) {
 	return base, base + "_.json"
 }
 
-// readCacheMeta reads and parses a cache metadata file from disk.
+// readCacheMeta reads and parses a cache metadata file from disk, with an
+// in-memory cache: hits serve from parsed state, validated by (size, mtime,
+// inode). The inode is part of the key because cache writes go through
+// "temp file + rename" — rename always creates a new inode, so a rewrite
+// within the same 1-second mtime granularity still invalidates.
 func readCacheMeta(path string) (*cacheMeta, error) {
-	data, err := os.ReadFile(path)
+	f, err := os.Open(path)
+	if err != nil {
+		return nil, err
+	}
+	defer f.Close()
+	fi, err := f.Stat()
+	if err != nil {
+		return nil, err
+	}
+	ino := uint64(0)
+	if st, ok := fi.Sys().(*syscall.Stat_t); ok {
+		ino = st.Ino
+	}
+
+	ccMetaCache.mu.Lock()
+	e, ok := ccMetaCache.m[path]
+	ccMetaCache.mu.Unlock()
+	if ok && e.size == fi.Size() && e.modTime.Equal(fi.ModTime()) && e.ino == ino {
+		m := e.meta
+		return &m, nil
+	}
+
+	data, err := io.ReadAll(f)
 	if err != nil {
 		return nil, err
 	}
@@ -139,8 +167,32 @@ func readCacheMeta(path string) (*cacheMeta, error) {
 	if err := json.Unmarshal(data, &m); err != nil {
 		return nil, err
 	}
+
+	ccMetaCache.mu.Lock()
+	if len(ccMetaCache.m) >= ccMetaCacheMax {
+		ccMetaCache.m = map[string]ccMetaCacheEntry{} // 整表丢弃：命中集随版本/热点自然重建
+	}
+	ccMetaCache.m[path] = ccMetaCacheEntry{size: fi.Size(), modTime: fi.ModTime(), ino: ino, meta: m}
+	ccMetaCache.mu.Unlock()
 	return &m, nil
 }
+
+// ccMetaCacheEntry is one parsed metadata file kept in memory.
+type ccMetaCacheEntry struct {
+	size    int64
+	modTime time.Time
+	ino     uint64
+	meta    cacheMeta
+}
+
+// ccMetaCacheMax caps the in-memory metadata cache (per-entry cost is small:
+// headers + sed plan; 4096 entries ≪ 10MB).
+const ccMetaCacheMax = 4096
+
+var ccMetaCache = struct {
+	mu sync.Mutex
+	m  map[string]ccMetaCacheEntry
+}{m: map[string]ccMetaCacheEntry{}}
 
 // writeCacheMeta atomically writes cache metadata as JSON.
 func writeCacheMeta(path string, m *cacheMeta) error {
@@ -191,7 +243,7 @@ func HandleCache(w http.ResponseWriter, r *http.Request) {
 
 	// Try cache lookup; on MISS fetch, stream and store.
 	bodyPath, metaPath := cachePaths(cacheRoot, scheme, host, rest)
-	if serveFromCache(w, bodyPath, metaPath, targetURL, r.Host) {
+	if serveFromCache(w, r, bodyPath, metaPath, targetURL, r.Host) {
 		return
 	}
 	handleCachedCache(w, r, targetURL, bodyPath, metaPath)
@@ -243,42 +295,95 @@ func buildTargetURL(scheme, host, rest, rawQuery string) string {
 // serveFromCache tries to serve a response from cache. Returns true on HIT.
 // The stored body is transformed per the persisted sedMeta plan (legacy
 // entries without one are served as-is).
-func serveFromCache(w http.ResponseWriter, bodyPath, metaPath, targetURL string, host string) bool {
+//
+// Body delivery depends on the persisted plan:
+//
+//   - mode=each → the body must be rewritten per request, so it is read into
+//     memory (the only case that still does);
+//   - everything else (none/once/legacy) → the stored bytes are final and are
+//     served straight from the file: http.ServeContent sends them via kernel
+//     sendfile (zero-copy, no heap allocation) and adds Range /
+//     If-Modified-Since support. Non-200 cached statuses (404 is cached)
+//     fall back to the in-memory path so the status code survives.
+func serveFromCache(w http.ResponseWriter, r *http.Request, bodyPath, metaPath, targetURL, host string) bool {
 	meta, err := readCacheMeta(metaPath)
 	if err != nil {
 		return false
 	}
-	body, err := os.ReadFile(bodyPath)
+	needsEach := meta.Sed != nil && meta.Sed.Mode == sedModeEach && len(meta.Sed.Each) > 0
+
+	// 响应头要等正文确认可读之后才写：正文缺失（元数据在、文件被清）时要
+	// 干净地回退 MISS，不能留下 X-Cache: HIT 或元数据首部让 MISS 路径重复叠加。
+	hit := func() {
+		w.Header().Set("X-Cache", "HIT")
+		copyHeaders(w.Header(), meta.Headers)
+	}
+
+	if needsEach {
+		body, err := os.ReadFile(bodyPath)
+		if err != nil {
+			return false
+		}
+		out, outGzip := sedServeFromMeta(meta, body, host)
+		log.Printf("[cache] cache HIT  %s ← %s (%d bytes, sed=each)", targetURL, bodyPath, len(out))
+		hit()
+		setCachedFraming(w, meta, outGzip)
+		// 正文已在手上，直接给出 Content-Length（旧实现走 chunked）。
+		w.Header().Del("Content-Length")
+		w.Header().Set("Content-Length", strconv.Itoa(len(out)))
+		w.WriteHeader(meta.Status)
+		_, _ = w.Write(out)
+		kvsStats.cacheHits.Add(1)
+		return true
+	}
+
+	if meta.Status != http.StatusOK {
+		// 非 200（404 也会入缓存）：ServeContent 只会回 200/206/304，退回
+		// 内存路径保住状态码语义（这类响应通常很小）。
+		body, err := os.ReadFile(bodyPath)
+		if err != nil {
+			return false
+		}
+		log.Printf("[cache] cache HIT  %s ← %s (%d bytes, status=%d)", targetURL, bodyPath, len(body), meta.Status)
+		hit()
+		setCachedFraming(w, meta, isGzipMeta(meta))
+		w.Header().Del("Content-Length")
+		w.WriteHeader(meta.Status)
+		_, _ = w.Write(body)
+		kvsStats.cacheHits.Add(1)
+		return true
+	}
+
+	f, err := os.Open(bodyPath)
 	if err != nil {
 		return false
 	}
-	// Framing fixup AFTER meta headers are copied — always clear first, then
-	// set once, so the header is never duplicated (a repeated Content-Encoding
-	// makes browsers reject the whole response):
-	//   mode=each → rewrite per request, gzip framed when SrcGzip (rule 5);
-	//   otherwise → stored bytes are final (none = upstream original with
-	//                its recorded framing header; once = our gzip).
-	out, outGzip := sedServeFromMeta(meta, body, host)
-	log.Printf("[cache] cache HIT  %s ← %s (%d bytes)", targetURL, bodyPath, len(out))
-	w.Header().Set("X-Cache", "HIT")
-	for k, vs := range meta.Headers {
-		for _, v := range vs {
-			w.Header().Add(k, v)
-		}
+	defer f.Close()
+	fi, err := f.Stat()
+	if err != nil {
+		return false
 	}
+	log.Printf("[cache] cache HIT  %s ← %s (%d bytes, file direct)", targetURL, bodyPath, fi.Size())
+	hit()
+	setCachedFraming(w, meta, isGzipMeta(meta))
+	w.Header().Del("Content-Length") // ServeContent 按文件大小自行给出
+	// modtime 用缓存文件的写入时间：If-Modified-Since/If-Range 针对"缓存条目
+	// 是否变化"作答（内容时间语义等同，只是不再用上游 Last-Modified）。
+	http.ServeContent(w, r, filepath.Base(bodyPath), fi.ModTime(), f)
+	kvsStats.cacheHits.Add(1)
+	return true
+}
+
+// setCachedFraming reproduces the HIT Content-Encoding semantics (same rules
+// as the write path): gzip bodies declare gzip, br & other passthrough
+// encodings keep their original claim, plain bodies declare nothing.
+func setCachedFraming(w http.ResponseWriter, meta *cacheMeta, outGzip bool) {
 	w.Header().Del("Content-Encoding")
 	if outGzip {
 		w.Header().Set("Content-Encoding", "gzip")
 	} else if enc := cacheContentEncoding(meta); enc != "" {
-		// Non-gzip encoded stored body (e.g. br passthrough): keep the
-		// original encoding claim — the stored bytes are NOT plain and must
-		// never be re-framed or delivered bare.
 		w.Header().Set("Content-Encoding", enc)
 	}
-	w.Header().Del("Content-Length")
-	w.WriteHeader(meta.Status)
-	_, _ = w.Write(out)
-	return true
 }
 
 // copyHeaders adds every header from src into dst (used to mirror cached
@@ -295,6 +400,7 @@ func copyHeaders(dst http.Header, src map[string][]string) {
 // client and writes the cache entry on success.
 func handleCachedCache(w http.ResponseWriter, r *http.Request, targetURL, bodyPath, metaPath string) {
 	log.Printf("[cache] cache MISS (will cache) %s", targetURL)
+	kvsStats.cacheMisses.Add(1)
 
 	// Reuse the request context so client disconnects cancel the upstream
 	// fetch (cacheClient caps the total at 5m).
@@ -429,6 +535,8 @@ func handleCachedCache(w http.ResponseWriter, r *http.Request, targetURL, bodyPa
 		}
 	}()
 
+	// 状态码必须先落：上游 404 也会入缓存，隐式 WriteHeader 会把它变成 200。
+	w.WriteHeader(resp.StatusCode)
 	n, copyErr := io.Copy(io.MultiWriter(w, tmp), resp.Body)
 	_ = tmp.Close()
 	if copyErr != nil {
@@ -589,7 +697,7 @@ func HandleCCBackend(b Backend) http.Handler {
 		}
 
 		bodyPath, metaPath := cachePaths(cacheBase, scheme, cacheHost, rest)
-		if serveFromCache(w, bodyPath, metaPath, targetURL, r.Host) {
+		if serveFromCache(w, r, bodyPath, metaPath, targetURL, r.Host) {
 			return
 		}
 		handleCachedCache(w, r, targetURL, bodyPath, metaPath)

@@ -64,6 +64,8 @@ func main() {
 	// 反向代理调优 + WebSocket 升级快路径（见 pkg/transport.go / pkg/wsproxy.go）。
 	pkg.SetProxyTuning(cfg.ProxyIdleConnsPerHost, cfg.ProxyMaxIdleConns, cfg.ProxyDisableCompression, cfg.ProxyFlushInterval)
 	pkg.SetWSTunnelOptions(cfg.WSProxy, cfg.WSIdleTimeout)
+	// 主 HTTP server 的 ReadTimeout（读完整请求含 body 的秒数；0=不限，默认 60）。
+	pkg.SetServerReadTimeout(cfg.ReadTimeout)
 	// 可选 pprof（KVS_PPROF=1 | <port> | <addr>），默认关闭。
 	pkg.StartPProfIfEnabled()
 
@@ -92,6 +94,12 @@ func main() {
 			re = compiled
 		}
 		routes[i] = route{prefix: b.Source, re: re, handler: pkg.CreateBackendHandler(b, cfg.Headers, cfg.LoginAuthz), isService: b.IsService, exact: pkg.ExactPathMatch(b)}
+		// ws~ + 隧道类目标（http/https/ws/wss/unix）现在按前缀匹配；前缀为 "/" 时
+		// 会匹配所有路径，把其后声明的路由全部遮蔽。旧版这类路由是精确匹配（基本
+		// 不可用），行为有变，显式告警以免静默踩坑。
+		if b.IsWSock && !pkg.ExactPathMatch(b) && b.Source == "/" {
+			log.Printf("WARNING: ws~ route %q (%s) 前缀为 /，按前缀匹配会遮蔽其后声明的所有路由", b.Source, b.RawURL)
+		}
 		if b.IsService {
 			servicePrefix = b.Source
 		}

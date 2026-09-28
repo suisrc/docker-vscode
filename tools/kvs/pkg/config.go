@@ -74,6 +74,7 @@ type Config struct {
 	ProxyFlushInterval      int    // proxy_flush_interval — 刷出间隔(ms)，默认 100；0=不主动刷，-1=每写必刷
 	WSProxy                 string // ws_proxy — auto|stdlib|off，WebSocket 升级快路径，默认 auto
 	WSIdleTimeout           int    // ws_idle_timeout — WS 隧道空闲超时(秒)，0=关闭（默认）
+	ReadTimeout             int    // read_timeout — 主 server 读完整请求(含 body)的秒数，0=不限，默认 60
 }
 
 // Backend describes a single proxy target with its routing prefix.
@@ -882,6 +883,7 @@ func LoadInitConfig() Config {
 	cfg.ProxyFlushInterval = parseIntDefault(expandValue(strProp(ini, "proxy_flush_interval", ""), svcVars), 100)
 	cfg.WSProxy = expandValue(strProp(ini, "ws_proxy", ""), svcVars)
 	cfg.WSIdleTimeout = parseIntDefault(expandValue(strProp(ini, "ws_idle_timeout", ""), svcVars), 0)
+	cfg.ReadTimeout = parseIntDefault(expandValue(strProp(ini, "read_timeout", ""), svcVars), 60)
 	// path_public — |-separated list of paths reachable without auth
 	// (e.g. /api/v1/public|/remote/v4). Non-empty entries are kept as-is;
 	// prefix matching is applied by the auth middleware.

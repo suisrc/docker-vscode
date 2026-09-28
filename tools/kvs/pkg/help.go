@@ -64,6 +64,8 @@ Proxy tuning (optional, top-level keys):
   proxy_disable_compression       pass Accept-Encoding through instead of gzip+gunzip
                                   inside the proxy (default true)
   proxy_flush_interval            streaming flush interval in ms (default 100; 0=never, -1=every write)
+  read_timeout                    seconds to read a whole request incl. body (default 60;
+                                  0=unlimited, for big uploads / slow clients)
 
 Built-in endpoints:
   /__stats           runtime counters as JSON (WS tunnels splice/generic + bytes, relay

@@ -46,6 +46,23 @@ func BuildServers(port string, useSSL bool, mux http.Handler) []ServerInstance {
 	}
 }
 
+// serverReadTimeout 是主 HTTP server 的 ReadTimeout：读完整个请求（含 body）的上限。
+// 默认 60s；read_timeout=0 关闭（慢客户端/大上传不受限），负值告警并保持现状。
+// 对 WebSocket 无影响：升级请求在 hijack 时已清掉所有 deadline。
+var serverReadTimeout = 60 * time.Second
+
+// SetServerReadTimeout 由 main 从配置读取后调用（在 BuildServers 之前）。
+func SetServerReadTimeout(seconds int) {
+	switch {
+	case seconds > 0:
+		serverReadTimeout = time.Duration(seconds) * time.Second
+	case seconds == 0:
+		serverReadTimeout = 0
+	default:
+		log.Printf("WARNING: invalid read_timeout %d, keeping %v", seconds, serverReadTimeout)
+	}
+}
+
 // newCacheServer returns an *http.Server with the proxy's standard timeouts.
 // A nil tlsCfg yields a plain HTTP server.
 func newCacheServer(addr string, mux http.Handler, tlsCfg *tls.Config) *http.Server {
@@ -53,7 +70,7 @@ func newCacheServer(addr string, mux http.Handler, tlsCfg *tls.Config) *http.Ser
 		Addr:              addr,
 		Handler:           mux,
 		ReadHeaderTimeout: 10 * time.Second,
-		ReadTimeout:       60 * time.Second,
+		ReadTimeout:       serverReadTimeout,
 		WriteTimeout:      0, // streaming (proxying, downloads) may take long; bounded by IdleTimeout + client disconnect
 		IdleTimeout:       120 * time.Second,
 	}
