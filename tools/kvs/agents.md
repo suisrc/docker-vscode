@@ -1,6 +1,6 @@
 # agents.md — kvs 开发文档（AI 向）
 
-面向 AI 协作开发的内部机制与约定速查。用户文档（简介/快速开始/使用/感谢）在 [readme.md](readme.md)；**各配置键的完整说明以 demo 模板注释为准**（`kvs demo` 生成，即 `pkg/kvs.default.ini` / `pkg/kvs.vscode.ini`）。分工：readme=使用说明，demo 模板=配置参考，本文件=架构与开发。两文档与代码冲突时以代码为准。
+面向 AI 协作开发的内部机制与约定速查。用户文档（简介/快速开始/使用/感谢）在 [readme.md](readme.md)；**各配置键的完整说明以 demo 模板注释为准**（`kvs demo` 生成，即 `pkg/kvs.ini`）。分工：readme=使用说明，demo 模板=配置参考，本文件=架构与开发。两文档与代码冲突时以代码为准。
 
 ## 1. 定位与硬约束
 
@@ -14,9 +14,9 @@
 | 文件 | 职责 |
 |---|---|
 | `main.go` | CLI 分发（`help`/`demo`/`mirror`/`syncto` 子命令；无子命令=代理模式）、mux 装配、登录/内置端点、注入脚本服务 |
-| `pkg/config.go` | ini 解析 + 值模板展开、SVC_* 内部变量、版本覆盖（`GOverrideVersion`）、zcodex 预设注入（KVS_PROXIES 拼装 `relay://`/`api://manager`） |
+| `pkg/config.go` | ini 解析 + 值模板展开（含多行 JSON 修复）、多路由表 `[proxies.<name>]`（`-n :name` 选表）、多服务段 `[service.<name>]` + `KVS_SVC_<NAME>_*` 环境变量反推、版本覆盖（`SetOverrideVersion` 按服务）、`-c` 可选（缺省=内嵌 kvs.ini，仅接受文件路径） |
 | `pkg/backend.go` | `Backend` 抽象；`CreateBackendHandler` 按 scheme 分发；`registerAPI`（api:// 进程内注册表）；ws 代理；`precompressedFileServer`（br/gz/zst 预压缩静态） |
-| `pkg/service.go` | service 生命周期：检测→版本解析→下载→解压→脚本→启停 |
+| `pkg/service.go` | service 生命周期：检测→版本解析→下载→解压→脚本→启停；`ServiceManager`（每 svc:// 服务独立 ServiceState+Process）；healthz `#@code` 探活 |
 | `pkg/cache.go` | `/__cache/` 外部资源代理；`cc~` 缓存（命中按 sed 计划直出 sendfile/内存重写，元数据内存缓存 size+mtime+inode 判失效）；cache_sed once/each/none 与 `_.json` 元数据 |
 | `pkg/server.go` | 服务器构建（HTTP + HTTPS=port+1 自签 ECDSA P-256）、静态资产/登录页服务、`isBrowserRequest` |
 | `pkg/vscode.go` | VS Code 专有：web-extension-resource 本地化（上游乱码 issue microsoft/vscode#299425）、语言包/汉化链路 |
@@ -33,17 +33,17 @@
 | `pkg/proc.go` | 子进程 Setsid 脱离、终止时前台进程组恢复 |
 | `pkg/s3mirror.go` | `mirror`/`syncto` 的 S3 同步实现（owner 开发中，勿擅自重构） |
 | `pkg/help.go` | help 文本——新增配置项/环境变量必须同步 |
-| `pkg/` 资产 | `manager.html` `login.html` `loading.html` `logout.vsc.js` `kvs.default.ini` `kvs.vscode.ini` `favicon.ico`，`go:embed` 进二进制 |
+| `pkg/` 资产 | `manager.html` `login.html` `loading.html` `logout.vsc.js` `kvs.ini` `favicon.ico`，`go:embed` 进二进制 |
 
 ## 3. 核心机制
 
 ### 3.1 值模板展开（config.go）
 
-`{VAR}`、`{VAR:-default}`、`${VAR}`/`$VAR`（os.ExpandEnv）、`@now`（仅 text 后端，RFC3339）。`[service]` 值可引用 SVC_* 内部变量，加载序：`SVC_HOME`→`SVC_VERSION_BASE_URL`→`SVC_VERSION`→`SVC_VERSION_HASH`（留空=SVC_VERSION）→`SVC_PACKAGE_EXT`→`SVC_BIN_HOME`。
+`{VAR}`、`{VAR:-default}`、`${VAR}`/`$VAR`（os.ExpandEnv）、`@now`（仅 text 后端，RFC3339）。`[service.<name>]` 值可引用反推的 `KVS_SVC_<NAME>_*` 变量，段内解析序：home→address→healthz→version→download→bin_home→scripts/command；`download` 支持 VERSION/VERHASH 裸词替换，`version_hash_url` 支持 VERSION 替换（裸词与 `{}` 形式均可，替换发生在版本解析之后）。
 
 ### 3.2 路由与后端协议
 
-`[proxies]` 按文件顺序匹配。前缀标记：普通前缀；`&`（托管服务，参与启停与 loading 页，**必须显式标记**）；`^`（正则）；`http(s)://`、`ws(s)://` 开头（全域名）。
+路由表：`[proxies.<name>]` 命名多表（`[proxies]` 无名表），`-n :name` 选择，默认取文件中第一张表。每行一个路由，按文件顺序匹配。前缀标记：普通前缀；`^`（正则）；`http(s)://`、`ws(s)://` 开头（全域名）。
 
 后端 scheme 全集（readme 仅列用户常用项）：
 
@@ -54,10 +54,13 @@
 | `unix` | Unix domain socket |
 | `file` | 静态文件（含 br/gz/zst 预压缩优选） |
 | `text` | 直接返回文本，支持 `@now` |
+| `svc://<name>` | kvs 托管服务：`[service.<name>]` 段，按地址反代；scheme 即显式服务标记 |
 | `relay://<name>` | 进程内 zcode 中继（zcode.go），如 `relay://zcode-clients` |
 | `api://<name>` | 进程内 handler 注册表（`registerAPI`），目前仅 `api://manager` |
 
-service 生命周期（`&` 后端，service.go）：`check` 检测外部服务（已存在则只代理不托管启停）→ `bin_home` 非空跳过下载 → 解析下载地址（`download` 优先，否则 `download_info`+`download_field_url`）→ 跟随重定向取扩展名 `SVC_PACKAGE_EXT` → 下载到 `{cache_dir}/cache/version/{version}_{version_hash}.{ext}` → 解压到 `bin_home` → 执行 `init_shell`；`stop_shell` 仅 kvs 托管的后端退出时执行。
+多托管服务（svc://）：LoadInitConfig 先扫选中表的 `svc://<name>` 引用（主服务=第一个引用），**只解析被引用的服务段**（未引用的 `[service.<name>]` 段保持休眠：不反推环境变量、不解析版本、不注册），被引用段按依赖序解析并**反向赋值** `KVS_SVC_<NAME>_*` 环境变量（HOME 默认 `{KVS_HOME}/<name>`；ADDR 回填；HOST/PORT 由 http 地址、SOCK 由 unix 地址反推；VERSION/VERHASH 解析后回填；BIN_HOME 回填；段末处理 envs_default——系统环境变量为空时用默认值填充，默认值可引用全部已反推变量），然后才展开路由值——路由里 `{KVS_SVC_ZCODE_BIN_HOME}` 这类引用由此生效。每个 svc:// 服务有独立的 ServiceState（loading 页）与 Process（Setsid 子进程组），启动命令在配置加载期已完成 `{KVS_SVC_<NAME>_*}` 展开，子进程继承完整进程环境；`/__restart?svc=<name>`（缺省=主服务）停进程+stop_shell+清 unix socket 并重置该服务状态；kvs 退出时 `StopAll()` 只杀 kvs 托管的进程。版本覆盖 `SetOverrideVersion(svc, v)` 按服务记录。
+
+service 生命周期（service.go `PrepareService(sc)`）：探活（`healthz` 键=`#@<code>` 后缀要求精确状态码、无后缀只要求可达；unix 探活失败会清理残留 socket 文件）→ 已存活=外部服务（只代理不托管启停）→ `bin_home` 非空跳过下载 → 解析下载地址（`download` 优先，否则 `download_info`+`download_field_url`）→ 跟随重定向取扩展名（缓存文件名后缀）→ 下载到 `{cache_dir}/version/{service}/{version}_{version_hash}.{ext}`（按服务名分目录，避免不同服务同版本冲突） → 解压到 `bin_home` → 执行 `once_shell`（`{bin_home}/__once__` 标记）+`init_shell`；`stop_shell` 仅 kvs 托管的后端退出时执行。
 
 ### 3.2.1 WebSocket 升级快路径（pkg/wsproxy.go）
 
@@ -102,7 +105,7 @@ ws~ 路由前缀匹配与退避：`ExactPathMatch` = `ws~` 且目标非隧道类
 | 值 | Cookie 格式 | 校验 | 过期 |
 |---|---|---|---|
 | `0`/空 | `login_token` 明文 | 直接比对 | session |
-| `>0` | `<hash>.<ts>.<salt>`，hash=`sha256(ts+salt+login_token)[:24]`，salt=16 位随机 hex | 哈希比对 + 过期检查 | 剩余 ≤1/4 时自动续期（滑动过期） |
+| `>0` | `<hash>.<ts>.<salt>`，hash=`sha256(ts+salt+login_token)[:24]`，salt=16 位随机 hex | 哈希比对 + 过期检查（过期令牌拒绝，未来时间戳拒绝） | 剩余 ≤1/4 时自动续期（滑动过期） |
 | `<0` | 启动报错 | | |
 
 ### 3.4 `/__cache/`（cache.go）
@@ -137,7 +140,7 @@ ws~ 路由前缀匹配与退避：`ExactPathMatch` = `ws~` 且目标非隧道类
 
 ### 3.5 zcodex 模式与 manager（zcode.go / manager.go）
 
-`-c zcodex` 预设注入的环境变量（用户显式设置优先）：`KVS_PATH_PUBLIC`、`KVS_SVC_CHECK_URL`（探活 `/api/server-info`，默认端口 7587）、`KVS_SVC_COMMAND`（本地 zcode 懒启动）、`KVS_PROXIES`（`/zcode` + `/=api://manager`）。
+`-c` 可选且只接受文件路径（缺省=内嵌 `kvs.ini`）；路由表只有 `-n :name` 一种选法，无预设别名。代码不再注入任何 zcodex 环境默认值：`KVS_PATH_PUBLIC`（桌面客户端无法走 Cookie 认证）、`KVS_CC_SED`（wss 地址重写）由部署环境/Makefile zcodex 目标提供（值见 `[service.zcode]` 注释）。
 
 管理页 `manager.html` 挂载于 `/=api://manager`（客户端渲染，支持深浅色主题）。条目四类：`[ZCD]local` 本机 zcode（`/zcode`，kvs 懒启动，始终可点）；`[ZCD]xxx` 通过 relay 中继注册的远程 zcode 桌面端（在线时点击打开远程控制终端）；`[VSC]zzz` 手动添加的 VS Code 应用（同一设备的不同工作区以快捷方式挂同一卡片，访问地址 `{卡片同host}/?folder=<工作区路径>`，可编辑/删除）；`[APP]`/`[LNX]` 「其他」类型设备（Logo 四选一 vsc/zcd/linux/other）。卡片顺序固定（不按访问时间排序），拖拽调整后持久化到 `order` 段，新条目追加末尾。
 
@@ -178,9 +181,9 @@ manager.html 约定：
 |---|---|---|
 | `/__login` | 公开 | 登录页（GET）/ 处理登录表单（POST） |
 | `/__logout` | 公开 | 清除 Cookie，返回 JSON |
-| `/__version` | 需认证 | 返回 service 应用版本（`SVC_VERSION`，含 `?v=` 覆盖值；纯文本，无版本返回 `0.0.0`） |
+| `/__version` | 需认证 | 返回 service 应用版本（`KVS_SVC_<NAME>_VERSION`；纯文本，无版本返回 `0.0.0`；`?svc=<name>` 选择指定服务，缺省=表内第一个 svc:// 服务） |
 | `/__open_tkn` | 需认证 | 签发临时访问令牌（纯文本）。`GenerateTokenValue(login_token, token_timeout)`：`login_timeout=0` 时返回 `login_token` 明文；`>0` 时返回以当前时间为 ts 的 `<hash>.<ts>.<salt>`，有效期 `token_timeout` 秒（默认 300）。令牌可通过 `?<query_token_key>=<令牌>` 或请求头 `x-request-<cookie_token_key>` 使用，供 curl/脚本在 Cookie 不可用时访问受保护接口 |
-| `/__restart` | 需认证 | 杀后端子进程并重置服务状态，下次请求重新触发部署流程：`/__restart` 清除版本覆盖；`/__restart?v=<版本>` 写 `GOverrideVersion` 指定版本重启（优先于 `version`/`version_latest_url`）。仅 kvs 托管的 service 后端有效 |
+| `/__restart` | 需认证 | 杀后端子进程并重置服务状态，下次请求重新触发部署流程：`/__restart` 清除版本覆盖；`/__restart?v=<版本>` 覆盖版本重启（优先于 `version`/`version_latest_url`）；`/__restart?svc=<name>` 选择指定服务（缺省=主服务）。仅 kvs 托管的 service 后端有效 |
 | `/__stats` | 需认证 | 运行计数 JSON：WS 隧道（splice/generic、字节数、回退次数）、中继帧、缓存命中、goroutine/堆；`KVS_PPROF` 另行开启 pprof |
 | `/__logout.vsc.js` | 公开 | 退出按钮 + Update 菜单注入脚本 |
 | `/favicon.ico` | 公开 | 内联 SVG 图标 |
@@ -196,7 +199,7 @@ Update 菜单注入（vscode.go + logout.vsc.js）：`login_authz = true` 且代
 - 联调模板（全程用自有端口与临时 HOME）：
   ```bash
   (cd pkg && KVS_DEBUG=1 KVS_PORT=7189 KVS_HOME=../temp/.vsc-test \
-    KVS_LOGIN_TOKEN=123456 KVS_ZCODEX_NODE=/bin/false ../kvs -c zcodex)
+    KVS_LOGIN_TOKEN=123456 KVS_ZCODEX_NODE=/bin/false ../kvs -n :zcodex)
   # curl 鉴权：-H 'Cookie: kvs=123456'
   ```
 - **只 kill 自己启动的 PID**（记录 pid 文件；测试完删除临时 KVS_HOME）。生产实例（如 7080/7088/7090）属 owner，勿动、勿 pkill 按模式匹配
@@ -204,7 +207,7 @@ Update 菜单注入（vscode.go + logout.vsc.js）：`login_authz = true` 且代
 
 ## 5. 开发路线图
 
-已落地能力：多协议路由（http/ws/unix/file/text/relay/api）、Cookie 双阶段认证、service 自动部署与 `/__restart` 版本覆盖、VS Code 专有（Update 注入/退出按钮/web-extension 本地化/语言包）、`/__cache/` 含 cache_sed、S3 mirror/syncto、zcodex 应用中心（拖拽排序/标记/备注/工具栏/ZCode控制复制/深浅色/移动适配）。
+已落地能力：多协议路由（http/ws/unix/file/text/svc/relay/api）、Cookie 双阶段认证、多路由表与多托管服务（svc:// + KVS_SVC_<NAME>_* 反推）、service 自动部署与 `/__restart` 版本覆盖、VS Code 专有（Update 注入/退出按钮/web-extension 本地化/语言包）、`/__cache/` 含 cache_sed、S3 mirror/syncto、zcodex 应用中心（拖拽排序/标记/备注/工具栏/ZCode控制复制/深浅色/移动适配）。
 
 本轮已落地（性能）：
 - WS 升级快路径（裸 conn + splice + 握手期缓冲字节补齐 + 可选空闲超时）与 `ws_proxy` 开关

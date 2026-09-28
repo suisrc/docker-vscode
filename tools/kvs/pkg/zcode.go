@@ -370,7 +370,7 @@ var (
 	zcodeRelaysMu sync.Mutex
 	zcodeRelays   = map[string]*zcodeRelay{}
 
-	// zcodeHome is the kvs working directory (Config.SvcHome), injected
+	// zcodeHome is the kvs working directory (top-level home), injected
 	// via SetZcodeHome from main() before backends are built.
 	zcodeHome string
 
@@ -381,7 +381,7 @@ var (
 )
 
 // SetZcodeHome sets the base directory for the state file
-// ({home}/zcodex.json). Call once from main() with cfg.SvcHome.
+// ({home}/zcodex.json). Call once from main() with cfg.Home.
 func SetZcodeHome(home string) { zcodeHome = home }
 
 // zcodeState returns the shared zcodex.json store singleton, creating it (and

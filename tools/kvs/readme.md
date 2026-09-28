@@ -9,23 +9,24 @@ kai vscode
 ```bash
 make build
 ./kvs help                          # 查看帮助
-./kvs demo                          # 生成示例配置 ./kvs.ini（kvs.default.ini 模板）
-./kvs demo vscode                   # 生成示例配置 ./kvs.ini（kvs.vscode.ini 模板）
+./kvs demo                          # 生成示例配置 ./kvs.ini（内置唯一模板）
 # 编辑 kvs.ini —— 各键说明见模板内注释
-./kvs -c kvs.ini                    # 指定配置文件启动
-./kvs -c default|vscode|zcodex      # 内置预设，无需磁盘文件（zcodex=应用中心，见 agents.md）
-./kvs -n "/=http://127.0.0.1:8080"  # 内联路由，自动补充 -c default
+./kvs -c kvs.ini                    # 指定配置文件启动（默认用文件里第一张路由表）
+./kvs -c kvs.ini -n :vscode         # -n :名字 选择 [proxies.vscode] 路由表
+./kvs                                # 缺省使用内嵌 kvs.ini（第一张表 = zcodex 应用中心，见 agents.md）
+./kvs -c kvs.ini                     # 使用指定配置文件
+./kvs -n "/=http://127.0.0.1:8080"  # 内联路由（无 [service.<name>] 段，svc:// 不可用）
 ```
 
-**`-c` 为必填项**，不指定直接报错退出。`-n` 用 `;` 分割多条 `prefix=url` 替代 `[proxies]` 段（支持 `&` 前缀），自动补充 `-c default` 并禁用 `[service]`；环境变量 `KVS_PROXIES` 与 `-n` 等价。`-c zcodex` 应用中心（`api://manager`）的页面功能与内部机制见 [agents.md](agents.md)。
+**`-c` 可选，只接受文件路径**：不带 `-c` 时使用内嵌 `kvs.ini`；带 `-c` 而文件不存在直接报错退出（预设别名已全部移除）。配置内可以定义多张命名路由表 `[proxies.<name>]`，用 `-n :<name>` 选择其一，未选择时用文件中**第一张表**。`-n "prefix=url;…"` 为内联路由（内联模式没有 `[service.<name>]` 段，`svc://` 目标不可用）；环境变量 `KVS_PROXIES` 与内联 `-n` 等价。zcodex 应用中心（`api://manager`）的页面功能与内部机制见 [agents.md](agents.md)。
 
 ## 子命令
 
 | 命令 | 说明 |
 |---|---|
 | `kvs help` | 显示帮助信息（也支持 `-h`、`--help`） |
-| `kvs demo [default\|vscode]` | 生成示例配置文件 `kvs.ini`（默认 default 模板） |
-| `kvs mirror -c <config> [version]` | 同步 VS Code 版本到 S3 兼容存储（配置见 `demo vscode` 模板 `[mirror]` 段） |
+| `kvs demo [default\|vscode\|zcodex]` | 生成示例配置文件 `kvs.ini`（单模板，选择路由表用 `-n :<name>`） |
+| `kvs mirror [vscode] [-version v] [-platform p]` | 同步 VS Code 版本到 S3 兼容存储；`-version` 默认 latest，存储配置只走 `KVS_MIRROR_S3_PREFIX/_ACCESS/_SECRET/_REGION` 环境变量（不读配置文件） |
 | `kvs syncto <src> <dst>` | 本地 ↔ S3 文件同步（见下方说明） |
 
 `kvs syncto` **只读环境变量，不读 kvs.ini**，缺少必需变量直接报错：`KVS_S3_PREFIX`（S3 兼容服务基础 URL，bucket 根）、`KVS_S3_ACCESS`、`KVS_S3_SECRET` 必需，`KVS_S3_REGION` 可选（默认 us-east-1）。
@@ -40,7 +41,7 @@ kvs syncto s3:/vsc/zcode /zcode   # 下载：S3 → 本地（对象或前缀递�
 
 ## 配置文件
 
-**各配置键的完整说明以示例模板注释为准**（`./kvs demo` 生成后直接阅读 `kvs.ini`；`[headers]` 请求头改写、`[service]` 服务自动部署、`[mirror]` S3 镜像（VS Code 专有）均见模板注释）。
+**各配置键的完整说明以示例模板注释为准**（`./kvs demo` 生成后直接阅读 `kvs.ini`；`[headers]` 请求头改写、`[service.<name>]` 服务自动部署均见模板注释；`mirror` 为独立子命令，不读配置文件）。
 
 值模板语法（所有值支持）：
 
@@ -49,11 +50,13 @@ kvs syncto s3:/vsc/zcode /zcode   # 下载：S3 → 本地（对象或前缀递�
 | `{VAR}` / `{VAR:-default}` | 取环境变量 VAR，空则返回空 / default |
 | `${VAR}` / `$VAR` | 标准 os.ExpandEnv |
 | `@now` | 运行时时间戳（仅 text 后端），RFC3339 |
-| `{SVC_HOME}` 等 | [service] 内部变量，见模板注释与 [agents.md](agents.md) |
+| `{KVS_SVC_<NAME>_*}` | `[service.<name>]` 反推变量（HOME/ADDR/HOST/PORT/SOCK/VERSION/VERHASH/BIN_HOME），见模板注释与 [agents.md](agents.md) |
 
-### 路由 `[proxies]` 段（必填）
+### 路由 `[proxies.<name>]` 段（必填）
 
-每行一个路由 `prefix = url`，**按文件顺序匹配**。前缀标记：普通 `/path/` 前缀匹配；`&/path/` kvs 托管服务（触发自动部署、loading 页，**必须显式标记**）；`^pattern` 正则；`http(s)://`、`ws(s)://` 开头为全域名匹配。
+每行一个路由 `prefix = url`，**按文件顺序匹配**。一个配置文件可定义多张命名路由表：`[proxies]`（无名表）与 `[proxies.<name>]`，`-n :<name>` 选择其一，默认用第一张表。
+
+前缀标记：普通 `/path/` 前缀匹配；`^pattern` 正则；`http(s)://`、`ws(s)://` 开头为全域名匹配；`cc~/`、`ws~/` 性能标记见下文。
 
 | scheme | 说明 |
 |---|---|
@@ -61,7 +64,25 @@ kvs syncto s3:/vsc/zcode /zcode   # 下载：S3 → 本地（对象或前缀递�
 | `unix` | Unix domain socket |
 | `file` | 静态文件服务器（br/gz/zst 预压缩优选） |
 | `text` | 直接返回文本；支持 `@now` 替换当前时间（RFC3339） |
+| `svc://<name>` | kvs 托管服务：按 `[service.<name>]` 段探活→下载→解压→启动，再反代到 `address`（准备期间返回 loading 页） |
 | `relay://` / `api://` | 进程内 zcode 中继 / handler 注册表（zcodex 预设使用，见 [agents.md](agents.md)） |
+
+### 托管服务 `[service.<name>]` 段
+
+`svc://<name>` 路由触发对应服务段的解析与生命周期管理（**未被选中表 `svc://` 引用的 `[service.<name>]` 段保持休眠，完全不解析**）：`healthz`（`#@<code>` 后缀要求精确状态码，否则只要求网络可达）探活 → 版本解析（`version` / `version_latest_url` / `version_hash_url`，支持 `/__restart?v=` 覆盖）→ 下载（`download`）→ 解压（`bin_home`）→ `once_shell`/`init_shell` → `command` 启动；kvs 退出或 `/__restart` 时执行 `stop_shell`。外部已运行的服务（探活通过）只代理、不托管。
+
+每服务一组环境变量（`<NAME>` 为服务名大写，**由 kvs 反向赋值**，可在路由与后续配置中引用）：
+
+| 变量 | 说明 |
+|---|---|
+| `KVS_SVC_<NAME>_HOME` | 工作目录，未指定默认 `{KVS_HOME}/<name>` |
+| `KVS_SVC_<NAME>_ADDR` | 后端地址（`http(s)://` 或 `unix://`），由 `address` 解析回填 |
+| `KVS_SVC_<NAME>_HOST/_PORT/_SOCK` | 由 `_ADDR` 反推（http 取 host/port，unix 取 socket 路径） |
+| `KVS_SVC_<NAME>_VERSION/_VERHASH` | 解析出的版本号/哈希 |
+| `KVS_SVC_<NAME>_BIN_HOME` | 解析出的程序目录 |
+| `envs_default` | 环境变量默认值（JSON：变量名→默认值），系统变量为空时填充、不覆盖已有值；段内最后处理，可引用上述服务变量 |
+
+VS Code 专有键（`vsc_language`、`vsc_agents_*`、`vsc_open_url`、`actions`）放在对应服务段内，作用于该服务的 agent/注入流程。
 
 ## WebSocket 升级（性能与正确性）
 

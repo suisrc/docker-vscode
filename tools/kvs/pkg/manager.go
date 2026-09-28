@@ -38,7 +38,6 @@ import (
 	"log"
 	"net/http"
 	"net/url"
-	"os"
 	"runtime"
 	"sort"
 	"strings"
@@ -49,7 +48,7 @@ import (
 const (
 	mgrIDZcdLocal = "zcd-local"
 	mgrIDVscLocal = "vsc-local" // legacy stamps only; no synthesized entry anymore
-	mgrZcodePort  = "7587"      // default zcode local app port (KVS_ZCODE_PORT)
+	mgrZcodePort  = "7587"      // fallback probe port when no [service.zcode] is configured
 	mgrProbeTTL   = 45 * time.Second
 	mgrFolderMax  = 12
 	mgrNoteMax    = 500 // per-entry remark note length cap (runes)
@@ -339,17 +338,17 @@ func mgrProbe(target string) (string, bool) {
 	return v, true
 }
 
-// mgrZcodeCheckURL is the local zcode app liveness URL (KVS_SVC_CHECK_URL in
-// zcodex mode; otherwise the default zcode port).
+// mgrZcodeCheckURL is the local zcode web app probe URL: the registered
+// [service.zcode] healthz (with its "#@<code>" suffix stripped), falling back
+// to the default zcode port when the service is not configured.
 func mgrZcodeCheckURL() string {
-	if u := strings.TrimSpace(os.Getenv("KVS_SVC_CHECK_URL")); u != "" {
-		return u
+	if sc := Services().Get("zcode"); sc != nil && sc.Healthz != "" {
+		if i := strings.LastIndex(sc.Healthz, "#@"); i >= 0 {
+			return sc.Healthz[:i]
+		}
+		return sc.Healthz
 	}
-	port := os.Getenv("KVS_ZCODE_PORT")
-	if port == "" {
-		port = mgrZcodePort
-	}
-	return "http://127.0.0.1:" + port + "/api/server-info"
+	return "http://127.0.0.1:" + mgrZcodePort + "/api/server-info"
 }
 
 // ---------------------------------------------------------------------------

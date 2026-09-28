@@ -26,8 +26,7 @@ func main() {
 		return
 	}
 
-	// Subcommand: "demo" — generate a starter kvs.ini from an embedded template
-	// (default → kvs.default.ini, vscode → kvs.vscode.ini).
+	// Subcommand: "demo" — write the embedded kvs.ini template to ./kvs.ini.
 	if len(os.Args) > 1 && os.Args[1] == "demo" {
 		pkg.DemoCommand(os.Args[2:])
 		return
@@ -51,16 +50,20 @@ func main() {
 	// The cache route is registered only when cache_dir is configured AND
 	// proxy_path is non-empty; otherwise the prefix stays "" so the cache
 	// route is not registered and auth checks don't treat every path as public.
-	if cfg.SvcCacheDir != "" {
-		pkg.SetCacheConfig(cfg.SvcCacheDir, cfg.SvcProxyPath)
+	if cfg.CacheDir != "" {
+		pkg.SetCacheConfig(cfg.CacheDir, cfg.ProxyPath)
 	}
 	// cc~ marked backends always have disk caching available, defaulting to
 	// /cache when cache_dir is not configured.
-	pkg.SetCacheDir(cfg.SvcCacheDir)
-	// zcode relay state file lives under the service home ({home}/zcodex.json).
-	pkg.SetZcodeHome(cfg.SvcHome)
+	pkg.SetCacheDir(cfg.CacheDir)
+	// svc:// hosted services: download cache root + register the named
+	// services of this config (handlers resolve them at mux build time).
+	pkg.Services().SetCacheDir(cfg.CacheDir)
+	pkg.Services().Register(cfg.Services)
+	// zcode relay state file lives under the gateway home ({home}/zcodex.json).
+	pkg.SetZcodeHome(cfg.Home)
 	// cache_sed: rewrite cc~ cached bodies (file|old|new||... rules).
-	pkg.SetCacheSed(cfg.SvcCacheSed)
+	pkg.SetCacheSed(cfg.CacheSed)
 	// 反向代理调优 + WebSocket 升级快路径（见 pkg/transport.go / pkg/wsproxy.go）。
 	pkg.SetProxyTuning(cfg.ProxyIdleConnsPerHost, cfg.ProxyMaxIdleConns, cfg.ProxyDisableCompression, cfg.ProxyFlushInterval)
 	pkg.SetWSTunnelOptions(cfg.WSProxy, cfg.WSIdleTimeout)
@@ -69,21 +72,17 @@ func main() {
 	// 可选 pprof（KVS_PPROF=1 | <port> | <addr>），默认关闭。
 	pkg.StartPProfIfEnabled()
 
-	// Service preparation state (for showing loading page during download/extract).
-	srvState := &pkg.ServiceState{}
-
-	// Build (prefix → handler) routes for each backend. The service backend's
-	// prefix is recorded separately so the loading page is only shown for it
-	// during preparation (non-service backends stay reachable).
+	// Build (prefix → handler) routes for each backend. Hosted svc:// services
+	// get their own lazy preparation flow through the service manager (loading
+	// page while download/extract/start is in progress).
 	type route struct {
-		prefix    string
-		re        *regexp.Regexp // compiled regex for ^-prefixed backends, nil otherwise
-		handler   http.Handler
-		isService bool
-		exact     bool // ws~ backends: request path must equal prefix exactly (no prefix match)
+		prefix  string
+		re      *regexp.Regexp // compiled regex for ^-prefixed backends, nil otherwise
+		handler http.Handler
+		svc     string // svc:// service name ("" = not a hosted service)
+		exact   bool   // ws~ backends: request path must equal prefix exactly (no prefix match)
 	}
 	routes := make([]route, len(cfg.Proxies))
-	servicePrefix := "" // prefix of the kvs-managed service backend, "" if none
 	for i, b := range cfg.Proxies {
 		var re *regexp.Regexp
 		if b.IsRegex {
@@ -93,21 +92,14 @@ func main() {
 			}
 			re = compiled
 		}
-		routes[i] = route{prefix: b.Source, re: re, handler: pkg.CreateBackendHandler(b, cfg.Headers, cfg.LoginAuthz), isService: b.IsService, exact: pkg.ExactPathMatch(b)}
+		routes[i] = route{prefix: b.Source, re: re, handler: pkg.CreateBackendHandler(b, cfg.Headers, cfg.LoginAuthz), svc: svcBackendName(b), exact: pkg.ExactPathMatch(b)}
 		// ws~ + 隧道类目标（http/https/ws/wss/unix）现在按前缀匹配；前缀为 "/" 时
 		// 会匹配所有路径，把其后声明的路由全部遮蔽。旧版这类路由是精确匹配（基本
 		// 不可用），行为有变，显式告警以免静默踩坑。
 		if b.IsWSock && !pkg.ExactPathMatch(b) && b.Source == "/" {
 			log.Printf("WARNING: ws~ route %q (%s) 前缀为 /，按前缀匹配会遮蔽其后声明的所有路由", b.Source, b.RawURL)
 		}
-		if b.IsService {
-			servicePrefix = b.Source
-		}
 	}
-
-	service := &pkg.Process{Name: "service"}
-	agentvs := &pkg.Process{Name: "agentvs"}
-	// vmodels := &pkg.Process{Name: "vmodels"}
 
 	// setCookie writes a cookie with the given value and MaxAge.
 	setCookie := func(w http.ResponseWriter, value string, maxAge int) {
@@ -173,17 +165,118 @@ func main() {
 	// /__version – returns the resolved service application version as plain
 	// text. Falls back to "0.0.0" when no version is resolved (e.g. no service
 	// backend, version resolution failed, or version not yet loaded).
+	// ?svc=<name> selects a specific named service (default: the table's
+	// first svc:// service).
 	mux.HandleFunc("/__version", func(w http.ResponseWriter, r *http.Request) {
-		v := cfg.SvcVersion
+		v := ""
+		if sc := svcDefault(cfg); sc != nil {
+			v = sc.Version
+		}
+		if name := r.URL.Query().Get("svc"); name != "" {
+			if sc := pkg.Services().Get(name); sc != nil {
+				v = sc.Version
+			}
+		}
 		if v == "" {
 			v = "0.0.0"
 		}
-		// if vh := cfg.SvcVersionHash; vh != "" {
-		// 	v = v + ", " + vh
-		// }
 		w.Header().Set("Content-Type", "text/plain; charset=utf-8")
 		_, _ = io.WriteString(w, v)
 	})
+
+	// /__restart – kills the backend subprocess and resets the service state so
+	// the next request re-triggers version detection, download, extract, and
+	// start. Requires authentication (not in isPublicAuthPath). Only works when
+	// a hosted (svc://) service backend exists and was kvs-managed.
+	// /__restart            → restart the primary service
+	// /__restart?svc=name   → restart a specific named service
+	// /__restart?v=1.32.1   → restart with a specific version override
+	restartHandler := func(w http.ResponseWriter, r *http.Request) {
+		// Extract optional version: query (?v=1.32.1) is the primary method.
+		overrideVersion := r.URL.Query().Get("v")
+		svcName := r.URL.Query().Get("svc")
+		if svcName == "" {
+			if sc := svcDefault(cfg); sc != nil {
+				svcName = sc.Name
+			}
+		}
+		if svcName == "" || pkg.Services().Get(svcName) == nil {
+			w.Header().Set("Content-Type", "text/html; charset=utf-8")
+			w.WriteHeader(http.StatusOK)
+			fmt.Fprintln(w, `<!DOCTYPE html><html><body><h3>No service backend configured.</h3><a href="/">Go Home</a></body></html>`)
+			return
+		}
+
+		// Set or clear the version override BEFORE reloading config.
+		// This must happen even if the backend is not running, so that the
+		// version takes effect on the next preparation cycle. Overrides are
+		// tracked per service.
+		if overrideVersion != "" {
+			log.Printf("[restart:%s] overriding version to %s", svcName, overrideVersion)
+			pkg.SetOverrideVersion(svcName, overrideVersion)
+		} else {
+			// No version specified → clear any previous override so
+			// resolveVersion falls back to version_latest_url.
+			if old := pkg.GetOverrideVersion(svcName); old != "" {
+				log.Printf("[restart:%s] clearing version override (was %s)", svcName, old)
+				pkg.ClearOverrideVersion(svcName)
+			}
+		}
+
+		// Reload config so download/bin_home are re-expanded with the new (or
+		// cleared) version. If version resolve fails (e.g. 404), LoadInitConfig
+		// stores the error in InitError instead of crashing. PrepareService
+		// will surface it on the loading page as a download failure.
+		newCfg := pkg.LoadInitConfig()
+		pkg.Services().Register(newCfg.Services)
+
+		// Agent branch: /__restart?agent=<file> — restart the SERVICE backend
+		// (command) with bridge args appended to it, derived from the agent entry file.
+		if agentFile := r.URL.Query().Get("agent"); agentFile != "" {
+			sc := pkg.Services().Get(svcName)
+			if sc == nil || sc.Command == "" {
+				http.Error(w, "command not configured", http.StatusBadRequest)
+				return
+			}
+			args := pkg.AgentBridgeArgsFromFile(filepath.Join(sc.VscAgentsDir, agentFile+".json"))
+			if args == "" {
+				http.Error(w, "agent entry not found or invalid: "+agentFile, http.StatusNotFound)
+				return
+			}
+			// Apply the bridge args to the service's own config.
+			sc.VscAgentArgs = args
+		}
+
+		cfg = newCfg // always update cfg so route changes (if any) take effect
+
+		// Kill the running service backend (if any) and reset state.
+		pkg.Services().StopOne(svcName, true)
+		pkg.Services().State(svcName).Reset()
+
+		// If config reload failed (e.g. version hash 404), report the error
+		// but don't crash — the loading page will show it on next access.
+		var initErr string
+		if sc := pkg.Services().Get(svcName); sc != nil {
+			initErr = sc.InitError
+		}
+		if initErr != "" {
+			if st := pkg.Services().State(svcName); st != nil {
+				st.Finish(fmt.Errorf("%s", initErr))
+			}
+			log.Printf("[restart] config reload error: %s", initErr)
+			w.Header().Set("Content-Type", "text/html; charset=utf-8")
+			w.WriteHeader(http.StatusInternalServerError)
+			fmt.Fprintf(w, `<!DOCTYPE html><html><body><h3>Restart failed: %s</h3><p><a href="/">Go Home</a> | <a href="/__restart">Retry Restart</a></p></body></html>`, initErr)
+			return
+		}
+
+		log.Printf("[restart:%s] service reset, will re-prepare on next request", svcName)
+		// Redirect to home so the browser reloads and re-triggers preparation.
+		http.Redirect(w, r, "/", http.StatusSeeOther)
+	}
+	mux.HandleFunc("/__restart", restartHandler)
+
+	//======================================================================================
 
 	// /__open_tkn – returns a short-lived access token for API/script use.
 	// Requires a valid login cookie (NOT in isPublicAuthPath), so it cannot be
@@ -200,148 +293,62 @@ func main() {
 	// /__open_url  - use application open current windows url
 	mux.HandleFunc("/__open_url", func(w http.ResponseWriter, r *http.Request) {
 		w.Header().Set("Content-Type", "text/plain; charset=utf-8")
-		if cfg.VscOpenURL == "" || !strings.Contains(cfg.VscOpenURL, "://") {
+		openURL := ""
+		if sc := svcDefault(cfg); sc != nil {
+			openURL = sc.VscOpenURL
+		}
+		if openURL == "" || !strings.Contains(openURL, "://") {
 			// disable by vscode app
 			_, _ = io.WriteString(w, "error:disable open in application")
 			return
 		}
 		if cfg.TokenTimeout <= 0 || cfg.QueryTokenKey == "" {
 			// Go back directly
-			_, _ = io.WriteString(w, cfg.VscOpenURL)
+			_, _ = io.WriteString(w, openURL)
 			return
 		}
 		tkn := pkg.GenerateTokenValue(cfg.LoginToken, cfg.TokenTimeout)
-		if strings.Contains(cfg.VscOpenURL, "?") {
-			_, _ = io.WriteString(w, cfg.VscOpenURL+"&"+cfg.QueryTokenKey+"="+tkn)
+		if strings.Contains(openURL, "?") {
+			_, _ = io.WriteString(w, openURL+"&"+cfg.QueryTokenKey+"="+tkn)
 			return
 		}
-		_, _ = io.WriteString(w, cfg.VscOpenURL+"?"+cfg.QueryTokenKey+"="+tkn)
+		_, _ = io.WriteString(w, openURL+"?"+cfg.QueryTokenKey+"="+tkn)
 	})
 
-	// /__restart – kills the backend subprocess and resets the service state so
-	// the next request re-triggers version detection, download, extract, and
-	// start. Requires authentication (not in isPublicAuthPath). Only works when
-	// a service backend exists and was kvs-managed.
-	// /__restart        → simple restart, clears any version override
-	// /__restart?v=1.32.1 → restart with a specific version override
-	// /__restart/1.32.1 → same, path-style
-	restartHandler := func(w http.ResponseWriter, r *http.Request) {
-		// Extract optional version: query (?v=1.32.1) is the primary method.
-		// overrideVersion := r.PathValue("v")
-		overrideVersion := r.URL.Query().Get("v")
-
-		if servicePrefix == "" {
-			w.Header().Set("Content-Type", "text/html; charset=utf-8")
-			w.WriteHeader(http.StatusOK)
-			fmt.Fprintln(w, `<!DOCTYPE html><html><body><h3>No service backend configured.</h3><a href="/">Go Home</a></body></html>`)
-			return
-		}
-
-		// Set or clear the global version override BEFORE reloading config.
-		// This must happen even if the backend is not running, so that the
-		// version takes effect on the next preparation cycle.
-		if overrideVersion != "" {
-			log.Printf("[restart] overriding version to %s", overrideVersion)
-			pkg.GOverrideVersion = overrideVersion
-		} else {
-			// No version specified → clear any previous override so
-			// resolveVersion falls back to version_latest_url.
-			if pkg.GOverrideVersion != "" {
-				log.Printf("[restart] clearing version override (was %s)", pkg.GOverrideVersion)
-				pkg.GOverrideVersion = ""
-			}
-		}
-
-		// Reload config so download/bin_home are re-expanded with the new (or
-		// cleared) version. If version resolve fails (e.g. 404), LoadInitConfig
-		// stores the error in cfg.InitError instead of crashing. PrepareService
-		// will surface it on the loading page as a download failure.
-		newCfg := pkg.LoadInitConfig()
-
-		// Agent branch: /__restart?agent=<file> — restart the SERVICE backend
-		// (command) with bridge args appended to it, derived from the agent entry file.
-		if agentFile := r.URL.Query().Get("agent"); agentFile != "" {
-			if cfg.SvcCommand == "" {
-				http.Error(w, "command not configured", http.StatusBadRequest)
-				return
-			}
-			if agentFile == "" {
-				newCfg.VscAgentArgs = ""
-			} else if args := pkg.AgentBridgeArgsFromFile(filepath.Join(cfg.VscAgentsDir, agentFile+".json")); args == "" {
-				http.Error(w, "agent entry not found or invalid: "+agentFile, http.StatusNotFound)
-				return
-			} else {
-				newCfg.VscAgentArgs = args
-			}
-		}
-
-		cfg = newCfg // always update cfg so InitError (if any) is visible to prepareService
-
-		// Kill the running backend (if any) and reset state.
-		hadBackend := service.Running()
-		service.Stop()
-		if hadBackend {
-			// Run stop_shell if configured.
-			if cfg.SvcStopShell != "" {
-				log.Printf("[restart] running stop_shell: %s", cfg.SvcStopShell)
-				if err := pkg.RunServiceStartup(cfg.SvcStopShell); err != nil {
-					log.Printf("[restart] stop_shell error: %v", err)
-				}
-			}
-		}
-		// Clean up unix socket files.
-		for _, b := range cfg.Proxies {
-			if b.IsService && b.Scheme == "unix" {
-				_ = os.Remove(b.Target)
-			}
-		}
-		// Reset state so next request re-triggers preparation.
-		srvState.Reset()
-
-		// If config reload failed (e.g. version hash 404), report the error
-		// but don't crash — the loading page will show it on next access.
-		if newCfg.InitError != "" {
-			srvState.Finish(fmt.Errorf("%s", newCfg.InitError))
-			log.Printf("[restart] config reload error: %s", newCfg.InitError)
-			w.Header().Set("Content-Type", "text/html; charset=utf-8")
-			w.WriteHeader(http.StatusInternalServerError)
-			fmt.Fprintf(w, `<!DOCTYPE html><html><body><h3>Restart failed: %s</h3><p><a href="/">Go Home</a> | <a href="/__restart">Retry Restart</a></p></body></html>`, newCfg.InitError)
-			return
-		}
-
-		log.Printf("[restart] service reset, will re-prepare on next request")
-		// Redirect to home so the browser reloads and re-triggers preparation.
-		http.Redirect(w, r, "/", http.StatusSeeOther)
-	}
-	mux.HandleFunc("/__restart", restartHandler)
-	// mux.HandleFunc("/__restart/{v}", restartHandler)
-
-	//======================================================================================
+	agentvs := &pkg.Process{Name: "agentvs"}
 
 	// /__agents/status — returns { running, command, cmds } for the Agents
-	// dialog. command reflects the current (possibly body-replaced)
-	// vsc_agents_cmd; cmds is the vsc_agent_cmds preset map (name→command),
-	// shown as quick-fill buttons when the command box is empty.
+	// dialog, read from the table's default service. command reflects the
+	// current (possibly body-replaced) vsc_agents_cmd; cmds is the
+	// vsc_agent_cmds preset map (name→command), shown as quick-fill buttons
+	// when the command box is empty.
 	mux.HandleFunc("/__agents/status", func(w http.ResponseWriter, r *http.Request) {
 		w.Header().Set("Content-Type", "application/json; charset=utf-8")
 		resp := map[string]any{
 			"running": agentvs.Running(),
-			"command": cfg.VscAgentsCmd,
-			"cmds":    cfg.VscAgentCmds,
+		}
+		if sc := svcDefault(cfg); sc != nil {
+			resp["command"] = sc.VscAgentsCmd
+			resp["cmds"] = sc.VscAgentCmds
 		}
 		_ = json.NewEncoder(w).Encode(resp)
 	})
 
 	mux.HandleFunc("/__agents/entries", func(w http.ResponseWriter, r *http.Request) {
 		w.Header().Set("Content-Type", "application/json; charset=utf-8")
-		resp := pkg.ListAgentEntries(cfg.VscAgentsDir)
+		dir := ""
+		if sc := svcDefault(cfg); sc != nil {
+			dir = sc.VscAgentsDir
+		}
+		resp := pkg.ListAgentEntries(dir)
 		_ = json.NewEncoder(w).Encode(resp)
 	})
 
 	// /__agents/start — launch the agent host (409 if already running).
-	// Optional JSON body {"command": "..."} REPLACES cfg.VscAgentsCmd (the
-	// new value is kept for subsequent status/start/restart); an empty or
-	// missing body starts the currently configured command.
+	// Optional JSON body {"command": "..."} REPLACES the service's
+	// vsc_agents_cmd (the new value is kept for subsequent
+	// status/start/restart); an empty or missing body starts the currently
+	// configured command.
 	mux.HandleFunc("/__agents/start", func(w http.ResponseWriter, r *http.Request) {
 		if r.Method != http.MethodPost {
 			http.Error(w, "POST required", http.StatusMethodNotAllowed)
@@ -351,22 +358,23 @@ func main() {
 			http.Error(w, "agents already running", http.StatusConflict)
 			return
 		}
+		sc := svcDefault(cfg)
 		if r.Body != nil {
 			var req struct {
 				Command string `json:"command"`
 			}
 			if err := json.NewDecoder(io.LimitReader(r.Body, 64*1024)).Decode(&req); err == nil {
-				if c := strings.TrimSpace(req.Command); c != "" && c != cfg.VscAgentsCmd {
+				if c := strings.TrimSpace(req.Command); c != "" && sc != nil && c != sc.VscAgentsCmd {
 					log.Printf("[agents] command replaced: %s", c)
-					cfg.VscAgentsCmd = c
+					sc.VscAgentsCmd = c
 				}
 			}
 		}
-		if cfg.VscAgentsCmd == "" {
+		if sc == nil || sc.VscAgentsCmd == "" {
 			http.Error(w, "vsc_agents_cmd not configured", http.StatusBadRequest)
 			return
 		}
-		if err := agentvs.Start("", cfg.VscAgentsCmd); err != nil {
+		if err := agentvs.Start("", sc.VscAgentsCmd); err != nil {
 			http.Error(w, "failed to start agents: "+err.Error(), http.StatusInternalServerError)
 			return
 		}
@@ -391,29 +399,30 @@ func main() {
 
 	// /__agents/restart — restart the agent host (without bridge args; to
 	// reload with a specific entry use POST /__restart?agent=<file>).
-	// Optional JSON body {"command": "..."} REPLACES cfg.VscAgentsCmd, same
-	// as /__agents/start.
+	// Optional JSON body {"command": "..."} REPLACES the service's
+	// vsc_agents_cmd, same as /__agents/start.
 	mux.HandleFunc("/__agents/restart", func(w http.ResponseWriter, r *http.Request) {
 		if r.Method != http.MethodPost {
 			http.Error(w, "POST required", http.StatusMethodNotAllowed)
 			return
 		}
+		sc := svcDefault(cfg)
 		if r.Body != nil {
 			var req struct {
 				Command string `json:"command"`
 			}
 			if err := json.NewDecoder(io.LimitReader(r.Body, 64*1024)).Decode(&req); err == nil {
-				if c := strings.TrimSpace(req.Command); c != "" && c != cfg.VscAgentsCmd {
+				if c := strings.TrimSpace(req.Command); c != "" && sc != nil && c != sc.VscAgentsCmd {
 					log.Printf("[agents] command replaced: %s", c)
-					cfg.VscAgentsCmd = c
+					sc.VscAgentsCmd = c
 				}
 			}
 		}
-		if cfg.VscAgentsCmd == "" {
+		if sc == nil || sc.VscAgentsCmd == "" {
 			http.Error(w, "vsc_agents_cmd not configured", http.StatusBadRequest)
 			return
 		}
-		if ok := agentvs.Restart(cfg.VscAgentsCmd); !ok {
+		if ok := agentvs.Restart(sc.VscAgentsCmd); !ok {
 			http.Error(w, "failed to start agents", http.StatusInternalServerError)
 			return
 		}
@@ -421,18 +430,24 @@ func main() {
 		_, _ = io.WriteString(w, `{"success":true}`)
 	})
 
-	// /__agents/action/<name> — run the [actions] entry <name> from kvs.ini.
-	// kvs stays generic: pkg.RunAgentAction executes the value (file:// via
-	// shebang, otherwise sh -c) and blocks until it exits. Any method works, so
-	// a browser URL or plain curl triggers it. An unknown name returns 404
-	// without revealing the configured actions.
+	// /__agents/action/<name> — run the actions entry <name> from the default
+	// service's [service.<name>] section. kvs stays generic:
+	// pkg.RunAgentAction executes the value (file:// via shebang, otherwise
+	// sh -c) and blocks until it exits. Any method works, so a browser URL or
+	// plain curl triggers it. An unknown name returns 404 without revealing
+	// the configured actions.
 	mux.HandleFunc("/__agents/action/", func(w http.ResponseWriter, r *http.Request) {
 		name := strings.TrimPrefix(r.URL.Path, "/__agents/action/")
 		if name == "" || strings.Contains(name, "/") {
 			http.Error(w, "action name required", http.StatusBadRequest)
 			return
 		}
-		cmd, known := cfg.Actions[name]
+		sc := svcDefault(cfg)
+		if sc == nil {
+			http.Error(w, "unknown action", http.StatusNotFound)
+			return
+		}
+		cmd, known := sc.Actions[name]
 		if !known {
 			// Deliberately does not echo the configured action names: the
 			// action table is server-side only.
@@ -461,10 +476,23 @@ func main() {
 		pkg.ServeStaticAsset(w, "favicon.ico")
 	})
 
-	// Intercept VS Code NLS requests for translation remapping.
-	if nlsPathPrefix := os.Getenv("SVC_VSCODE_NLS_URL"); strings.HasPrefix(nlsPathPrefix, "/__") {
+	// Intercept VS Code NLS requests for translation remapping. The prefix
+	// comes from KVS_SVC_VSCODE_NLS_URL — the same variable the [service.vsc]
+	// once_shell template uses; the fallback matches the ini default
+	// {KVS_SVC_VSCODE_NLS_URL:-/__cache/vscode/nls/}. A /__ prefix serves NLS
+	// through kvs itself; any other value (e.g. an external URL) needs no
+	// local route.
+	nlsPathPrefix := os.Getenv("KVS_SVC_VSCODE_NLS_URL")
+	if nlsPathPrefix == "" {
+		nlsPathPrefix = "/__cache/vscode/nls/"
+	}
+	if strings.HasPrefix(nlsPathPrefix, "/__") {
 		mux.HandleFunc(nlsPathPrefix, func(w http.ResponseWriter, r *http.Request) {
-			pkg.VscodeNlsHandle(w, r, nlsPathPrefix, cfg.SvcHome, cfg.SvcBinHome, cfg.VscLanguage)
+			if sc := svcDefault(cfg); sc != nil {
+				pkg.VscodeNlsHandle(w, r, nlsPathPrefix, sc.Home, sc.BinHome, sc.VscLanguage)
+				return
+			}
+			http.NotFound(w, r)
 		})
 	}
 
@@ -489,11 +517,13 @@ func main() {
 	// loading page; once done (success), it proxies normally; on error, 500.
 	// Non-service backends are always reachable.
 	mux.HandleFunc("/", func(w http.ResponseWriter, r *http.Request) {
-		// Intercept VS Code web-extension-resource requests，SvcVersionHash change on restart
-		if cfg.SvcVersionHash != "" && cfg.SvcHome != "" {
-			prePath := "/stable-" + cfg.SvcVersionHash + "/web-extension-resource/"
+		// Intercept VS Code web-extension-resource requests, served from the
+		// default service's extensions dir. The version hash changes on
+		// restart, so resolve the service on every request.
+		if sc := svcDefault(cfg); sc != nil && sc.VersionHash != "" {
+			prePath := "/stable-" + sc.VersionHash + "/web-extension-resource/"
 			if strings.HasPrefix(r.URL.Path, prePath) {
-				pkg.VscodeExtHandle(w, r, prePath, cfg.SvcHome)
+				pkg.VscodeExtHandle(w, r, prePath, sc.Home)
 				return
 			}
 		}
@@ -514,50 +544,50 @@ func main() {
 					continue
 				}
 			}
-			if rt.isService {
+			if rt.svc != "" {
+				// Hosted svc:// service: per-service preparation state and
+				// subprocess, triggered lazily on the first request.
+				st := pkg.Services().State(rt.svc)
+				sc := pkg.Services().Get(rt.svc)
 				// Finished with error? Return it as 500 (no re-trigger, so
 				// the client gets the final error instead of looping on the
 				// 503 loading page). /__restart resets the state to retry.
-				if done, err := srvState.Result(); done && err != nil {
-					http.Error(w, "service preparation failed: "+err.Error(), http.StatusInternalServerError)
+				if done, err := st.Result(); done && err != nil {
+					http.Error(w, "service "+rt.svc+" preparation failed: "+err.Error(), http.StatusInternalServerError)
 					return
 				}
 				// Trigger preparation if not already running or succeeded.
-				if srvState.Begin() {
-					go func() {
-						managed, err := pkg.PrepareService(cfg, srvState)
-						if err == nil && managed && cfg.SvcCommand != "" {
-							// Clean up stale unix socket files left by a previous crash.
-							for _, b := range cfg.Proxies {
-								if b.IsService && b.Scheme == "unix" {
-									_ = os.Remove(b.Target)
-								}
-							}
+				if st.Begin() {
+					go func(sc *pkg.ServiceConfig, st *pkg.ServiceState) {
+						managed, err := pkg.PrepareService(sc, st)
+						if err == nil && managed && sc.Command != "" {
 							// Start the backend subprocess after a successful prepare.
-							service.Start("", cfg.SvcCommand+cfg.VscAgentArgs)
+							if err := pkg.Services().StartProc(sc); err != nil {
+								log.Printf("[prepare:%s] start backend: %v", sc.Name, err)
+							}
 						}
-						srvState.Finish(err)
+						st.Finish(err)
 						if err != nil {
-							log.Printf("[prepare] service preparation failed: %v", err)
+							log.Printf("[prepare:%s] service preparation failed: %v", sc.Name, err)
 						}
-					}()
+					}(sc, st)
 				}
 				// Preparing? Show loading page.
-				if srvState.Active() {
-					pkg.ServeLoadingPage(w, srvState.GetStatus())
+				if st.Active() {
+					pkg.ServeLoadingPage(w, st.GetStatus())
 					return
 				}
 				// Finished: proxy on success, 500 on error.
-				if done, err := srvState.Result(); done {
+				if done, err := st.Result(); done {
 					if err != nil {
-						http.Error(w, "service preparation failed: "+err.Error(), http.StatusInternalServerError)
+						http.Error(w, "service "+rt.svc+" preparation failed: "+err.Error(), http.StatusInternalServerError)
 						return
 					}
 					rt.handler.ServeHTTP(w, r)
 					return
 				}
 				// not yet active (goroutine just scheduled) — loading page.
-				pkg.ServeLoadingPage(w, srvState.GetStatus())
+				pkg.ServeLoadingPage(w, st.GetStatus())
 				return
 			}
 			rt.handler.ServeHTTP(w, r)
@@ -624,12 +654,9 @@ func main() {
 		log.Printf("proxy headers: %v", cfg.Headers)
 	}
 
-	// Start backend subprocess if KVS_SVC_COMMAND is configured. When a service
-	// backend exists, the subprocess is started lazily after preparation
-	// completes (see the service route handler above); otherwise it starts now.
-	if cfg.SvcCommand != "" && servicePrefix == "" {
-		service.Start("", cfg.SvcCommand+cfg.VscAgentArgs)
-	}
+	// Hosted svc:// services start lazily: the first request to their route
+	// triggers preparation (probe → download → extract → start), see the
+	// service route handler above.
 
 	<-sigCh
 	log.Printf("shutdown signal received, draining… (press Ctrl+C again to force quit)")
@@ -645,22 +672,29 @@ func main() {
 	}
 	// Agent host is kvs-managed: terminate it on kvs exit.
 	agentvs.Stop()
-	// Only kvs-managed backends (started via startBackend) are cleaned up.
-	// External/system services (detected via check, no proc) are never
+	// Hosted svc:// services: stop kvs-managed subprocesses (with stop_shell).
+	// External services (alive when probed, never started by kvs) are never
 	// killed or touched by kvs on shutdown.
-	if service.Running() {
-		service.Stop()
-		// Run stop_shell if configured (kvs-managed backend only).
-		if cfg.SvcStopShell != "" {
-			log.Printf("[shutdown] running stop_shell: %s", cfg.SvcStopShell)
-			if err := pkg.RunServiceStartup(cfg.SvcStopShell); err != nil {
-				log.Printf("[shutdown] stop_shell error: %v", err)
-			}
-		}
-		for _, b := range cfg.Proxies {
-			if b.IsService && b.Scheme == "unix" {
-				_ = os.Remove(b.Target)
-			}
+	pkg.Services().StopAll()
+}
+
+// svcBackendName returns the service name behind a svc:// backend ("" otherwise).
+func svcBackendName(b pkg.Backend) string {
+	if b.Scheme == "svc" {
+		return b.Target
+	}
+	return ""
+}
+
+// svcDefault returns the config of the first svc:// service referenced by the
+// current route table (nil when the table hosts no managed service). The
+// global service endpoints (/__version, /__agents/*, /__open_url, NLS…)
+// operate on it; ?svc=<name> selects a different service where supported.
+func svcDefault(cfg pkg.Config) *pkg.ServiceConfig {
+	for _, b := range cfg.Proxies {
+		if name := svcBackendName(b); name != "" {
+			return pkg.Services().Get(name)
 		}
 	}
+	return nil
 }

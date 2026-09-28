@@ -48,40 +48,38 @@ func MustAsset(name string) []byte {
 	return b
 }
 
-// parseBackends builds a list of Backend entries from the ordered [proxies]
-// section entries. Each entry is a [2]string{key, value} where key is the
-// routing prefix (with optional & or ^ markers) and value is the backend URL.
+// parseBackends builds a list of Backend entries from the selected [proxies]
+// route table (or inline -n entries). Each entry is a [2]string{key, value}
+// where key is the routing prefix (with optional & or ^ markers) and value is
+// the backend URL. Inline -n entries carry a "proxies." key prefix which is
+// stripped here; table entries are raw prefixes.
 //
 // Prefix markers:
-//   - "&" prefix: kvs-managed service backend (auto-deploy, loading page)
-//   - "^" prefix: regex pattern match (cannot combine with "&")
+//   - "^" prefix: regex pattern match
 //   - "cc~" prefix: cached proxy backend (disk cache)
 //   - "ws~" prefix: WebSocket-aware backend (upgrade requests detected)
 //   - "http://" or "https://" prefix on the prefix itself: full-domain match
+//   - svc://<name> target: kvs-hosted service
 //
-// Markers may combine (e.g. "&cc~/" is a kvs-managed cached backend); they
-// are stripped in any order.
+// Markers may combine (e.g. "cc~/path"); they are stripped in any order.
 //
-// Service backends must be explicitly marked with "&"; there is no implicit
-// single-backend-to-service promotion.
+// There is no implicit single-backend-to-service promotion: hosted services
+// are addressed explicitly via svc://<name>.
 func parseBackends(entries [][2]string) []Backend {
 	var backends []Backend
 	for _, e := range entries {
-		prefix := strings.TrimSpace(strings.TrimPrefix(e[0], "proxies."))
+		prefix := strings.TrimSpace(strings.TrimPrefix(strings.TrimSpace(e[0]), "proxies."))
 		urlStr := strings.TrimSpace(e[1])
 		if prefix == "" || urlStr == "" {
 			log.Printf("WARNING: empty prefix or url in proxies entry: %q=%q, skipping", prefix, urlStr)
 			continue
 		}
 
-		// Strip prefix markers (in any order, so "&cc~/" etc. combine).
-		var isService, isCache, isWSock bool
+		// Strip prefix markers (in any order, so "cc~ws~/" etc. combine).
+		var isCache, isWSock bool
 		for changed := true; changed; {
 			changed = false
 			switch {
-			case strings.HasPrefix(prefix, "&"):
-				prefix = prefix[1:]
-				isService, changed = true, true
 			case strings.HasPrefix(prefix, "cc~"):
 				prefix = prefix[3:]
 				isCache, changed = true, true
@@ -95,7 +93,7 @@ func parseBackends(entries [][2]string) []Backend {
 		// used verbatim as one backend, no comma splitting.
 		if isRegex := strings.HasPrefix(prefix, "^"); isRegex {
 			if b := newBackend(prefix[1:], urlStr); b != nil {
-				b.IsService = isService
+				b.IsService = b.Scheme == "svc"
 				b.IsRegex = true
 				b.IsCache = isCache
 				b.IsWSock = isWSock
@@ -115,7 +113,9 @@ func parseBackends(entries [][2]string) []Backend {
 				p = "/" + p
 			}
 			if b := newBackend(p, urlStr); b != nil {
-				b.IsService = isService
+				// svc://<name> targets are hosted services by definition —
+				// the scheme itself is the explicit service marker.
+				b.IsService = b.Scheme == "svc"
 				b.IsCache = isCache
 				b.IsWSock = isWSock
 				backends = append(backends, *b)
@@ -244,6 +244,28 @@ func CreateBackendHandler(b Backend, cacheHeaders map[string]string, loginAuthz 
 		log.Printf("backend file server: %s", dir)
 		// return http.StripPrefix(b.Source, http.FileServer(http.Dir(dir))) + .gz or .br
 		return http.StripPrefix(b.Source, precompressedFileServer(dir, http.FileServer(http.Dir(dir))))
+
+	case "svc":
+		// kvs-hosted service backend: the target names a [service.<name>]
+		// section. The inner reverse proxy points at the service's resolved
+		// address (http/https/unix); preparation (download/extract/start) is
+		// orchestrated by the route loop in main.go, which only reaches this
+		// handler once the service is ready.
+		name := b.Target
+		sc := Services().Get(name)
+		if sc == nil || sc.Address == "" {
+			log.Fatalf("backend svc://%s: service not configured or address missing (in %q)", name, b.RawURL)
+		}
+		scheme, target, ok := strings.Cut(sc.Address, "://")
+		scheme = strings.ToLower(scheme)
+		if !ok || scheme == "svc" {
+			log.Fatalf("backend svc://%s: invalid address %q", name, sc.Address)
+		}
+		nb := b
+		nb.Scheme, nb.Target, nb.RawURL = scheme, target, sc.Address
+		nb.IsService = false // lifecycle handled by the service manager
+		log.Printf("backend svc://%s → %s (hosted service)", name, sc.Address)
+		return CreateBackendHandler(nb, cacheHeaders, loginAuthz)
 
 	case "relay":
 		// In-process WebSocket relay backend (ws-to-ws, e.g. the zcode

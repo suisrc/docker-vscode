@@ -54,7 +54,7 @@ var cacheTransport = &http.Transport{
 var (
 	cacheOnce       sync.Once
 	cacheRoot       string // resolved cache root at first cache request; route only registered when non-empty
-	cacheOverride   string // set from SvcCacheDir in main()
+	cacheOverride   string // set from CacheDir in main()
 	proxyPathPrefix string // normalized proxy_path prefix (e.g. "/__cache/"), set in main()
 )
 

@@ -13,13 +13,14 @@ import (
 	"os"
 	"os/exec"
 	"path/filepath"
+	"strconv"
 	"strings"
 	"sync"
 	"time"
 )
 
 // =============================================================================
-// Service Preparation — download, extract, fixup before starting KVS_SVC_COMMAND
+// Service Preparation — download, extract, fixup before starting the backend command
 // =============================================================================
 
 // ServiceState tracks lazy preparation of the service backend. Preparation is
@@ -99,8 +100,6 @@ func (s *ServiceState) Reset() {
 	s.status = ""
 }
 
-// serveLoadingPage writes the preparation loading page (loading.html), injecting
-// the current status into the __STATUS__ placeholder.
 // ServeLoadingPage writes the preparation loading page (loading.html), injecting
 // the current status into the __STATUS__ placeholder.
 func ServeLoadingPage(w http.ResponseWriter, status string) {
@@ -119,44 +118,50 @@ func ServeLoadingPage(w http.ResponseWriter, status string) {
 // service. It blocks until preparation is complete. srvState tracks status for the
 // loading page.
 //
-// New flow:
-//  1. If check is set and the backend is already reachable → skip (already running)
+// PrepareService downloads/extracts/fixes the service backend. sc is the
+// resolved service config of one [service.<name>] section.
+//
+// Flow:
+//  1. If healthz is set and the backend is already reachable → skip (already running)
 //  2. If bin_home exists and is non-empty → skip deploy; run init_shell, plus
 //     once_shell only when the {bin_home}/__once__ marker is absent
 //  3. Resolve download URL (download has priority; otherwise download_info + field)
-//  4. Follow redirects to get .ext → SVC_PACKAGE_EXT
-//  5. Download to cache_dir/version/{SVC_VERSION}_{SVC_VERSION_HASH}.{ext}
+//  4. Follow redirects to get the package extension (cache filename suffix)
+//  5. Download to {cache_dir}/version/{service}/{version}_{version_hash}.{ext}
 //  6. Extract tarball to bin_home
 //  7. Run once_shell (once per deployment, guarded by {bin_home}/__once__),
 //     then init_shell (every startup)
 //
 // Returns (managed, error). managed=false means the backend is an external service
-// already alive (detected via check) — kvs must NOT start/stop it or touch its
+// already alive (detected via healthz) — kvs must NOT start/stop it or touch its
 // socket. managed=true means kvs owns the backend lifecycle.
-
-// PrepareService downloads/extracts/fixes the service backend.
-//
-// Returns (managed, error). managed=false means the backend is an external service
-// already alive (detected via check) — kvs must NOT start/stop it or touch its
-// socket. managed=true means kvs owns the backend lifecycle.
-func PrepareService(cfg Config, srvState *ServiceState) (bool, error) {
+func PrepareService(sc *ServiceConfig, srvState *ServiceState) (bool, error) {
 	// 0. If config init failed (e.g. version resolve error), fail fast so the
 	// loading page shows the error instead of crashing the whole program.
-	if cfg.InitError != "" {
-		return false, fmt.Errorf("%s", cfg.InitError)
+	if sc.InitError != "" {
+		return false, fmt.Errorf("%s", sc.InitError)
 	}
 
 	// 1. Check if backend is already running (external/system service).
-	if cfg.SvcCheck != "" {
-		if isBackendAlive(cfg.SvcCheck) {
-			log.Printf("[prepare] backend already alive: %s (external service, not managed by kvs)", cfg.SvcCheck)
-			return false, nil
-		}
-		// If check is unix:// and the socket file exists but is dead, it's a
-		// stale socket left by a previous kvs-managed crash — safe to remove.
-		if scheme, target, ok := strings.Cut(cfg.SvcCheck, "://"); ok && scheme == "unix" {
+	// healthz uses the "#@<code>" suffix form; a plain URL only requires
+	// the backend to be reachable.
+	alive := false
+	if sc.Healthz != "" {
+		alive = isServiceAlive(sc.Healthz)
+	}
+	if alive {
+		log.Printf("[prepare:%s] backend already alive: %s (external service, not managed by kvs)", sc.Name, sc.Healthz)
+		return false, nil
+	}
+	// If the probe/address is unix:// and the socket file exists but is dead,
+	// it's a stale socket left by a previous kvs-managed crash — safe to remove
+	// so the restarted backend can re-bind it. The healthz may carry the http
+	// "#@<code>" suffix and a trailing "/" (healthz = "{ADDR}/#@200"), so the
+	// path is normalized first.
+	for _, u := range []string{sc.Healthz, sc.Address} {
+		if target, ok := unixSocketPath(u); ok {
 			if _, err := os.Stat(target); err == nil {
-				log.Printf("[prepare] removing stale unix socket: %s", target)
+				log.Printf("[prepare:%s] removing stale unix socket: %s", sc.Name, target)
 				_ = os.Remove(target)
 			}
 		}
@@ -164,55 +169,58 @@ func PrepareService(cfg Config, srvState *ServiceState) (bool, error) {
 
 	// 2. If bin_home exists and is non-empty → already deployed, skip
 	// download/extract and just run the scripts.
-	if cfg.SvcBinHome != "" {
-		if installed, _ := isServiceInstalled(cfg.SvcBinHome); installed {
-			log.Printf("[prepare] bin_home already exists: %s", cfg.SvcBinHome)
-			return runShellScripts(cfg, srvState)
+	if sc.BinHome != "" {
+		if installed, _ := isServiceInstalled(sc.BinHome); installed {
+			log.Printf("[prepare:%s] bin_home already exists: %s", sc.Name, sc.BinHome)
+			return runShellScripts(sc, srvState)
 		}
 	}
 
 	// 3. Resolve download URL.
 	// Build an HTTP client that uses download_proxy if configured.
-	dlClient := buildDownloadClient(cfg.SvcDownloadProxy)
-	if cfg.SvcDownloadProxy != "" {
-		log.Printf("[prepare] using download proxy: %s", cfg.SvcDownloadProxy)
+	dlClient := buildDownloadClient(sc.DownloadProxy)
+	if sc.DownloadProxy != "" {
+		log.Printf("[prepare:%s] using download proxy: %s", sc.Name, sc.DownloadProxy)
 	}
 
-	downloadURL := cfg.SvcDownload
-	if downloadURL == "" && cfg.SvcDownloadInfo != "" {
+	downloadURL := sc.Download
+	if downloadURL == "" && sc.DownloadInfo != "" {
 		// Fetch download_info JSON and extract URL field.
 		var err error
-		downloadURL, err = resolveDownloadInfo(dlClient, cfg.SvcDownloadInfo, cfg.SvcDownloadFieldURL)
+		downloadURL, err = resolveDownloadInfo(dlClient, sc.DownloadInfo, sc.DownloadFieldURL)
 		if err != nil {
 			return false, fmt.Errorf("download_info: %w", err)
 		}
 	}
 	if downloadURL == "" {
 		// nothing to download → nothing to deploy (but kvs may still start command)
-		return runShellScripts(cfg, srvState)
+		return runShellScripts(sc, srvState)
 	}
-	if cfg.SvcBinHome == "" {
+	if sc.BinHome == "" {
 		return false, fmt.Errorf("bin_home is required when download is set")
 	}
 
-	// 4. Follow redirects to resolve .ext → SVC_PACKAGE_EXT.
+	// 4. Follow redirects to resolve the package extension (cache filename
+	// suffix).
 	ext, err := resolveExtFromURL(dlClient, downloadURL)
 	if err != nil {
 		return false, fmt.Errorf("resolve extension: %w", err)
 	}
-	_ = os.Setenv("SVC_PACKAGE_EXT", ext)
-	log.Printf("[prepare] package ext: %s", ext)
+	sc.PackageExt = ext
+	log.Printf("[prepare:%s] package ext: %s", sc.Name, ext)
 
 	// 5. Compute cache path and download if not cached.
-	verName := cfg.SvcVersion
-	if cfg.SvcVersionHash != "" {
-		verName = cfg.SvcVersion + "_" + cfg.SvcVersionHash
+	verName := sc.Version
+	if sc.VersionHash != "" {
+		verName = sc.Version + "_" + sc.VersionHash
 	}
-	cachePath := filepath.Join(cfg.SvcCacheDir, "version", verName+"."+ext)
+	// Per-service subdirectory so same-version downloads of different
+	// services never collide: {cache_dir}/version/{service}/{version}_{verhash}.{ext}
+	cachePath := filepath.Join(Services().CacheDir(), "version", sc.Name, verName+"."+ext)
 
 	if _, err := os.Stat(cachePath); err != nil {
 		srvState.SetPreparing("Downloading Application: " + downloadURL)
-		log.Printf("[prepare] downloading: %s → %s", downloadURL, cachePath)
+		log.Printf("[prepare:%s] downloading: %s → %s", sc.Name, downloadURL, cachePath)
 		// Progress callback updates the loading page status.
 		onProgress := func(written, total int64) {
 			if total > 0 {
@@ -223,20 +231,86 @@ func PrepareService(cfg Config, srvState *ServiceState) (bool, error) {
 		if err := downloadFile(dlClient, downloadURL, cachePath, onProgress); err != nil {
 			return false, fmt.Errorf("download: %w", err)
 		}
-		log.Printf("[prepare] download complete: %s", cachePath)
+		log.Printf("[prepare:%s] download complete: %s", sc.Name, cachePath)
 	} else {
-		log.Printf("[prepare] download cached: %s", cachePath)
+		log.Printf("[prepare:%s] download cached: %s", sc.Name, cachePath)
 	}
 
 	// 6. Extract to bin_home.
-	srvState.SetPreparing("Extracting Application: " + cfg.SvcBinHome)
-	log.Printf("[prepare] extracting: %s → %s", cachePath, cfg.SvcBinHome)
-	if err := extractTarball(cachePath, cfg.SvcBinHome); err != nil {
+	srvState.SetPreparing("Extracting Application: " + sc.BinHome)
+	log.Printf("[prepare:%s] extracting: %s → %s", sc.Name, cachePath, sc.BinHome)
+	if err := extractTarball(cachePath, sc.BinHome); err != nil {
 		return false, fmt.Errorf("extract: %w", err)
 	}
-	log.Printf("[prepare] extract complete: %s", cfg.SvcBinHome)
+	log.Printf("[prepare:%s] extract complete: %s", sc.Name, sc.BinHome)
 
-	return runShellScripts(cfg, srvState)
+	return runShellScripts(sc, srvState)
+}
+
+// unixSocketPath extracts the socket file path from a unix:// address. The
+// scheme is cut manually — url.Parse would eat the first path segment as a
+// host ("unix://../../x" → host ".."). A trailing "#…" fragment (the http
+// "#@<code>" suffix, which the healthz template appends regardless of scheme)
+// and trailing "/" are stripped.
+func unixSocketPath(addr string) (string, bool) {
+	scheme, target, ok := strings.Cut(addr, "://")
+	if !ok || scheme != "unix" {
+		return "", false
+	}
+	if i := strings.LastIndex(target, "#"); i >= 0 {
+		target = target[:i]
+	}
+	target = strings.TrimRight(target, "/")
+	if target == "" {
+		return "", false
+	}
+	return target, true
+}
+
+// isServiceAlive probes a backend URL. Any response proves reachability,
+// unless the URL carries a "#@<code>" suffix, which requires exactly that
+// status. unix probes dial the socket, file probes stat the path.
+func isServiceAlive(probeURL string) bool {
+	scheme, target, ok := strings.Cut(probeURL, "://")
+	if !ok {
+		return false
+	}
+	switch scheme {
+	case "http", "https":
+		// "#@<code>" suffix: require that exact status.
+		required := 0
+		if idx := strings.LastIndex(probeURL, "#@"); idx >= 0 {
+			if n, err := strconv.Atoi(probeURL[idx+2:]); err == nil {
+				required = n
+				probeURL = probeURL[:idx]
+			}
+		}
+		client := &http.Client{Timeout: 5 * time.Second}
+		resp, err := client.Get(probeURL)
+		if err != nil {
+			return false
+		}
+		resp.Body.Close()
+		if required != 0 {
+			return resp.StatusCode == required
+		}
+		return true // reachable is enough
+	case "unix":
+		sock, ok := unixSocketPath(probeURL)
+		if !ok {
+			return false
+		}
+		conn, err := net.Dial("unix", sock)
+		if err != nil {
+			return false
+		}
+		conn.Close()
+		return true
+	case "file":
+		_, err := os.Stat(target)
+		return err == nil
+	}
+	return false
 }
 
 // onceMarkerName is the sentinel file written into bin_home after once_shell has
@@ -251,43 +325,43 @@ const onceMarkerName = "__once__"
 // the {bin_home}/__once__ sentinel file; init_shell runs on every kvs startup.
 // Both support "file://" prefix (script executed directly, shebang respected);
 // any other value is run via "sh -c". Empty values are skipped.
-func runShellScripts(cfg Config, srvState *ServiceState) (bool, error) {
+func runShellScripts(sc *ServiceConfig, srvState *ServiceState) (bool, error) {
 	// Run once_shell only when it has not already succeeded for this
 	// deployment. The marker is written after a successful run only, so a
 	// failed run leaves no marker and is retried on the next preparation cycle.
-	if cfg.SvcOnceShell != "" {
+	if sc.OnceShell != "" {
 		markerPath := ""
-		if cfg.SvcBinHome != "" {
-			markerPath = filepath.Join(cfg.SvcBinHome, onceMarkerName)
+		if sc.BinHome != "" {
+			markerPath = filepath.Join(sc.BinHome, onceMarkerName)
 		}
 		if ts, done := readOnceMarker(markerPath); done {
-			log.Printf("[prepare] once script already ran at %s, skipping: %s", ts, cfg.SvcOnceShell)
+			log.Printf("[prepare:%s] once script already ran at %s, skipping: %s", sc.Name, ts, sc.OnceShell)
 		} else {
-			srvState.SetPreparing("Running once script: " + cfg.SvcOnceShell)
-			log.Printf("[prepare] running once script: %s", cfg.SvcOnceShell)
-			if err := RunServiceStartup(cfg.SvcOnceShell); err != nil {
+			srvState.SetPreparing("Running once script: " + sc.OnceShell)
+			log.Printf("[prepare:%s] running once script: %s", sc.Name, sc.OnceShell)
+			if err := RunServiceStartup(sc.OnceShell); err != nil {
 				return false, fmt.Errorf("once_shell: %w", err)
 			}
-			log.Printf("[prepare] once script complete")
+			log.Printf("[prepare:%s] once script complete", sc.Name)
 			// Record completion; the content is the run timestamp (RFC3339).
 			if markerPath == "" {
-				log.Printf("[prepare] WARNING: bin_home not set, once_shell result cannot be recorded and may run again")
+				log.Printf("[prepare:%s] WARNING: bin_home not set, once_shell result cannot be recorded and may run again", sc.Name)
 			} else if err := os.WriteFile(markerPath, []byte(time.Now().Format(time.RFC3339)+"\n"), 0o644); err != nil {
-				log.Printf("[prepare] WARNING: failed to write once marker %s: %v", markerPath, err)
+				log.Printf("[prepare:%s] WARNING: failed to write once marker %s: %v", sc.Name, markerPath, err)
 			} else {
-				log.Printf("[prepare] once marker written: %s", markerPath)
+				log.Printf("[prepare:%s] once marker written: %s", sc.Name, markerPath)
 			}
 		}
 	}
 
 	// Run init_shell if set (every kvs startup).
-	if cfg.SvcInitShell != "" {
-		srvState.SetPreparing("Running startup script: " + cfg.SvcInitShell)
-		log.Printf("[prepare] running startup script: %s", cfg.SvcInitShell)
-		if err := RunServiceStartup(cfg.SvcInitShell); err != nil {
+	if sc.InitShell != "" {
+		srvState.SetPreparing("Running startup script: " + sc.InitShell)
+		log.Printf("[prepare:%s] running startup script: %s", sc.Name, sc.InitShell)
+		if err := RunServiceStartup(sc.InitShell); err != nil {
 			return false, fmt.Errorf("init_shell: %w", err)
 		}
-		log.Printf("[prepare] startup script complete")
+		log.Printf("[prepare:%s] startup script complete", sc.Name)
 	}
 
 	return true, nil
@@ -305,38 +379,6 @@ func readOnceMarker(path string) (string, bool) {
 		return "", false
 	}
 	return strings.TrimSpace(string(b)), true
-}
-
-// isBackendAlive checks if the backend at the given URL is reachable.
-// Supports http://, https:// (GET request), unix:// (socket dial), file:// (file exists).
-func isBackendAlive(checkURL string) bool {
-	scheme, target, ok := strings.Cut(checkURL, "://")
-	if !ok {
-		return false
-	}
-	switch scheme {
-	case "http", "https":
-		client := &http.Client{Timeout: 5 * time.Second}
-		resp, err := client.Get(checkURL)
-		if err != nil {
-			return false
-		}
-		resp.Body.Close()
-		// Only a 200 proves the backend is actually serving; a 404/500
-		// means something is listening but not ready.
-		return resp.StatusCode == http.StatusOK
-	case "unix":
-		conn, err := net.Dial("unix", target)
-		if err != nil {
-			return false
-		}
-		conn.Close()
-		return true
-	case "file":
-		_, err := os.Stat(target)
-		return err == nil
-	}
-	return false
 }
 
 // buildDownloadClient creates an *http.Client for service downloads.
@@ -640,8 +682,6 @@ func RunServiceStartup(cmd string) error {
 	return c.Run()
 }
 
-// normalizeProxyPath ensures p starts and ends with '/'.
-// Empty or "/" input defaults to "/__cache/".
 // NormalizeProxyPath ensures p starts and ends with '/'.
 func NormalizeProxyPath(p string) string {
 	p = strings.TrimSpace(p)
@@ -658,4 +698,151 @@ func NormalizeProxyPath(p string) string {
 		p = p + "/"
 	}
 	return p
+}
+
+// =============================================================================
+// Service Manager — lifecycle state for every hosted (svc://) service
+// =============================================================================
+
+// managedService couples one service config with its lazy-preparation state
+// and the kvs-owned backend subprocess. One instance per svc:// service.
+type managedService struct {
+	cfg   *ServiceConfig
+	state ServiceState
+	proc  Process
+}
+
+// ServiceManager tracks every named service of the current config. A config
+// reload (via /__restart) only replaces the cfg pointers — preparation state
+// and subprocesses survive.
+type ServiceManager struct {
+	mu       sync.Mutex
+	svcs     map[string]*managedService
+	cacheDir string // download cache root ({cache_dir}/version/…)
+}
+
+var gServices = &ServiceManager{svcs: map[string]*managedService{}}
+
+// Services returns the process-wide service manager.
+func Services() *ServiceManager { return gServices }
+
+// SetCacheDir records the download cache root used by PrepareService.
+func (m *ServiceManager) SetCacheDir(dir string) {
+	m.mu.Lock()
+	m.cacheDir = dir
+	m.mu.Unlock()
+}
+
+// CacheDir returns the download cache root (empty → /cache, matching cc~).
+func (m *ServiceManager) CacheDir() string {
+	m.mu.Lock()
+	defer m.mu.Unlock()
+	if m.cacheDir == "" {
+		return defaultCacheDir
+	}
+	return m.cacheDir
+}
+
+// Register syncs the manager with a freshly loaded config: missing services
+// are added, existing ones only get their cfg pointer refreshed (state and
+// subprocess are kept). Configs are shared pointers — callers must treat
+// them as read-only after registration.
+func (m *ServiceManager) Register(cfgs map[string]*ServiceConfig) {
+	m.mu.Lock()
+	defer m.mu.Unlock()
+	for name, sc := range cfgs {
+		if ms, ok := m.svcs[name]; ok {
+			ms.cfg = sc
+			continue
+		}
+		m.svcs[name] = &managedService{cfg: sc}
+	}
+}
+
+// Get returns the current config of a registered service (nil if unknown).
+func (m *ServiceManager) Get(name string) *ServiceConfig {
+	m.mu.Lock()
+	defer m.mu.Unlock()
+	if ms, ok := m.svcs[name]; ok {
+		return ms.cfg
+	}
+	return nil
+}
+
+// State returns the preparation state of a service (nil if unknown).
+func (m *ServiceManager) State(name string) *ServiceState {
+	m.mu.Lock()
+	defer m.mu.Unlock()
+	if ms, ok := m.svcs[name]; ok {
+		return &ms.state
+	}
+	return nil
+}
+
+// StartProc launches the service command in its own process group. The
+// command (and the optional agent bridge args) were already expanded at
+// config-load time; the subprocess additionally inherits the whole kvs
+// environment, including every reverse-assigned KVS_SVC_<NAME>_* variable.
+// No-op when the command is empty or the previous child is still running.
+func (m *ServiceManager) StartProc(sc *ServiceConfig) error {
+	m.mu.Lock()
+	ms, ok := m.svcs[sc.Name]
+	m.mu.Unlock()
+	if !ok {
+		return fmt.Errorf("service %q not registered", sc.Name)
+	}
+	if sc.Command == "" {
+		return fmt.Errorf("service %q has no command", sc.Name)
+	}
+	if ms.proc.Running() {
+		return fmt.Errorf("service %q process is running", sc.Name)
+	}
+	return ms.proc.Start(sc.Name, sc.Command+sc.VscAgentArgs)
+}
+
+// StopOne terminates a kvs-managed service subprocess, runs stop_shell and
+// cleans up a unix address socket. External services (never started by kvs,
+// proc not running) are not touched. Returns whether a managed subprocess
+// was stopped.
+func (m *ServiceManager) StopOne(name string, runStopShell bool) bool {
+	m.mu.Lock()
+	ms, ok := m.svcs[name]
+	m.mu.Unlock()
+	if !ok {
+		return false
+	}
+	stopped := false
+	if ms.proc.Running() {
+		ms.proc.Stop()
+		stopped = true
+	}
+	sc := ms.cfg
+	if stopped && runStopShell && sc != nil && sc.StopShell != "" {
+		log.Printf("[service %s] running stop_shell: %s", name, sc.StopShell)
+		if err := RunServiceStartup(sc.StopShell); err != nil {
+			log.Printf("[service %s] stop_shell error: %v", name, err)
+		}
+	}
+	// Clean up the address socket of a kvs-managed unix backend.
+	if stopped && sc != nil {
+		if scheme, target, ok := strings.Cut(sc.Address, "://"); ok && scheme == "unix" {
+			_ = os.Remove(target)
+		}
+	}
+	return stopped
+}
+
+// StopAll terminates every kvs-managed service subprocess (with stop_shell).
+// External services detected via check are never started by kvs and are left
+// untouched.
+func (m *ServiceManager) StopAll() {
+	m.mu.Lock()
+	names := make([]string, 0, len(m.svcs))
+	for name := range m.svcs {
+		names = append(names, name)
+	}
+	m.mu.Unlock()
+	for _, name := range names {
+		m.StopOne(name, true)
+	}
 }

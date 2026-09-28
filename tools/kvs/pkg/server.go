@@ -284,12 +284,14 @@ func validateHashedToken(loginValue, loginToken string, timeout int) (bool, bool
 	if subtle.ConstantTimeCompare([]byte(gotHash), []byte(expectedHash)) != 1 {
 		return false, false
 	}
-	// Check expiry.
+	// Check expiry: tokens older than timeout are rejected. Remaining-time
+	// renewal (below) keeps sessions alive while in use; abandoned tokens
+	// expire. A future timestamp is rejected as well (forged or clock skew).
 	now := time.Now().Unix()
 	age := now - ts
-	// if age >= int64(timeout) {
-	// 	return false, false
-	// }
+	if age >= int64(timeout) || age < -60 {
+		return false, false
+	}
 	// Refresh when ≤ 1/4 of timeout remains.
 	remaining := int64(timeout) - age
 	needsRefresh := remaining < int64(timeout)/4

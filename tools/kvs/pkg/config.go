@@ -6,66 +6,74 @@ import (
 	"io"
 	"log"
 	"net/http"
+	"net/url"
 	"os"
+	"path/filepath"
 	"slices"
 	"strconv"
 	"strings"
+	"sync"
 	"time"
 )
 
-// GOverrideVersion is the version override set by /__restart?v=VERSION.
-// When non-empty, resolveVersion uses it instead of fetching version_latest_url.
-// This avoids polluting os.Environ (SVC_VERSION) which could leak into the
+// GOverrideVersion is the per-service version override map set by
+// /__restart?v=VERSION (key = service name). When an entry is non-empty,
+// resolveVersion uses it instead of fetching version_latest_url. This avoids
+// polluting os.Environ (KVS_SVC_<NAME>_VERSION) which could leak into the
 // backend subprocess and cause unexpected behavior.
-var GOverrideVersion string
+var (
+	gOverrideMu       sync.Mutex
+	gOverrideVersions = map[string]string{}
+)
+
+// SetOverrideVersion records a version override for the given service
+// ("" = legacy single service).
+func SetOverrideVersion(svc, version string) {
+	gOverrideMu.Lock()
+	defer gOverrideMu.Unlock()
+	gOverrideVersions[svc] = version
+}
+
+// ClearOverrideVersion removes the version override of the given service.
+func ClearOverrideVersion(svc string) {
+	gOverrideMu.Lock()
+	defer gOverrideMu.Unlock()
+	delete(gOverrideVersions, svc)
+}
+
+// GetOverrideVersion returns the version override of the given service (""=none).
+func GetOverrideVersion(svc string) string {
+	gOverrideMu.Lock()
+	defer gOverrideMu.Unlock()
+	return gOverrideVersions[svc]
+}
 
 // gDebug is flag app is running by debug mode
 var gDebug = os.Getenv("KVS_DEBUG") == "1"
 
-// Config holds kvs configuration loaded from kvs.ini.
+// Config holds the gateway-level kvs configuration loaded from kvs.ini.
+// Everything service-specific lives on ServiceConfig ([service.<name>]);
+// endpoints that need "the" service derive it from the route table (first
+// svc:// entry, see svcDefault in main.go) or take ?svc=<name>.
 type Config struct {
-	Proxies []Backend
-	// [service] section
-	SvcEnable           bool   // service enable
-	SvcCheck            string // check — detect if backend already running (http/unix/file)
-	SvcHome             string // home — working directory, injected as SVC_HOME
-	SvcVersion          string // version — literal version, or empty to fetch from version_latest_url
-	SvcVersionLatestURL string // version_latest_url — fetch version JSON, #field extracts a key
-	SvcVersionHashURL   string // version_hash_url — fetch hash JSON, #field extracts a key, supports {SVC_VERSION}
-	SvcVersionHash      string // resolved version hash → SVC_VERHASH
-	SvcDownload         string // download — download URL (highest priority)
-	SvcDownloadInfo     string // download_info — version info API URL (returns JSON)
-	SvcDownloadFieldURL string // download_field_url — JSON field for URL in download_info
-	SvcDownloadProxy    string // download_proxy — proxy URL (http/https/socks5) for downloads
-	SvcCacheDir         string // cache_dir — cache directory
-	SvcCacheSed         string // cache_sed — cc~ cache rewrite rules: file|old|new||... (via KVS_CC_SED)
-	SvcProxyPath        string // proxy_path — /__cache/ path prefix
-	SvcBinHome          string // bin_home — extracted bin directory, → SVC_BIN_HOME
-	SvcOnceShell        string // once_shell — one-time script (file:// or sh -c), runs once per deploy, guarded by {bin_home}/__once__
-	SvcInitShell        string // init_shell — startup script (file:// or sh -c), runs on every kvs startup
-	SvcStopShell        string // stop_shell — shutdown script (file:// or sh -c), kvs-managed only
-	SvcCommand          string // command — optional shell command to run as the backend subprocess
+	Proxies  []Backend
+	Services map[string]*ServiceConfig // [service.<name>] sections, keyed by name
 
-	VscAgentsCmd string            // vsc_agents_cmd — agent host command (env assignments + argv), kvs-managed subprocess
-	VscAgentCmds map[string]string // vsc_agent_cmds — named agent host command presets (JSON map name→command)
-	VscAgentsDir string            // vsc_agents_dir — directory scanned for *.json agent endpoint entries
-	VscAgentArgs string            // SvcCommnand suffix, vscode agents connect config
-	VscLanguage  map[string]string // vsc_language — lang→langpack mapping (e.g. zh-cn→zh-hans)
-	VscOpenURL   string            // vsc_open_url - use vscode app open current windows url
+	CacheDir  string // cache_dir — download + cc~ cache directory (top-level key)
+	CacheSed  string // cache_sed — cc~ cache rewrite rules: file|old|new||... (via KVS_CC_SED)
+	ProxyPath string // proxy_path — /__cache/ external cache-proxy path prefix
 
-	Actions map[string]string // Actions maps the [actions] section: action name → one-shot command
-	// top-level
-	Port          string
-	CookieTknName string            // cookie_token_key, default "kvs" (legacy key: cookie)
+	Home          string            // top-level home — gateway working directory (KVS_HOME)
+	Port          string            // (KVS_PORT)
+	CookieTknName string            // cookie_token_key, default "kvs"
 	QueryTokenKey string            // query_token_key — when set, ?<key>=<token> grants access
 	LoginAuthz    bool              // login_authz — enable auth redirect + logout button injection
 	LoginToken    string            // login_token; when set, cookie value must match it
 	LoginTimeout  int               // login_timeout (seconds); 0=session; >0=hashed+expiring; <0=error
-	TokenTimeout  int               // check_timeout (seconds); default: 300
+	TokenTimeout  int               // token_timeout (seconds); default: 300
 	UseSSL        bool              // use_ssl — enable HTTPS with a self-signed cert
 	Headers       map[string]string // [headers] section: Xxx=Val → set/override; Xxx= → delete
 	PathPublic    []string          // path_public — |-separated paths reachable without auth
-	InitError     string            // non-fatal init error (e.g. version resolve failure); shown on loading page
 
 	// 反向代理调优（全部可省略；实现见 pkg/transport.go 与 pkg/wsproxy.go）
 	ProxyIdleConnsPerHost   int    // proxy_idle_conns_per_host — 每后端空闲连接上限，默认 32
@@ -77,14 +85,80 @@ type Config struct {
 	ReadTimeout             int    // read_timeout — 主 server 读完整请求(含 body)的秒数，0=不限，默认 60
 }
 
+// ServiceConfig holds one named service section ([service.<name>]). A service
+// becomes a hosted backend when a route references it via svc://<name>: kvs
+// then manages its lifecycle (probe → version resolve → download → extract →
+// scripts → start/stop).
+type ServiceConfig struct {
+	Name string // section suffix, e.g. "def" in [service.def]
+
+	Address string // address — backend address (http(s)://host:port or unix://path); reverse-assigned to KVS_SVC_<N>_ADDR/_HOST/_PORT/_SOCK
+	Healthz string // healthz — liveness probe URL; "#@<code>" suffix requires that status, plain URL only requires connectivity
+
+	Home             string // home — working directory; default KVS_HOME/<name>
+	Version          string
+	VersionBaseURL   string
+	VersionLatestURL string
+	VersionHashURL   string
+	VersionHash      string
+	Download         string
+	DownloadInfo     string
+	DownloadFieldURL string
+	DownloadProxy    string
+	BinHome          string
+	OnceShell        string
+	InitShell        string
+	StopShell        string
+	Command          string
+
+	PackageExt string // resolved download package extension (cache filename suffix)
+	InitError  string // non-fatal resolve error (e.g. version fetch); surfaced on the loading page
+
+	// vscode-specific service options (also present on other services but
+	// only consumed by the VS Code flows). *Raw hold the unexpanded JSON
+	// source values until resolveService expands them.
+	VscAgentsCmd    string
+	VscAgentCmds    map[string]string
+	VscAgentCmdsRaw string
+	VscAgentsDir    string
+	VscAgentArgs    string
+	VscLanguage     map[string]string
+	VscLanguageRaw  string
+	VscOpenURL      string
+
+	Actions    map[string]string // per-service actions table (actions = {name: cmd} JSON)
+	ActionsRaw string            // raw actions JSON before expansion
+
+	EnvsDefaultRaw string // raw envs_default JSON: env name → default value (filled when the system var is empty)
+}
+
+// envSuffix returns the environment-variable name fragment for a service:
+// upper-cased with non-alphanumeric characters folded to "_".
+func envSuffix(name string) string {
+	var b strings.Builder
+	for _, c := range strings.ToUpper(name) {
+		if c >= 'A' && c <= 'Z' || c >= '0' && c <= '9' {
+			b.WriteRune(c)
+		} else {
+			b.WriteByte('_')
+		}
+	}
+	return b.String()
+}
+
+// svcEnvKey builds KVS_SVC_<NAME>_<SUFFIX> for a service.
+func svcEnvKey(name, suffix string) string {
+	return "KVS_SVC_" + envSuffix(name) + "_" + suffix
+}
+
 // Backend describes a single proxy target with its routing prefix.
 type Backend struct {
 	Source    string // routing Source, "/" for root
-	Scheme    string // http, https, unix, file, text
-	Target    string // host:port, socket path, dir path, or literal text
+	Scheme    string // http, https, unix, file, text, relay, api, svc
+	Target    string // host:port, socket path, dir path, literal text, relay/api/service name
 	RawURL    string // original URL for logging
 	PathMode  string // http(s) path handling: ""=forward as-is, "-"=replace (strip source prefix onto target path), "+"=append (request path after target path)
-	IsService bool   // this backend is the one managed by kvs (auto-deploy, etc.)
+	IsService bool   // this backend is managed by kvs (svc:// target, or legacy & marker)
 	IsRegex   bool   // prefix is a regex pattern (^ prefix in [proxies])
 	IsCache   bool   // cc~ prefix: cache proxied responses on disk ({cache_dir:-/cache}/ccproxy/{scheme}:{host}/path)
 	IsWSock   bool   // ws~ prefix (or ws://wss:// url scheme): WebSocket-aware route, upgrade requests detected and handled separately
@@ -99,12 +173,15 @@ type Backend struct {
 //	"proxies./__healthz"      — [proxies] section
 //	"headers.x-forwarded-port" — [headers] section
 //
-// Array values (key = [a, b, c]) are parsed at read time and stored as a
-// space-joined string; the original items are kept in arrays for callers
-// that need the []string form.
+// Named sections ([proxies.zcodex], [service.def]…) keep their full section
+// name as the prefix ("proxies.zcodex./__healthz"); table/service parsing uses
+// the section-aware views below instead of the flat keys.
 type iniFile struct {
 	props [][2]string    // ordered [key, value] pairs preserving file order
 	index map[string]int // key → index in props, for O(1) lookup
+
+	secOrder []string               // section names in first-appearance order ("" = top-level)
+	secKeys  map[string][][2]string // section name → ordered [raw key, value] pairs
 }
 
 // iniKey builds the lookup key from a section and key name.
@@ -134,6 +211,17 @@ func (ini *iniFile) set(key, value string) {
 	ini.props = append(ini.props, [2]string{key, value})
 }
 
+// setSection records a key/value pair inside a named section (raw key kept).
+func (ini *iniFile) setSection(section, key, value string) {
+	if ini.secKeys == nil {
+		ini.secKeys = map[string][][2]string{}
+	}
+	if _, ok := ini.secKeys[section]; !ok {
+		ini.secOrder = append(ini.secOrder, section)
+	}
+	ini.secKeys[section] = append(ini.secKeys[section], [2]string{key, value})
+}
+
 // hasPrefix returns all [key, value] pairs whose key starts with prefix,
 // in file order.
 func (ini *iniFile) hasPrefix(prefix string) [][2]string {
@@ -142,6 +230,58 @@ func (ini *iniFile) hasPrefix(prefix string) [][2]string {
 		if strings.HasPrefix(kv[0], prefix) {
 			out = append(out, kv)
 		}
+	}
+	return out
+}
+
+// proxyTables lists the available route tables in file order: [proxies]
+// (unnamed, reported as "") plus every [proxies.<name>].
+func (ini *iniFile) proxyTables() []string {
+	var names []string
+	seen := map[string]bool{}
+	for _, sec := range ini.secOrder {
+		name := ""
+		switch {
+		case sec == "proxies":
+			name = ""
+		case strings.HasPrefix(sec, "proxies."):
+			name = strings.TrimPrefix(sec, "proxies.")
+		default:
+			continue
+		}
+		if !seen[name] {
+			seen[name] = true
+			names = append(names, name)
+		}
+	}
+	return names
+}
+
+// tableEntries returns the raw route entries of one table (file order).
+func (ini *iniFile) tableEntries(table string) [][2]string {
+	sec := "proxies"
+	if table != "" {
+		sec = "proxies." + table
+	}
+	return ini.secKeys[sec]
+}
+
+// serviceSections returns the named service sections in file order as
+// (name, raw entries) pairs — every [service.<n>] section.
+func (ini *iniFile) serviceSections() [][2]string {
+	var out [][2]string
+	seen := map[string]bool{}
+	for _, sec := range ini.secOrder {
+		if !strings.HasPrefix(sec, "service.") {
+			continue
+		}
+		name := strings.TrimPrefix(sec, "service.")
+		if seen[name] {
+			log.Printf("WARNING: duplicate service section for %q, keeping the first", name)
+			continue
+		}
+		seen[name] = true
+		out = append(out, [2]string{name, sec})
 	}
 	return out
 }
@@ -158,19 +298,22 @@ func resolveConfigPath(flagPath string) string {
 	return flagPath
 }
 
-// expandValue expands {VAR} and {VAR:-default} placeholders in v.
-// Lookup order: os environment variables first, then the svcVars map (internal
-// SVC_* variables). This supports the template syntax used in kvs.ini:
+// expandValue expands {VAR} and {VAR:-default} placeholders in v, looking the
+// name up in the process environment (service fields are reverse-assigned via
+// os.Setenv during resolveService, so they are visible here). This supports
+// the template syntax used in kvs.ini:
 //
-//	{KVS_PORT:-7080}   → env KVS_PORT, or "7080" if unset/empty
-//	{SVC_HOME}         → internal SVC_HOME variable
-//	${VAR} / $VAR      → standard os.ExpandEnv (legacy, still supported)
+//	{KVS_PORT:-8080}   → env KVS_PORT, or "8080" if unset/empty
+//	{KVS_SVC_VSCODE_HOME} → any reverse-assigned service variable
+//	${VAR} / $VAR      → standard os.ExpandEnv
 //
 // A brace expression is only treated as a placeholder when the name is a
 // valid identifier (letters/digits/underscores). Anything else (e.g. JSON
-// like `{ "commit": "{SVC_VERSION_HASH}" }`) is emitted verbatim, though
-// inner valid placeholders are still expanded.
-func expandValue(v string, svcVars map[string]string, excludes ...string) string {
+// like `{ "commit": "{KVS_SVC_VSCODE_VERHASH}" }`) is emitted verbatim, though
+// inner valid placeholders are still expanded. Names listed in excludes are
+// left as-is so a later substitution pass (e.g. VERSION → VERHASH ordering)
+// can handle them.
+func expandValue(v string, excludes ...string) string {
 	// validPlaceholderName reports whether s is a bare identifier
 	// (letters, digits, underscores), required before/inside {VAR} and
 	// {VAR:-default} placeholders.
@@ -220,11 +363,7 @@ func expandValue(v string, svcVars map[string]string, excludes ...string) string
 				sb.WriteByte('}')
 				continue
 			}
-			// Lookup: svcVars first (internal), then os env.
-			val, ok := svcVars[name]
-			if !ok {
-				val = os.Getenv(name)
-			}
+			val := os.Getenv(name)
 			if val == "" {
 				val = def
 			}
@@ -242,10 +381,16 @@ func expandValue(v string, svcVars map[string]string, excludes ...string) string
 // Format:
 //   - Lines of the form key = value (whitespace trimmed).
 //   - Empty lines and lines starting with # or ; are comments.
-//   - [section] headers group keys; [headers], [proxies], [service] are special.
-//   - Values support {VAR} and {VAR:-default} placeholders (expanded later by
-//     loadInitConfig, not here, so internal SVC_* vars are available).
+//   - [section] headers group keys ([headers], [proxies.<name>],
+//     [service.<name>] are consumed via the section-aware views).
+//   - Values support {VAR} and {VAR:-default} placeholders (expansion is
+//     deferred to LoadInitConfig so the reverse-assigned KVS_SVC_<NAME>_*
+//     variables are already visible).
 //   - Multi-line values: trailing " \" continues to next line.
+//   - Multi-line JSON: a value starting with "{" whose braces do not balance
+//     on the same line keeps consuming lines (comment-only lines skipped)
+//     until they balance; missing commas between members are repaired so
+//     hand-written blocks stay valid JSON.
 //   - Array values: key = [item1, item2, item3] → stored as []string.
 //     Items are trimmed; quoted items ("..." / '...') are unquoted.
 func parseIni(path string) (*iniFile, error) {
@@ -257,12 +402,13 @@ func parseIni(path string) (*iniFile, error) {
 }
 
 // parseIniData parses INI content from a byte slice. source is used only for
-// error messages (e.g. "kvs.default.ini:3: ..."). This allows loading config
-// from embedded assets (via -c default) without a temp file.
+// error messages (e.g. "kvs.ini:3: ..."). This allows loading config from the
+// embedded kvs.ini without a temp file.
 func parseIniData(data []byte, source string) (*iniFile, error) {
 	ini := &iniFile{
-		props: make([][2]string, 0, 64),
-		index: make(map[string]int),
+		props:   make([][2]string, 0, 64),
+		index:   make(map[string]int),
+		secKeys: make(map[string][][2]string),
 	}
 	section := "" // current section, "" = top-level
 	lines := strings.Split(string(data), "\n")
@@ -287,7 +433,13 @@ func parseIniData(data []byte, source string) (*iniFile, error) {
 		}
 	}
 
-	for lineNo, raw := range joined {
+	store := func(section, k, v string) {
+		ini.set(iniKey(section, strings.ToLower(k)), v)
+		ini.setSection(section, k, v)
+	}
+
+	for lineNo := 0; lineNo < len(joined); lineNo++ {
+		raw := joined[lineNo]
 		line := strings.TrimSpace(raw)
 		if line == "" || line[0] == '#' || line[0] == ';' {
 			continue
@@ -324,6 +476,30 @@ func parseIniData(data []byte, source string) (*iniFile, error) {
 		} else if len(v) == 1 && (v[0] == '"' || v[0] == '\'') {
 			return nil, fmt.Errorf("%s:%d: lone quote in %q", source, lineNo+1, raw)
 		}
+		// Multi-line JSON object: value starts with "{" and the braces do
+		// not balance on this line. Consume lines until balanced (comment
+		// lines skipped) so hand-written blocks like
+		//   actions = {
+		//       "name": "cmd"
+		//   }
+		// parse as one value.
+		if strings.HasPrefix(v, "{") && !jsonBracesBalanced(v) {
+			var block []string
+			block = append(block, v)
+			for lineNo++; lineNo < len(joined); lineNo++ {
+				nl := strings.TrimSpace(joined[lineNo])
+				if nl == "" || nl[0] == '#' || nl[0] == ';' {
+					continue
+				}
+				block = append(block, nl)
+				if jsonBracesBalanced(strings.Join(block, "\n")) {
+					break
+				}
+			}
+			v = repairJSONCommas(strings.Join(block, "\n"))
+			store(section, k, v)
+			continue
+		}
 		// Array value: [item1, item2, item3] — parse at read time and store
 		// as a space-joined string. Variable expansion is done later by
 		// loadInitConfig (the join is transparent to shell -c execution).
@@ -332,14 +508,106 @@ func parseIniData(data []byte, source string) (*iniFile, error) {
 			if err != nil {
 				return nil, err
 			}
-			ini.set(iniKey(section, strings.ToLower(k)), strings.Join(items, " "))
+			store(section, k, strings.Join(items, " "))
 			continue
 		}
 		// Store with section prefix; variable expansion is deferred to
-		// loadInitConfig so internal SVC_* vars are available.
-		ini.set(iniKey(section, strings.ToLower(k)), v)
+		// LoadInitConfig so reverse-assigned vars are visible.
+		store(section, k, v)
 	}
 	return ini, nil
+}
+
+// jsonBracesBalanced reports whether every "{" in s has a matching "}",
+// ignoring braces inside double-quoted strings (with backslash escapes).
+func jsonBracesBalanced(s string) bool {
+	depth := 0
+	inStr := false
+	for i := 0; i < len(s); i++ {
+		c := s[i]
+		if inStr {
+			if c == '\\' {
+				i++ // skip escaped character
+			} else if c == '"' {
+				inStr = false
+			}
+			continue
+		}
+		switch c {
+		case '"':
+			inStr = true
+		case '{':
+			depth++
+		case '}':
+			depth--
+			if depth < 0 {
+				return false
+			}
+		}
+	}
+	return depth == 0 && !inStr
+}
+
+// repairJSONCommas inserts missing commas between members of a hand-written
+// JSON object: inside an object, a string immediately followed by another
+// string (newlines/whitespace only in between) gets a "," inserted. Values
+// like {"a": "x"\n"b": "y"} become valid JSON. Strings are respected, so
+// braces or colons inside values never trigger a repair.
+func repairJSONCommas(s string) string {
+	type frame struct {
+		obj bool // true = object, false = array
+	}
+	var stack []frame
+	var out strings.Builder
+	inStr := false
+	prev := byte(0) // last significant char outside strings
+	isWS := func(c byte) bool { return c == ' ' || c == '\t' || c == '\r' || c == '\n' }
+	for i := 0; i < len(s); i++ {
+		c := s[i]
+		if inStr {
+			out.WriteByte(c)
+			if c == '\\' && i+1 < len(s) {
+				i++
+				out.WriteByte(s[i])
+			} else if c == '"' {
+				inStr = false
+				prev = '"'
+			}
+			continue
+		}
+		switch c {
+		case '"':
+			// Missing comma between object members: the previous significant
+			// char is the closing quote of a value and this quote opens the
+			// next key.
+			if len(stack) > 0 && stack[len(stack)-1].obj && prev == '"' {
+				out.WriteByte(',')
+				out.WriteByte('\n')
+			}
+			inStr = true
+			out.WriteByte(c)
+		case '{':
+			stack = append(stack, frame{obj: true})
+			out.WriteByte(c)
+			prev = c
+		case '[':
+			stack = append(stack, frame{obj: false})
+			out.WriteByte(c)
+			prev = c
+		case '}', ']':
+			if len(stack) > 0 {
+				stack = stack[:len(stack)-1]
+			}
+			out.WriteByte(c)
+			prev = c
+		default:
+			out.WriteByte(c)
+			if !isWS(c) {
+				prev = c
+			}
+		}
+	}
+	return out.String()
 }
 
 // parseArray parses "[item1, item2, item3]" into a []string.
@@ -408,15 +676,6 @@ func strProp(ini *iniFile, key, def string) string {
 	return def
 }
 
-// svcStr returns the string value for a [service] key, falling back to
-// def when the key is absent or empty.
-func svcStr(ini *iniFile, key, def string) string {
-	if v := ini.get("service." + key); v != "" {
-		return v
-	}
-	return def
-}
-
 // parseBool returns the boolean value for s, falling back to def when s is
 // empty. Accepts 1/0, true/false (case-insensitive).
 func parseBool(s string, def bool) bool {
@@ -457,52 +716,59 @@ func parseTimeout(s string) int {
 	return n
 }
 
-// resolveVersion resolves the application version and its hash.
+// resolveVersion resolves the application version and its hash for one
+// service (the results are reverse-assigned to KVS_SVC_<NAME>_VERSION /
+// _VERHASH by resolveService).
 //
-//   - If version is non-empty, it is used directly as SVC_VERSION.
+//   - If a version override is registered for svcKey (/__restart?v=VERSION),
+//     it is used directly.
+//   - Else if version is non-empty, it is used directly.
 //   - If version is empty, versionLatestURL is fetched. The URL may contain a
 //     "#field" suffix; if present, the response is treated as JSON and the named
 //     field is extracted. Otherwise the response body (trimmed) is the version.
-//   - If versionHashURL is empty, SVC_VERSION_HASH = SVC_VERSION.
-//   - If versionHashURL is set, it is fetched (after {SVC_VERSION} substitution)
-//     and the same "#field" extraction applies.
+//   - If versionHashURL is empty, the version hash equals the version.
+//   - If versionHashURL is set, it is fetched after VERSION substitution
+//     (the {VERSION} brace form and the bare VERSION token, e.g.
+//     .../api/versions/VERSION/...) and the same "#field" extraction applies.
 //
 // Returns (version, versionHash, error).
-func resolveVersion(version, versionLatestURL, versionHashURL string) (string, string, error) {
-	// Step 1: Resolve SVC_VERSION.
-	// Priority: GOverrideVersion (/__restart?v=VERSION) > version (config) > versionLatestURL (fetched).
-	if GOverrideVersion != "" {
-		version = GOverrideVersion
-		log.Printf("[version] SVC_VERSION=%s (from override)", version)
+func resolveVersion(svcKey, version, versionLatestURL, versionHashURL string) (string, string, error) {
+	// Step 1: Resolve the version.
+	// Priority: /__restart override > version (config) > versionLatestURL (fetched).
+	if v := GetOverrideVersion(svcKey); v != "" {
+		version = v
+		log.Printf("[version %s] version=%s (from override)", svcKey, version)
 	} else if version == "" && versionLatestURL != "" {
 		v, err := fetchJSONField(versionLatestURL)
 		if err != nil {
-			return "", "", fmt.Errorf("fetch version: %w", err)
+			return "", "", fmt.Errorf("fetch version %w", err)
 		}
 		version = v
 	}
 	if version == "" {
 		return "", "", fmt.Errorf("version is empty and version_latest_url is not configured")
 	}
-	log.Printf("[version] SVC_VERSION=%s", version)
+	log.Printf("[version %s] version=%s", svcKey, version)
 
-	// Step 2: Resolve SVC_VERSION_HASH.
+	// Step 2: Resolve the version hash.
 	if versionHashURL == "" {
-		log.Printf("[version] version_hash_url not set, SVC_VERSION_HASH=SVC_VERSION=%s", version)
+		log.Printf("[version %s] version_hash_url not set, hash=version=%s", svcKey, version)
 		return version, version, nil
 	}
 
-	// Substitute {SVC_VERSION} in the hash URL.
-	hashURL := strings.ReplaceAll(versionHashURL, "{SVC_VERSION}", version)
+	// Substitute VERSION in the hash URL: the {VERSION} brace form and the
+	// bare VERSION token (e.g. .../api/versions/VERSION/...).
+	hashURL := strings.ReplaceAll(versionHashURL, "{VERSION}", version)
+	hashURL = strings.ReplaceAll(hashURL, "VERSION", version)
 	vh, err := fetchJSONField(hashURL)
 	if err != nil {
 		return "", "", fmt.Errorf("fetch version hash: %w", err)
 	}
 	if vh == "" {
 		vh = version
-		log.Printf("[version] version_hash empty, falling back to SVC_VERSION=%s", version)
+		log.Printf("[version %s] version hash empty, falling back to version=%s", svcKey, version)
 	}
-	log.Printf("[version] SVC_VERSION_HASH=%s", vh)
+	log.Printf("[version %s] version hash=%s", svcKey, vh)
 	return version, vh, nil
 }
 
@@ -563,7 +829,7 @@ func flagValue(name string) string {
 }
 
 // parseProxiesArg parses the -n flag value into [][2]string pairs matching the
-// format returned by ini.hasPrefix("proxies."). The value uses ";" to separate
+// format returned by ini.tableEntries. The value uses ";" to separate
 // entries, each of the form "prefix=url".
 //
 // Example: "/__healthz=text://OK:@now;/=http://127.0.0.1:8080"
@@ -586,276 +852,154 @@ func parseProxiesArg(s string) [][2]string {
 	return entries
 }
 
-// loadIni parses the -c flag value and returns the parsed INI file plus the
-// resolved source label (for logging). The special value "default" loads the
-// embedded kvs.default.ini without requiring a file on disk.
+// loadIni resolves the config source from the -c flag and returns the parsed
+// INI file and the source label (for logging).
+//
+// -c is optional and takes a FILE PATH only (no preset names): absent → the
+// embedded kvs.ini; present → that file (fatal when missing). The route table
+// is always selected with -n :<name> (or inline -n / KVS_PROXIES entries);
+// with no -n the first [proxies.<name>] table in file order is used.
 func loadIni() (*iniFile, string) {
-	cfgPath := ""
-	for i, arg := range os.Args[1:] {
-		if arg == "-c" && i+1 < len(os.Args)-1 {
-			cfgPath = os.Args[i+2]
-			break
-		}
-		if val, ok := strings.CutPrefix(arg, "-c="); ok {
-			cfgPath = val
-			break
-		}
-	}
-
-	// -n present without -c: auto-use default config.
-	if cfgPath == "" && (flagValue("-n") != "" || os.Getenv("KVS_PROXIES") != "") {
-		if os.Getenv("KVS_SVC_ENABLE") == "" {
-			os.Setenv("KVS_SVC_ENABLE", "false")
-		}
-		cfgPath = "default"
-	}
-	// switch -c by embed fs
-	switch cfgPath {
-	case "default":
-		log.Printf("loading config: default (embedded kvs.default.ini)")
-		ini, err := parseIniData(MustAsset("kvs.default.ini"), "kvs.default.ini")
+	// No -c → the embedded kvs.ini.
+	if cfgPath := flagValue("-c"); cfgPath == "" {
+		log.Printf("loading config: embed kvs.ini")
+		ini, err := parseIniData(MustAsset("kvs.ini"), "kvs.ini")
 		if err != nil {
 			log.Fatalf("parse embedded config: %v", err)
 		}
-		return ini, "default"
-	case "vscode":
-		log.Printf("loading config: vscode (embedded kvs.vscode.ini)")
-		ini, err := parseIniData(MustAsset("kvs.vscode.ini"), "kvs.vscode.ini")
+		return ini, "embed"
+	} else if resolved := resolveConfigPath(cfgPath); resolved != "" {
+		log.Printf("loading config: %s", resolved)
+		ini, err := parseIni(resolved)
 		if err != nil {
-			log.Fatalf("parse embedded config: %v", err)
+			log.Fatalf("parse config: %v", err)
 		}
-		return ini, "vscode"
-	case "zcodex":
-		if home := os.Getenv("KVS_ZCODEX_HOME"); home != "" {
-			if os.Getenv("ZCODE_DATA_BASE_DIR") == "" {
-				os.Setenv("ZCODE_DATA_BASE_DIR", home)
-			}
-			if os.Getenv("ZCODE_DESKTOP_HOME_DIR") == "" {
-				os.Setenv("ZCODE_DESKTOP_HOME_DIR", home)
-			}
-		}
-		zport := os.Getenv("KVS_ZCODE_PORT")
-		if zport == "" {
-			zport = "7587" // default: zcode port
-		}
-		if os.Getenv("KVS_SVC_CHECK_URL") == "" {
-			os.Setenv("KVS_SVC_CHECK_URL", "http://127.0.0.1:"+zport+"/api/server-info")
-		}
-		if os.Getenv("KVS_SVC_COMMAND") == "" {
-			os.Setenv("KVS_SVC_COMMAND", "${KVS_ZCODEX_NODE} {SVC_BIN_HOME}/bin/zcode.mjs --web --workspace ${HOME} --no-token --no-open --host=127.0.0.1 --port="+zport)
-		}
-		if os.Getenv("KVS_PATH_PUBLIC") == "" {
-			os.Setenv("KVS_PATH_PUBLIC", "/remote/ws|/api/v1/client/configs")
-		}
-		if os.Getenv("KVS_CC_SED") == "" {
-			// KVS_CC_SED='index-*.js|overrideUrl:void 0|overrideUrl:`wss://>host</ws`'
-			os.Setenv("KVS_CC_SED", "src-*.js|`wss://zcode.z.ai/ws`|`wss://>host</remote/ws`||src-*.js|`/api/v1/client/configs`,ff(e).origin|`/api/v1/client/configs`")
-		}
-		if os.Getenv("KVS_PROXIES") == "" {
-			os.Setenv("KVS_PROXIES", "/__healthz=text://OK:@now;"+ //
-				// zcode remote
-				"ws~/remote/ws=relay://zcode-clients;"+
-				"cc~/remote/v4=https://zcode.z.ai/[v=app_version]remote/v4;"+
-				"cc~/api/v1/client=https://zcode.z.ai/[v=app_version]api/v1/client;"+
-				// zcode local
-				"/assets/,/material-icons/,/pdfjs/,/favicon.ico=file://{SVC_BIN_HOME}/web/assets;"+
-				"ws~/zcode/remote/ws=relay://zcode-clients;"+
-				"/zcode/api/=-http://127.0.0.1:"+zport+"/api/;"+
-				"/zcode/ws=-http://127.0.0.1:"+zport+"/ws;"+
-				"&/zcode=http://127.0.0.1:"+zport+";"+
-				// zcode manager
-				"/=api://manager")
-		}
-		// read other config from kvs.default.ini
-		log.Printf("loading config: zcodex (embedded kvs.default.ini)")
-		ini, err := parseIniData(MustAsset("kvs.default.ini"), "kvs.default.ini")
-		if err != nil {
-			log.Fatalf("parse embedded config: %v", err)
-		}
-		return ini, "zcodex"
+		return ini, resolved
+	} else {
+		log.Fatalf("config file not found: %s", cfgPath)
+		return nil, ""
 	}
-	// -c by local fs
-	resolved := resolveConfigPath(cfgPath)
-	if resolved == "" {
-		if cfgPath != "" {
-			log.Fatalf("config file not found: %s", cfgPath)
-		}
-		log.Fatal("config file required: use -c <path> or -c default")
-	}
-	log.Printf("loading config: %s", resolved)
-	ini, err := parseIni(resolved)
-	if err != nil {
-		log.Fatalf("parse config: %v", err)
-	}
-	return ini, resolved
 }
 
 // LoadInitConfig loads kvs.ini and resolves the full Config.
 func LoadInitConfig() Config {
-	ini, _ := loadIni()
+	ini, source := loadIni()
 
-	// -n flag overrides [proxies] with inline "prefix=url;prefix=url" entries.
-	// When -n is used, the user provides their own backends, so kvs skips the
-	// service lifecycle (download/extract/start command, version resolution).
-	useNext := flagValue("-n")
-	if useNext == "" {
-		useNext = os.Getenv("KVS_PROXIES")
-	}
-
-	// svcVars holds internal SVC_* variables, built incrementally as [service]
-	// fields are resolved. These are available for {VAR} expansion in later
-	// values within the same kvs.ini.
-	svcVars := map[string]string{}
-
+	// Route source selection, highest priority first:
+	//   1. -n ":name"        → named [proxies.<name>] table
+	//   2. -n "p=u;p=u"      → inline routes
+	//   3. KVS_PROXIES env   → inline routes
+	//   4. otherwise         → first table in file order
+	table := ""
 	var proxyEntries [][2]string
-	if useNext != "" {
-		proxyEntries = parseProxiesArg(useNext)
-	} else {
-		proxyEntries = ini.hasPrefix("proxies.")
+	nFlag := flagValue("-n")
+	switch {
+	case strings.HasPrefix(nFlag, ":"):
+		table = strings.TrimPrefix(nFlag, ":")
+	case nFlag != "" && strings.Contains(nFlag, "="):
+		proxyEntries = parseProxiesArg(nFlag)
+	case nFlag != "":
+		table = nFlag
+	case os.Getenv("KVS_PROXIES") != "":
+		proxyEntries = parseProxiesArg(os.Getenv("KVS_PROXIES"))
+	default:
+		tables := ini.proxyTables()
+		if len(tables) == 0 {
+			log.Fatal("config error: [proxies] section is required in kvs.ini")
+		}
+		table = tables[0]
 	}
-	if len(proxyEntries) == 0 {
-		log.Fatal("config error: [proxies] section is required in kvs.ini")
+	if proxyEntries == nil {
+		proxyEntries = ini.tableEntries(table)
+		if len(proxyEntries) == 0 {
+			log.Fatalf("config error: route table [proxies.%s] not found or empty (available: %v)", table, ini.proxyTables())
+		}
 	}
+	log.Printf("config source: %s, route table: %q (available: %v)", source, table, ini.proxyTables())
 
 	var cfg Config
+	cfg.Services = map[string]*ServiceConfig{}
 
-	// --- Resolve [service] fields in dependency order ---
-	cfg.SvcEnable = parseBool(expandValue(strProp(ini, "service.enable", ""), svcVars), true)
-
-	// 1. home → SVC_HOME (loaded first, available for later references)
-	cfg.SvcHome = expandValue(svcStr(ini, "home", ""), svcVars)
-	svcVars["SVC_HOME"] = cfg.SvcHome
-	_ = os.Setenv("SVC_HOME", cfg.SvcHome)
-
-	// 1b. cache_dir → expanded with svcVars. Parsed even in -n mode so
-	// cc~ marked backends can honor a configured cache directory.
-	cfg.SvcCacheDir = expandValue(svcStr(ini, "cache_dir", ""), svcVars)
-
-	// 1c. cache_sed → cc~ 缓存内容替换规则 (file|old|new||...)。与 cache_dir
-	// 一样在 -n 模式下也解析，使 cc~ 标记的后端也能做缓存内容替换。
-	cfg.SvcCacheSed = expandValue(svcStr(ini, "cache_sed", ""), svcVars)
-
-	if cfg.SvcEnable {
-		// 1b. version_base_url → SVC_VERSION_BASE_URL (before version_latest_url etc.)
-		svcVersionBaseURL := expandValue(svcStr(ini, "version_base_url", ""), svcVars)
-		svcVars["SVC_VERSION_BASE_URL"] = svcVersionBaseURL
-		_ = os.Setenv("SVC_VERSION_BASE_URL", svcVersionBaseURL)
-
-		// 1c. （SVC_VSCODE_NLS_URL:-/__cache/vscode/nls/}
-		if _, exist := os.LookupEnv("SVC_VSCODE_NLS_URL"); !exist {
-			os.Setenv("SVC_VSCODE_NLS_URL", "/__cache/vscode/nls/")
-		}
-
-		// 2. version / version_latest_url / version_hash_url → SVC_VERSION, SVC_VERHASH
-		cfg.SvcVersion = expandValue(svcStr(ini, "version", ""), svcVars)
-		cfg.SvcVersionLatestURL = expandValue(svcStr(ini, "version_latest_url", ""), svcVars)
-		cfg.SvcVersionHashURL = expandValue(svcStr(ini, "version_hash_url", ""), svcVars, "SVC_VERSION")
-
-		// 3. download — re-expand with svcVars (may reference {SVC_VERSION_HASH})
-		if download := expandValue(svcStr(ini, "download", ""), svcVars); download != "" {
-			var err error
-			cfg.SvcVersion, cfg.SvcVersionHash, err = resolveVersion(cfg.SvcVersion, cfg.SvcVersionLatestURL, cfg.SvcVersionHashURL)
-			if err != nil {
-				cfg.InitError = fmt.Sprintf("resolve version: %v", err)
-				log.Printf("WARNING: %s", cfg.InitError)
-			}
-			svcVars["SVC_VERSION"] = cfg.SvcVersion
-			svcVars["SVC_VERSION_HASH"] = cfg.SvcVersionHash
-			_ = os.Setenv("SVC_VERSION", cfg.SvcVersion)
-			_ = os.Setenv("SVC_VERSION_HASH", cfg.SvcVersionHash)
-
-			download = strings.ReplaceAll(download, "SVC_VERSION_HASH", cfg.SvcVersionHash)
-			download = strings.ReplaceAll(download, "SVC_VERSION", cfg.SvcVersion)
-			cfg.SvcDownload = download
-			log.Printf("backend download url: %s, version: %s, hash: %s", cfg.SvcDownload, cfg.SvcVersion, cfg.SvcVersionHash)
-		} else {
-			svcVars["SVC_VERSION"] = cfg.SvcVersion
-			svcVars["SVC_VERSION_HASH"] = cfg.SvcVersionHash
-			_ = os.Setenv("SVC_VERSION", cfg.SvcVersion)
-			_ = os.Setenv("SVC_VERSION_HASH", cfg.SvcVersionHash)
-
-			log.Printf("backend download url: empty")
-		}
-
-		// 4. download_info / download_field_url
-		cfg.SvcDownloadInfo = expandValue(svcStr(ini, "download_info", ""), svcVars)
-		cfg.SvcDownloadFieldURL = expandValue(svcStr(ini, "download_field_url", "url"), svcVars)
-		cfg.SvcDownloadProxy = expandValue(svcStr(ini, "download_proxy", ""), svcVars)
-
-		// 6. bin_home → SVC_BIN_HOME
-		cfg.SvcBinHome = expandValue(svcStr(ini, "bin_home", ""), svcVars)
-		if strings.ContainsRune(cfg.SvcBinHome, '{') {
-			cfg.SvcBinHome = expandValue(cfg.SvcBinHome, svcVars)
-		}
-		svcVars["SVC_BIN_HOME"] = cfg.SvcBinHome
-		_ = os.Setenv("SVC_BIN_HOME", cfg.SvcBinHome)
-
-		// 7. Other fields
-		if checkURL := os.Getenv("KVS_SVC_CHECK_URL"); checkURL != "" {
-			cfg.SvcCheck = checkURL
-		} else {
-			cfg.SvcCheck = expandValue(svcStr(ini, "check", ""), svcVars)
-		}
-		cfg.SvcProxyPath = expandValue(svcStr(ini, "proxy_path", ""), svcVars)
-		cfg.SvcOnceShell = expandValue(svcStr(ini, "once_shell", ""), svcVars)
-		cfg.SvcInitShell = expandValue(svcStr(ini, "init_shell", ""), svcVars)
-		cfg.SvcStopShell = expandValue(svcStr(ini, "stop_shell", ""), svcVars)
-		cfg.SvcCommand = expandValue(svcStr(ini, "command", ""), svcVars)
-		if strings.ContainsRune(cfg.SvcCommand, '{') {
-			cfg.SvcCommand = expandValue(cfg.SvcCommand, svcVars)
-		}
-		log.Printf("service.command: %s", cfg.SvcCommand)
-
-		// 7b. vsc_language — lang→langpack JSON map (e.g. {"zh-cn":"zh-hans"}).
-		//     NOT expanded via expandValue: the {…} JSON braces would be
-		//     mistaken for {VAR} placeholders and destroyed.
-		if raw := ini.get("service.vsc_language"); raw != "" {
-			var m map[string]string
-			if err := json.Unmarshal([]byte(raw), &m); err != nil {
-				log.Printf("WARNING: invalid vsc_language JSON: %v", err)
-			} else {
-				cfg.VscLanguage = m
-			}
-		}
-		cfg.VscAgentsCmd = expandValue(svcStr(ini, "vsc_agents_cmd", ""), svcVars)
-		// vsc_agent_cmds — named command presets (JSON map). Values carry
-		// {SVC_HOME}/{SVC_BIN_HOME} placeholders, so expand FIRST (the JSON
-		// keys like "vscode" are not valid identifiers and pass through
-		// verbatim), then unmarshal.
-		if raw := ini.get("service.vsc_agent_cmds"); raw != "" {
-			var m map[string]string
-			if err := json.Unmarshal([]byte(expandValue(raw, svcVars)), &m); err != nil {
-				log.Printf("WARNING: invalid vsc_agent_cmds JSON: %v", err)
-			} else {
-				cfg.VscAgentCmds = m
-			}
-		}
-		cfg.VscAgentsDir = expandValue(svcStr(ini, "vsc_agents_dir", ""), svcVars)
-		cfg.VscAgentArgs = expandValue(svcStr(ini, "vsc_agent_args", ""), svcVars)
-		cfg.VscOpenURL = expandValue(svcStr(ini, "vsc_open_url", ""), svcVars)
-
-		// 7c. [actions] — named one-shot commands (name → command). Loaded
-		//     generically: kvs has no idea what any action does, it just runs
-		//     the command. Placed after bin_home so {SVC_BIN_HOME} expands.
-		cfg.Actions = make(map[string]string)
-		for _, kv := range ini.hasPrefix("actions.") {
-			name := strings.TrimPrefix(kv[0], "actions.")
-			cfg.Actions[name] = strings.TrimSpace(expandValue(kv[1], svcVars))
-		}
+	// --- Top-level home / port with reverse env assignment -----------------
+	// home = {KVS_HOME:-/app/.kvs}: when KVS_HOME is unset the resolved value
+	// is written back so service defaults (KVS_HOME/<name>) and later
+	// expansions see it. Same for KVS_PORT.
+	cfg.Home = expandValue(strProp(ini, "home", ""))
+	if cfg.Home == "" {
+		cfg.Home = "/app/.kvs"
+	}
+	if os.Getenv("KVS_HOME") == "" {
+		os.Setenv("KVS_HOME", cfg.Home)
+		log.Printf("KVS_HOME not set, assigned to %s", cfg.Home)
 	} else {
-		log.Printf("[service] disable, pass service config.")
+		cfg.Home = os.Getenv("KVS_HOME")
+	}
+	cfg.Port = expandValue(strProp(ini, "port", "8080"))
+	if os.Getenv("KVS_PORT") == "" && cfg.Port != "" {
+		os.Setenv("KVS_PORT", cfg.Port)
 	}
 
-	// 8. Expand [proxies] and [headers] now that all SVC_* vars are set.
-	for i, kv := range proxyEntries {
-		proxyEntries[i][1] = expandValue(kv[1], svcVars)
+	// --- Named service sections (raw) --------------------------------------
+	sections := map[string]*ServiceConfig{}
+	serviceOrder := make([]string, 0, 4)
+	for _, kv := range ini.serviceSections() {
+		sc := &ServiceConfig{Name: kv[0]}
+		for _, e := range ini.secKeys[kv[1]] {
+			sc.setRaw(e[0], e[1])
+		}
+		sections[sc.Name] = sc
+		serviceOrder = append(serviceOrder, sc.Name)
 	}
+
+	// --- Referenced services: svc://<name> targets of the selected table ---
+	// A [service.<name>] section is only parsed when the selected table
+	// references it via svc://<name>; every other section stays dormant (no
+	// env reverse-assignment, no version fetch). Referenced sections must be
+	// resolved BEFORE the proxy values are expanded, because routes reference
+	// the reverse-assigned KVS_SVC_<NAME>_* vars.
+	var svcRefs []string
+	seenRef := map[string]bool{}
+	for _, e := range proxyEntries {
+		target := strings.TrimSpace(e[1])
+		target = strings.TrimLeft(target, "-+")
+		if name, ok := strings.CutPrefix(target, "svc://"); ok {
+			if name = strings.TrimSpace(name); name != "" && !seenRef[name] {
+				seenRef[name] = true
+				svcRefs = append(svcRefs, name)
+			}
+		}
+	}
+	for _, name := range svcRefs {
+		if _, ok := sections[name]; !ok {
+			log.Fatalf("config error: route references svc://%s but no [service.%s] section exists", name, name)
+		}
+		cfg.Services[name] = sections[name]
+	}
+	if len(svcRefs) > 0 {
+		log.Printf("services in use: %v (available: %v, default: %q)", svcRefs, serviceOrder, svcRefs[0])
+	}
+	for _, name := range svcRefs {
+		cfg.resolveService(cfg.Services[name])
+	}
+
+	// --- cache_dir / cache_sed / proxy_path (top-level keys) ---------------
+	cfg.CacheDir = expandValue(strProp(ini, "cache_dir", ""))
+	cfg.CacheSed = expandValue(strProp(ini, "cache_sed", ""))
+	cfg.ProxyPath = expandValue(strProp(ini, "proxy_path", ""))
+
+	// --- Expand [headers] and proxy routes (after all KVS_SVC_* vars) ----
 	headerEntries := ini.hasPrefix("headers.")
 	for i, kv := range headerEntries {
-		headerEntries[i][1] = expandValue(kv[1], svcVars)
+		headerEntries[i][1] = expandValue(kv[1])
 	}
 
-	// Build []proxyEntry from the expanded proxies.* pairs.
+	// Expand the selected route table's targets now that every service env
+	// var (KVS_SVC_<NAME>_*) is reverse-assigned.
+	for i, kv := range proxyEntries {
+		proxyEntries[i][1] = expandValue(kv[1])
+	}
+
+	// Build []proxyEntry from the expanded pairs.
 	cfg.Proxies = parseBackends(proxyEntries)
 	if len(cfg.Proxies) == 0 {
 		log.Fatal("config error: [proxies] parsed to zero backends")
@@ -868,26 +1012,25 @@ func LoadInitConfig() Config {
 	}
 
 	// Top-level fields (always resolved, even in -n mode).
-	cfg.Port = expandValue(strProp(ini, "port", "7080"), svcVars)
-	cfg.CookieTknName = expandValue(strProp(ini, "cookie_token_key", strProp(ini, "cookie", "kvs")), svcVars)
-	cfg.QueryTokenKey = expandValue(strProp(ini, "query_token_key", ""), svcVars)
-	cfg.LoginAuthz = parseBool(expandValue(strProp(ini, "login_authz", ""), svcVars), false)
-	cfg.LoginToken = expandValue(strProp(ini, "login_token", ""), svcVars)
-	cfg.LoginTimeout = parseTimeout(expandValue(strProp(ini, "login_timeout", "0"), svcVars))
-	cfg.TokenTimeout = parseTimeout(expandValue(strProp(ini, "token_timeout", "300"), svcVars))
-	cfg.UseSSL = parseBool(expandValue(strProp(ini, "use_ssl", ""), svcVars), false)
+	cfg.CookieTknName = expandValue(strProp(ini, "cookie_token_key", "kvs"))
+	cfg.QueryTokenKey = expandValue(strProp(ini, "query_token_key", ""))
+	cfg.LoginAuthz = parseBool(expandValue(strProp(ini, "login_authz", "")), false)
+	cfg.LoginToken = expandValue(strProp(ini, "login_token", ""))
+	cfg.LoginTimeout = parseTimeout(expandValue(strProp(ini, "login_timeout", "0")))
+	cfg.TokenTimeout = parseTimeout(expandValue(strProp(ini, "token_timeout", "300")))
+	cfg.UseSSL = parseBool(expandValue(strProp(ini, "use_ssl", "")), false)
 	// 反向代理调优（默认值见 pkg/transport.go / pkg/wsproxy.go）
-	cfg.ProxyIdleConnsPerHost = parseIntDefault(expandValue(strProp(ini, "proxy_idle_conns_per_host", ""), svcVars), 0)
-	cfg.ProxyMaxIdleConns = parseIntDefault(expandValue(strProp(ini, "proxy_max_idle_conns", ""), svcVars), 0)
-	cfg.ProxyDisableCompression = parseBool(expandValue(strProp(ini, "proxy_disable_compression", ""), svcVars), true)
-	cfg.ProxyFlushInterval = parseIntDefault(expandValue(strProp(ini, "proxy_flush_interval", ""), svcVars), 100)
-	cfg.WSProxy = expandValue(strProp(ini, "ws_proxy", ""), svcVars)
-	cfg.WSIdleTimeout = parseIntDefault(expandValue(strProp(ini, "ws_idle_timeout", ""), svcVars), 0)
-	cfg.ReadTimeout = parseIntDefault(expandValue(strProp(ini, "read_timeout", ""), svcVars), 60)
+	cfg.ProxyIdleConnsPerHost = parseIntDefault(expandValue(strProp(ini, "proxy_idle_conns_per_host", "")), 0)
+	cfg.ProxyMaxIdleConns = parseIntDefault(expandValue(strProp(ini, "proxy_max_idle_conns", "")), 0)
+	cfg.ProxyDisableCompression = parseBool(expandValue(strProp(ini, "proxy_disable_compression", "")), true)
+	cfg.ProxyFlushInterval = parseIntDefault(expandValue(strProp(ini, "proxy_flush_interval", "")), 100)
+	cfg.WSProxy = expandValue(strProp(ini, "ws_proxy", ""))
+	cfg.WSIdleTimeout = parseIntDefault(expandValue(strProp(ini, "ws_idle_timeout", "")), 0)
+	cfg.ReadTimeout = parseIntDefault(expandValue(strProp(ini, "read_timeout", "")), 60)
 	// path_public — |-separated list of paths reachable without auth
 	// (e.g. /api/v1/public|/remote/v4). Non-empty entries are kept as-is;
 	// prefix matching is applied by the auth middleware.
-	if raw := expandValue(strProp(ini, "path_public", ""), svcVars); raw != "" {
+	if raw := expandValue(strProp(ini, "path_public", "")); raw != "" {
 		for _, p := range strings.Split(raw, "|") {
 			if p = strings.TrimSpace(p); p != "" {
 				cfg.PathPublic = append(cfg.PathPublic, p)
@@ -896,4 +1039,246 @@ func LoadInitConfig() Config {
 	}
 
 	return cfg
+}
+
+// setRaw stores a raw section value on the service (lower-cased key, as the
+// ini parser folds keys).
+func (sc *ServiceConfig) setRaw(key, value string) {
+	switch strings.ToLower(key) {
+	case "address":
+		sc.Address = value
+	case "healthz":
+		sc.Healthz = value
+	case "home":
+		sc.Home = value
+	case "version":
+		sc.Version = value
+	case "version_base_url":
+		sc.VersionBaseURL = value
+	case "version_latest_url":
+		sc.VersionLatestURL = value
+	case "version_hash_url":
+		sc.VersionHashURL = value
+	case "download":
+		sc.Download = value
+	case "download_info":
+		sc.DownloadInfo = value
+	case "download_field_url":
+		sc.DownloadFieldURL = value
+	case "download_proxy":
+		sc.DownloadProxy = value
+	case "bin_home":
+		sc.BinHome = value
+	case "once_shell":
+		sc.OnceShell = value
+	case "init_shell":
+		sc.InitShell = value
+	case "stop_shell":
+		sc.StopShell = value
+	case "command":
+		sc.Command = value
+	case "vsc_agents_cmd":
+		sc.VscAgentsCmd = value
+	case "vsc_agent_cmds":
+		sc.VscAgentCmdsRaw = value
+	case "vsc_agents_dir":
+		sc.VscAgentsDir = value
+	case "vsc_agent_args":
+		sc.VscAgentArgs = value
+	case "vsc_language":
+		sc.VscLanguageRaw = value
+	case "vsc_open_url":
+		sc.VscOpenURL = value
+	case "actions":
+		sc.ActionsRaw = value
+	case "envs_default":
+		sc.EnvsDefaultRaw = value
+	}
+}
+
+// resolveService expands one named service section in dependency order and
+// reverse-assigns the KVS_SVC_<NAME>_* environment variables so later values
+// (healthz, bin_home, command, proxy routes) can reference them:
+//
+//	KVS_SVC_<N>_HOME      env or {KVS_HOME}/<name>
+//	KVS_SVC_<N>_ADDR      resolved address (also _HOST/_PORT or _SOCK)
+//	KVS_SVC_<N>_VERSION   resolved version (from override/config/latest_url)
+//	KVS_SVC_<N>_VERHASH   resolved version hash (defaults to version)
+//	KVS_SVC_<N>_BIN_HOME  resolved bin_home
+func (c *Config) resolveService(sc *ServiceConfig) {
+	name := envSuffix(sc.Name)
+	envKey := func(suffix string) string { return "KVS_SVC_" + name + "_" + suffix }
+	logIf := func(format string, args ...any) {
+		log.Printf("[service "+sc.Name+"] "+format, args...)
+	}
+
+	// 1. home → KVS_SVC_<N>_HOME (default {KVS_HOME}/<name>), resolved value
+	//    written back for later placeholders.
+	sc.Home = expandValue(sc.Home)
+	if sc.Home == "" {
+		sc.Home = filepath.Join(c.Home, sc.Name)
+		logIf("home not set, defaulting to %s", sc.Home)
+	}
+	os.Setenv(envKey("HOME"), sc.Home)
+
+	// 2. address → reverse-assign ADDR + HOST/PORT (http) or SOCK (unix).
+	sc.Address = expandValue(sc.Address)
+	if sc.Address == "" {
+		sc.Address = os.Getenv(envKey("ADDR"))
+	}
+	if sc.Address != "" {
+		os.Setenv(envKey("ADDR"), sc.Address)
+		if u, err := url.Parse(sc.Address); err == nil {
+			switch u.Scheme {
+			case "http", "https":
+				if h := u.Hostname(); h != "" {
+					os.Setenv(envKey("HOST"), h)
+				}
+				if p := u.Port(); p != "" {
+					os.Setenv(envKey("PORT"), p)
+				}
+			case "unix":
+				// url.Parse eats the first path segment as a host
+				// ("unix://../../x" → host "..", path "/../x"), breaking
+				// relative socket paths — cut the scheme manually, the same
+				// way the backend and probe paths do.
+				if _, sock, ok := strings.Cut(sc.Address, "://"); ok && sock != "" {
+					os.Setenv(envKey("SOCK"), sock)
+				}
+			}
+		}
+		logIf("address: %s", sc.Address)
+	}
+
+	// 3. healthz — liveness probe; falls back to the address (connectivity).
+	sc.Healthz = expandValue(sc.Healthz)
+	if sc.Healthz == "" {
+		sc.Healthz = sc.Address
+	}
+
+	// 4. version chain → resolve → reverse-assign VERSION/VERHASH.
+	sc.Version = expandValue(sc.Version)
+	sc.VersionBaseURL = expandValue(sc.VersionBaseURL)
+	os.Setenv(envKey("DOWNLOAD_BASE"), sc.VersionBaseURL)
+	sc.VersionLatestURL = expandValue(sc.VersionLatestURL)
+	// The VERSION token is substituted by resolveVersion, not here — keep the
+	// {VERSION} brace form intact for it.
+	sc.VersionHashURL = expandValue(sc.VersionHashURL, "VERSION")
+
+	sc.Download = expandValue(sc.Download)
+	if sc.Download != "" || sc.VersionLatestURL != "" {
+		version, vh, err := resolveVersion(sc.Name, sc.Version, sc.VersionLatestURL, sc.VersionHashURL)
+		if err != nil {
+			sc.InitError = fmt.Sprintf("resolve version %v", err)
+			log.Printf("WARNING: [service %s] %s", sc.Name, sc.InitError)
+		} else {
+			sc.Version, sc.VersionHash = version, vh
+		}
+	}
+	if sc.VersionHash == "" {
+		sc.VersionHash = sc.Version
+	}
+	os.Setenv(envKey("VERSION"), sc.Version)
+	os.Setenv(envKey("VERHASH"), sc.VersionHash)
+
+	// Substitute the bare VERSION/VERHASH tokens in the download URL. VERHASH
+	// goes first — its name contains VERSION as a substring. This covers
+	// .../commit:VERHASH/... and .../api/versions/VERSION/... style URLs.
+	sc.Download = strings.ReplaceAll(sc.Download, "VERHASH", sc.VersionHash)
+	sc.Download = strings.ReplaceAll(sc.Download, "VERSION", sc.Version)
+	if sc.Download != "" {
+		logIf("download: %s", sc.Download)
+	} else {
+		logIf("download url: empty")
+	}
+
+	// 5. download_info / download_field_url / download_proxy.
+	sc.DownloadInfo = expandValue(sc.DownloadInfo)
+	sc.DownloadFieldURL = expandValue(sc.DownloadFieldURL)
+	if sc.DownloadFieldURL == "" {
+		sc.DownloadFieldURL = "url"
+	}
+	sc.DownloadProxy = expandValue(sc.DownloadProxy)
+
+	// 6. bin_home → KVS_SVC_<N>_BIN_HOME (default: service home), so later
+	//    values (command, scripts, routes) can reference it.
+	sc.BinHome = expandValue(sc.BinHome)
+	if strings.ContainsRune(sc.BinHome, '{') {
+		sc.BinHome = expandValue(sc.BinHome)
+	}
+	if sc.BinHome == "" {
+		sc.BinHome = sc.Home
+	}
+	os.Setenv(envKey("BIN_HOME"), sc.BinHome)
+
+	// 7. scripts and command (double brace pass for nested placeholders).
+	sc.OnceShell = expandValue(sc.OnceShell)
+	sc.InitShell = expandValue(sc.InitShell)
+	sc.StopShell = expandValue(sc.StopShell)
+	sc.Command = expandValue(sc.Command)
+	if strings.ContainsRune(sc.Command, '{') {
+		sc.Command = expandValue(sc.Command)
+	}
+	if sc.Command != "" {
+		logIf("command: %s", sc.Command)
+	}
+
+	// 8. vscode-specific options and the actions table.
+	if raw := sc.VscLanguageRaw; raw != "" {
+		// NOT expanded via expandValue: the {…} JSON braces would be
+		// mistaken for {VAR} placeholders and destroyed.
+		var m map[string]string
+		if err := json.Unmarshal([]byte(raw), &m); err != nil {
+			log.Printf("WARNING: [service %s] invalid vsc_language JSON: %v", sc.Name, err)
+		} else {
+			sc.VscLanguage = m
+		}
+	}
+	sc.VscAgentsCmd = expandValue(sc.VscAgentsCmd)
+	if raw := sc.VscAgentCmdsRaw; raw != "" {
+		// Values carry {KVS_SVC_*_HOME}/{KVS_SVC_*_BIN_HOME} placeholders, so
+		// expand FIRST (JSON keys are not valid identifiers and pass through
+		// verbatim), then unmarshal.
+		var m map[string]string
+		if err := json.Unmarshal([]byte(expandValue(raw)), &m); err != nil {
+			log.Printf("WARNING: [service %s] invalid vsc_agent_cmds JSON: %v", sc.Name, err)
+		} else {
+			sc.VscAgentCmds = m
+		}
+	}
+	sc.VscAgentsDir = expandValue(sc.VscAgentsDir)
+	sc.VscAgentArgs = expandValue(sc.VscAgentArgs)
+	sc.VscOpenURL = expandValue(sc.VscOpenURL)
+	if raw := sc.ActionsRaw; raw != "" {
+		m := map[string]string{}
+		if err := json.Unmarshal([]byte(expandValue(raw)), &m); err != nil {
+			log.Printf("WARNING: [service %s] invalid actions JSON: %v", sc.Name, err)
+		} else {
+			sc.Actions = m
+		}
+	}
+
+	// 9. envs_default — fill UNSET/empty system env vars with defaults. Runs
+	// LAST so the defaults can reference every reverse-assigned service
+	// variable ({KVS_SVC_<NAME>_*}); already-set values are never overridden.
+	// The values land in the process environment, so the backend subprocess
+	// and the once/init/stop scripts inherit them.
+	if raw := sc.EnvsDefaultRaw; raw != "" {
+		// Expand FIRST (JSON keys pass through verbatim), then apply — same
+		// pattern as vsc_agent_cmds/actions above.
+		var m map[string]string
+		if err := json.Unmarshal([]byte(expandValue(raw)), &m); err != nil {
+			log.Printf("WARNING: [service %s] invalid envs_default JSON: %v", sc.Name, err)
+		} else {
+			for name, def := range m {
+				if def == "" {
+					continue
+				}
+				if os.Getenv(name) == "" {
+					os.Setenv(name, def)
+					logIf("env default: %s=%s", name, def)
+				}
+			}
+		}
+	}
 }

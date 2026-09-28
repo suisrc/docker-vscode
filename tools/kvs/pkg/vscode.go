@@ -94,7 +94,7 @@ func VscodeNlsHandle(w http.ResponseWriter, r *http.Request, prePath, svcHome, b
 	cacheOnce.Do(initCache)
 
 	// 1. Parse URL: {prePath}{commit}/{version}/{lang}/nls-messages.js
-	//    prePath is SVC_VSCODE_NLS_URL, e.g. "/__cache/vscode/nls/"
+	//    prePath is KVS_SVC_VSCODE_NLS_URL, e.g. "/__cache/vscode/nls/"
 	//    After stripping prePath: "{commit}/{version}/{lang}/nls-messages.js"
 	parts := strings.Split(strings.TrimPrefix(r.URL.Path, prePath), "/")
 	if len(parts) < 4 || (parts[3] != "nls-messages.js" && parts[3] != "nls.messages.js") {
@@ -365,115 +365,88 @@ func vscodeNlsFetchBytes(urlStr string) ([]byte, error) {
 // Custom VSCode feature
 // sync application image mirror to custom s3 server
 
-// mirrorConfig holds the [mirror] section settings.
+// mirrorConfig holds the mirror command settings. The [mirror] config
+// section no longer exists: everything comes from the command line and the
+// KVS_MIRROR_S3_* environment variables.
 type mirrorConfig struct {
-	S3Prefix    string // s3_prefix — e.g. https://oss.example.com/vsc
-	S3Access    string // s3_access — access key ID
-	S3Secret    string // s3_secret — secret access key
-	S3Region    string // s3_region — region (default empty)
-	VSCPlatform string // vsc_platform — e.g. server-linux-x64-web (default: server-linux-x64-web)
-	VSCBaseURL  string // vsc_base_url — API base URL (default: https://update.code.visualstudio.com)
-	VSCDownload string // vsc_download — download URL template, supports {name} and {hash}; empty=use API returned url
-	CacheDir    string // cache_dir — from [service] section, for caching tarballs
+	S3Prefix string // KVS_MIRROR_S3_PREFIX — e.g. https://oss.example.com/vsc
+	S3Access string // KVS_MIRROR_S3_ACCESS — access key ID
+	S3Secret string // KVS_MIRROR_S3_SECRET — secret access key
+	S3Region string // KVS_MIRROR_S3_REGION — region (default empty)
+	Platform string // -platform, e.g. server-linux-x64-web (default)
+	BaseURL  string // vscode update API base (default: https://update.code.visualstudio.com)
 }
 
-// loadMirrorConfig reads the [mirror] section from the config file
-// specified by -c. Values are expanded via expandValue (supports {VAR} and
-// {VAR:-default} syntax), requiring SVC_HOME to be resolved first from
-// [service].home so that cache_dir = {SVC_HOME}/cache expands correctly.
+// loadMirrorConfig reads the mirror settings from the environment
+// (KVS_MIRROR_S3_PREFIX/_ACCESS/_SECRET/_REGION).
 func loadMirrorConfig() mirrorConfig {
-	cfgPath := ""
-	for i, arg := range os.Args[1:] {
-		if arg == "-c" && i+1 < len(os.Args)-1 {
-			cfgPath = os.Args[i+2]
-			break
-		}
-		if val, ok := strings.CutPrefix(arg, "-c="); ok {
-			cfgPath = val
-			break
-		}
+	return mirrorConfig{
+		S3Prefix: os.Getenv("KVS_MIRROR_S3_PREFIX"),
+		S3Access: os.Getenv("KVS_MIRROR_S3_ACCESS"),
+		S3Secret: os.Getenv("KVS_MIRROR_S3_SECRET"),
+		S3Region: os.Getenv("KVS_MIRROR_S3_REGION"),
+		Platform: "server-linux-x64-web",
+		BaseURL:  "https://update.code.visualstudio.com",
 	}
-	if cfgPath == "" {
-		log.Fatal("mirror: config file required: use -c <path> or -c vscode")
-	}
-
-	var ini *iniFile
-	if cfgPath == "vscode" {
-		log.Printf("mirror: loading config: vscode (embedded kvs.vscode.ini)")
-		var err error
-		ini, err = parseIniData(MustAsset("kvs.vscode.ini"), "kvs.vscode.ini")
-		if err != nil {
-			log.Fatalf("mirror: parse embedded config: %v", err)
-		}
-	} else {
-		var err error
-		ini, err = parseIni(cfgPath)
-		if err != nil {
-			log.Fatalf("mirror: parse config: %v", err)
-		}
-	}
-	// Build svcVars: resolve SVC_HOME first so {SVC_HOME} can be expanded
-	// in cache_dir and other [service] fields.
-	svcVars := map[string]string{}
-	svcHome := expandValue(ini.get("service.home"), svcVars)
-	svcVars["SVC_HOME"] = svcHome
-	_ = os.Setenv("SVC_HOME", svcHome)
-
-	mc := mirrorConfig{
-		S3Prefix:    expandValue(ini.get("mirror.s3_prefix"), svcVars),
-		S3Access:    expandValue(ini.get("mirror.s3_access"), svcVars),
-		S3Secret:    expandValue(ini.get("mirror.s3_secret"), svcVars),
-		S3Region:    expandValue(ini.get("mirror.s3_region"), svcVars),
-		VSCPlatform: expandValue(ini.get("mirror.vsc_platform"), svcVars),
-		VSCBaseURL:  expandValue(ini.get("mirror.vsc_base_url"), svcVars),
-		VSCDownload: expandValue(ini.get("mirror.vsc_download"), svcVars),
-		CacheDir:    expandValue(ini.get("service.cache_dir"), svcVars),
-	}
-	if mc.VSCPlatform == "" {
-		mc.VSCPlatform = "server-linux-x64-web"
-	}
-	if mc.VSCBaseURL == "" {
-		mc.VSCBaseURL = "https://update.code.visualstudio.com"
-	}
-	return mc
 }
 
-// mirrorCommand implements `kvs mirror -c <config> [version]`.
+// MirrorCommand syncs vscode versions to S3-compatible storage.
 //
-//   - `kvs mirror -c kvs.ini`          → sync the latest version
-//   - `kvs mirror -c kvs.ini 1.132.1`  → sync a specific version
+//	kvs mirror [vscode] [-version <v|latest>] [-platform <p>]
 //
-// latest mode: first fetch /api/latest/ to get the version name, then
-// fetch /api/versions/{name}/ to get the full metadata (url, hash, etc.)
+// The optional positional argument names the app to sync (only "vscode" is
+// supported); -version selects the version ("latest", the default, first
+// fetches /api/latest/ for the version name); -platform overrides the default
+// server-linux-x64-web. Both flags accept "-x value" and "-x=value". Storage
+// settings come from the KVS_MIRROR_S3_* environment variables; the metadata
+// (url, hash, …) always comes from /api/versions/{name}/.
 //
 // S3 layout:
 //   - {s3_prefix}/stable/{hash}/vscode-server-linux-x64-web.tar.gz   → tarball
 //   - {s3_prefix}/api/latest/server-linux-x64-web/stable            → latest JSON (latest only)
 //   - {s3_prefix}/api/versions/{name}/server-linux-x64-web/stable   → version JSON
-//
-// MirrorCommand syncs vscode versions to S3-compatible storage.
 func MirrorCommand(args []string) {
-	if len(args) == 0 {
-		fmt.Fprintf(os.Stderr, "usage: kvs mirror -c <config> [version]\n")
+	// Parse arguments: one optional positional app name + flags.
+	app, version, platform := "vscode", "latest", ""
+	for i := 0; i < len(args); i++ {
+		a := args[i]
+		switch {
+		case a == "-version" || a == "-platform":
+			if i+1 >= len(args) {
+				fmt.Fprintf(os.Stderr, "mirror: %s requires a value\nusage: kvs mirror [vscode] [-version <v|latest>] [-platform <p>]\n", a)
+				os.Exit(1)
+			}
+			i++
+			if a == "-version" {
+				version = args[i]
+			} else {
+				platform = args[i]
+			}
+		case strings.HasPrefix(a, "-version="):
+			version = strings.TrimPrefix(a, "-version=")
+		case strings.HasPrefix(a, "-platform="):
+			platform = strings.TrimPrefix(a, "-platform=")
+		case strings.HasPrefix(a, "-"):
+			fmt.Fprintf(os.Stderr, "mirror: unknown flag %q\nusage: kvs mirror [vscode] [-version <v|latest>] [-platform <p>]\n", a)
+			os.Exit(1)
+		default:
+			app = a
+		}
+	}
+	if app != "vscode" {
+		fmt.Fprintf(os.Stderr, "mirror: unknown app %q (only vscode)\n", app)
 		os.Exit(1)
 	}
-	// Extract version from args, skipping -c <config> / -c=<config>.
-	version := "latest"
-	for i := 0; i < len(args); i++ {
-		if args[i] == "-c" {
-			i++ // skip config path
-			continue
-		}
-		if strings.HasPrefix(args[i], "-c=") {
-			continue
-		}
-		version = args[i]
-		break
+	if version == "" {
+		log.Fatalf("[mirror] -version requires a value (e.g. -version 1.139.1 or -version latest)")
 	}
 
 	mc := loadMirrorConfig()
+	if platform != "" {
+		mc.Platform = platform
+	}
 	if mc.S3Prefix == "" {
-		fmt.Fprintf(os.Stderr, "mirror: s3_prefix is not configured, mirror disabled\n")
+		fmt.Fprintf(os.Stderr, "mirror: KVS_MIRROR_S3_PREFIX is not set, mirror disabled\n")
 		os.Exit(1)
 	}
 	log.Printf("[mirror] s3_prefix=%s", mc.S3Prefix)
@@ -486,7 +459,7 @@ func MirrorCommand(args []string) {
 	// specified version: directly fetch /api/versions/{version}/
 	var apiURL string
 	if version == "latest" {
-		latestAPI := mc.VSCBaseURL + "/api/latest/" + mc.VSCPlatform + "/stable"
+		latestAPI := mc.BaseURL + "/api/latest/" + mc.Platform + "/stable"
 		log.Printf("[mirror] fetching latest: %s", latestAPI)
 		resp, err := client.Get(latestAPI)
 		if err != nil {
@@ -511,9 +484,9 @@ func MirrorCommand(args []string) {
 			log.Fatalf("[mirror] missing name in latest response")
 		}
 		log.Printf("[mirror] latest version name: %s", latestName)
-		apiURL = mc.VSCBaseURL + "/api/versions/" + latestName + "/" + mc.VSCPlatform + "/stable"
+		apiURL = mc.BaseURL + "/api/versions/" + latestName + "/" + mc.Platform + "/stable"
 	} else {
-		apiURL = mc.VSCBaseURL + "/api/versions/" + version + "/" + mc.VSCPlatform + "/stable"
+		apiURL = mc.BaseURL + "/api/versions/" + version + "/" + mc.Platform + "/stable"
 	}
 	log.Printf("[mirror] fetching %s", apiURL)
 	resp, err := client.Get(apiURL)
@@ -544,66 +517,32 @@ func MirrorCommand(args []string) {
 	}
 	log.Printf("[mirror] version=%s hash=%s url=%s", metaName, metaVersion, downloadURL)
 
-	// If vsc_download is configured, use it to build the download URL.
-	if mc.VSCDownload != "" {
-		url := mc.VSCDownload
-		url = strings.ReplaceAll(url, "{name}", metaName)
-		url = strings.ReplaceAll(url, "{hash}", metaVersion)
-		downloadURL = url
-		log.Printf("[mirror] using vsc_download: %s", downloadURL)
+	// Step 2: Download the tarball to a temp file.
+	tmpFile, err := os.CreateTemp("", "vscode-mirror-*.tar.gz")
+	if err != nil {
+		log.Fatalf("[mirror] create temp file: %v", err)
 	}
-
-	// Step 2: Download the tarball (use cache_dir if configured).
-	var tarballPath string
-	if mc.CacheDir != "" {
-		tarballPath = filepath.Join(mc.CacheDir, "version", metaName+"_"+metaVersion+".tar.gz")
-		if _, err := os.Stat(tarballPath); err == nil {
-			log.Printf("[mirror] tarball cached: %s", tarballPath)
-		} else {
-			log.Printf("[mirror] downloading tarball: %s", downloadURL)
-			var lastDlPct int64 = -1
-			if err := downloadFile(client, downloadURL, tarballPath, func(written, total int64) {
-				if total > 0 {
-					pct := written * 100 / total
-					if pct != lastDlPct {
-						lastDlPct = pct
-						fmt.Fprintf(os.Stderr, "\r[mirror] download progress: %d%%", pct)
-					}
-				}
-			}); err != nil {
-				fmt.Fprintln(os.Stderr)
-				log.Fatalf("[mirror] download tarball: %v", err)
+	tarballPath := tmpFile.Name()
+	defer os.Remove(tarballPath)
+	log.Printf("[mirror] downloading tarball: %s", downloadURL)
+	var lastDlPct int64 = -1
+	if err := downloadFile(client, downloadURL, tarballPath, func(written, total int64) {
+		if total > 0 {
+			pct := written * 100 / total
+			if pct != lastDlPct {
+				lastDlPct = pct
+				fmt.Fprintf(os.Stderr, "\r[mirror] download progress: %d%%", pct)
 			}
-			fmt.Fprintln(os.Stderr)
-			log.Printf("[mirror] download complete: %s", tarballPath)
 		}
-	} else {
-		tmpFile, err := os.CreateTemp("", "vscode-mirror-*.tar.gz")
-		if err != nil {
-			log.Fatalf("[mirror] create temp file: %v", err)
-		}
-		tarballPath = tmpFile.Name()
-		defer os.Remove(tarballPath)
-		log.Printf("[mirror] downloading tarball: %s", downloadURL)
-		var lastDlPct2 int64 = -1
-		if err := downloadFile(client, downloadURL, tarballPath, func(written, total int64) {
-			if total > 0 {
-				pct := written * 100 / total
-				if pct != lastDlPct2 {
-					lastDlPct2 = pct
-					fmt.Fprintf(os.Stderr, "\r[mirror] download progress: %d%%", pct)
-				}
-			}
-		}); err != nil {
-			fmt.Fprintln(os.Stderr)
-			log.Fatalf("[mirror] download tarball: %v", err)
-		}
+	}); err != nil {
 		fmt.Fprintln(os.Stderr)
-		log.Printf("[mirror] download complete")
+		log.Fatalf("[mirror] download tarball: %v", err)
 	}
+	fmt.Fprintln(os.Stderr)
+	log.Printf("[mirror] download complete")
 
-	// Step 3: Upload tarball to {s3_prefix}/stable/{hash}/{vsc_platform}.tar.gz
-	tarballURL := mc.S3Prefix + "/stable/" + metaVersion + "/vscode-" + mc.VSCPlatform + ".tar.gz"
+	// Step 3: Upload tarball to {s3_prefix}/stable/{hash}/{platform}.tar.gz
+	tarballURL := mc.S3Prefix + "/stable/" + metaVersion + "/vscode-" + mc.Platform + ".tar.gz"
 	log.Printf("[mirror] uploading tarball to %s", tarballURL)
 	var lastUpPct int64 = -1
 	if err := s3UploadFile(mc, tarballURL, tarballPath, "application/gzip", func(written, total int64) {
@@ -643,7 +582,7 @@ func MirrorCommand(args []string) {
 
 	// Step 4: Upload latest JSON (latest mode only).
 	if version == "latest" {
-		latestURL := mc.S3Prefix + "/api/latest/" + mc.VSCPlatform + "/stable"
+		latestURL := mc.S3Prefix + "/api/latest/" + mc.Platform + "/stable"
 		log.Printf("[mirror] uploading latest JSON to %s", latestURL)
 		if err := s3UploadBytes(mc, latestURL, cachedJSON, "application/json", nil); err != nil {
 			log.Fatalf("[mirror] upload latest JSON: %v", err)
@@ -652,7 +591,7 @@ func MirrorCommand(args []string) {
 	}
 
 	// Step 5: Upload version JSON.
-	versionURL := mc.S3Prefix + "/api/versions/" + metaName + "/" + mc.VSCPlatform + "/stable"
+	versionURL := mc.S3Prefix + "/api/versions/" + metaName + "/" + mc.Platform + "/stable"
 	log.Printf("[mirror] uploading version JSON to %s", versionURL)
 	if err := s3UploadBytes(mc, versionURL, cachedJSON, "application/json", nil); err != nil {
 		log.Fatalf("[mirror] upload version JSON: %v", err)
