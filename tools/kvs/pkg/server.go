@@ -199,11 +199,23 @@ func AuthMiddleware(next http.Handler, cfg Config, setCookie func(http.ResponseW
 				return
 			}
 		}
+		// Header-based auth (x-request-<cookieName>): replaces the old query
+		// param approach, which leaked into logs/history/Referer.
+		if cfg.LoginTimeout == 0 && cfg.LoginToken != "" {
+			if tkn := r.Header.Get("x-request-" + cfg.CookieTknName); tkn != "" {
+				if subtle.ConstantTimeCompare([]byte(tkn), []byte(cfg.LoginToken)) == 1 {
+					next.ServeHTTP(w, r)
+					return
+				}
+				http.Error(w, "401 Unauthorized", http.StatusUnauthorized)
+				return
+			}
+		}
 		// Query-param auth (?<query_token_key>=<token>): grants access when the
 		// value matches loginToken. Only enabled when query_token_key is set.
 		if cfg.QueryTokenKey != "" && cfg.LoginToken != "" {
-			// if tkn := GetReqestParam(r, cfg.QueryTokenKey, ""); tkn != "" {
 			tkn := ""
+			// if tkn = GetReqestParam(r, cfg.QueryTokenKey, ""); tkn != "" {
 			if tkn = r.URL.Query().Get(cfg.QueryTokenKey); tkn == "" {
 				// try from by header
 				tkn = r.Header.Get("x-request-" + cfg.QueryTokenKey)
@@ -213,18 +225,6 @@ func AuthMiddleware(next http.Handler, cfg Config, setCookie func(http.ResponseW
 					next.ServeHTTP(w, r)
 					return
 				} else if rok, _ := validateHashedToken(tkn, cfg.LoginToken, cfg.TokenTimeout); rok {
-					next.ServeHTTP(w, r)
-					return
-				}
-				http.Error(w, "401 Unauthorized", http.StatusUnauthorized)
-				return
-			}
-		}
-		// Header-based auth (x-request-<cookieName>): replaces the old query
-		// param approach, which leaked into logs/history/Referer.
-		if cfg.LoginTimeout == 0 && cfg.LoginToken != "" {
-			if tkn := r.Header.Get("x-request-" + cfg.CookieTknName); tkn != "" {
-				if subtle.ConstantTimeCompare([]byte(tkn), []byte(cfg.LoginToken)) == 1 {
 					next.ServeHTTP(w, r)
 					return
 				}
