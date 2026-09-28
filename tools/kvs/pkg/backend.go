@@ -24,7 +24,7 @@ import (
 	"time"
 )
 
-//go:embed favicon.ico manager.html loading.html login.html logout.vsc.js kvs.default.ini kvs.vscode.ini
+//go:embed favicon.ico manager.html loading.html login.html logout.vsc.js kvs.ini
 var staticFS embed.FS
 
 // MustAsset reads an embedded asset by name, failing fast at startup if missing.
