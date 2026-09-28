@@ -1,11 +1,11 @@
 package pkg
 
-// zcode relay — in-process "wsws://" backend porting tools/zrelay (device ↔
+// zcode relay — in-process "relay://" backend porting tools/zrelay (device ↔
 // terminal pairing for ZCode web-remote-control). Role-agnostic: desktop and
 // web client share one endpoint; who is who comes from the first auth_init
 // message, not the URL. The routing prefix is pure operator config:
 //
-//	ws~/ws = wsws://zcode-clients
+//	ws~/ws = relay://zcode-clients
 //
 // Desktop: ZCODE_WEB_REMOTE_CONTROL_RELAY_WS_URL=ws://host:port/ws[?mid=<uuid>]
 // Web page: endpoint injected via KVS_CC_SED (overrideUrl:`wss://>host</ws`).
@@ -352,8 +352,8 @@ type zcodeConn struct {
 }
 
 // zcodeRelay is the in-process pairing relay. One instance serves any number
-// of "wsws://" backends; typically there is exactly one, named by the
-// backend target (e.g. wsws://zcode-clients). All relays share one device
+// of "relay://" backends; typically there is exactly one, named by the
+// backend target (e.g. relay://zcode). All relays share one device
 // store (the zcodex.json singleton).
 type zcodeRelay struct {
 	mu     sync.Mutex
@@ -400,7 +400,7 @@ func zcodeState() *zcodeStore {
 }
 
 // zcodeGetRelay returns (creating on first use) the named relay instance.
-// The name is the wsws:// target (e.g. "zcode-clients").
+// The name is the relay:// target (e.g. "zcode-clients").
 func zcodeGetRelay(name string) *zcodeRelay {
 	if name == "" {
 		name = "zcode"
@@ -422,7 +422,7 @@ func zcodeGetRelay(name string) *zcodeRelay {
 }
 
 // Handle upgrades the request and runs the connection until it closes.
-// This is the http.Handler entry point wired by the wsws:// backend case.
+// This is the http.Handler entry point wired by the relay:// backend case.
 func (r *zcodeRelay) Handle(w http.ResponseWriter, req *http.Request) {
 	ws, err := wsUpgrade(w, req)
 	if err != nil {

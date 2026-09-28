@@ -654,12 +654,12 @@ func loadIni() (*iniFile, string) {
 		if os.Getenv("KVS_PROXIES") == "" {
 			os.Setenv("KVS_PROXIES", "/__healthz=text://OK:@now;"+ //
 				// zcode remote
-				"ws~/remote/ws=wsws://zcode-clients;"+
+				"ws~/remote/ws=relay://zcode-clients;"+
 				"cc~/remote/v4=https://zcode.z.ai/[v=app_version]remote/v4;"+
 				"cc~/api/v1/client=https://zcode.z.ai/[v=app_version]api/v1/client;"+
 				// zcode local
 				"/assets/,/material-icons/,/pdfjs/,/favicon.ico=file://{SVC_BIN_HOME}/web/assets;"+
-				"ws~/zcode/remote/ws=wsws://zcode-clients;"+
+				"ws~/zcode/remote/ws=relay://zcode-clients;"+
 				"/zcode/api/=-http://127.0.0.1:"+zport+"/api/;"+
 				"/zcode/ws=-http://127.0.0.1:"+zport+"/ws;"+
 				"&/zcode=http://127.0.0.1:"+zport+";"+

@@ -28,7 +28,7 @@ type kvsStatCounters struct {
 	wsTunnelBytesUp   atomic.Int64 // 客户端 → 后端 字节数
 	wsTunnelBytesDown atomic.Int64 // 后端 → 客户端 字节数
 
-	// wsws 中继（zcode 远程控制）
+	// relay 中继（zcode 远程控制）
 	relayFramesIn  atomic.Int64 // 入站帧数
 	relayFramesOut atomic.Int64 // 出站帧数
 	relayBytesIn   atomic.Int64 // 入站字节

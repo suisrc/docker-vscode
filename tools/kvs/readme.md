@@ -61,7 +61,7 @@ kvs syncto s3:/vsc/zcode /zcode   # 下载：S3 → 本地（对象或前缀递�
 | `unix` | Unix domain socket |
 | `file` | 静态文件服务器（br/gz/zst 预压缩优选） |
 | `text` | 直接返回文本；支持 `@now` 替换当前时间（RFC3339） |
-| `wsws://` / `api://` | 进程内 zcode 中继 / handler 注册表（zcodex 预设使用，见 [agents.md](agents.md)） |
+| `relay://` / `api://` | 进程内 zcode 中继 / handler 注册表（zcodex 预设使用，见 [agents.md](agents.md)） |
 
 ## WebSocket 升级（性能与正确性）
 

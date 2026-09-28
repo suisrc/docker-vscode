@@ -245,14 +245,14 @@ func CreateBackendHandler(b Backend, cacheHeaders map[string]string, loginAuthz 
 		// return http.StripPrefix(b.Source, http.FileServer(http.Dir(dir))) + .gz or .br
 		return http.StripPrefix(b.Source, precompressedFileServer(dir, http.FileServer(http.Dir(dir))))
 
-	case "wsws":
+	case "relay":
 		// In-process WebSocket relay backend (ws-to-ws, e.g. the zcode
 		// pairing relay): the target is a logical relay name resolved by
 		// zcodeGetRelay (optionally "/state-file"), not a host:port. The
 		// relay is role-agnostic — the routing prefix (any prefix) is where
 		// both desktop and web clients connect. Upgrade requests are handed
 		// to the relay state machine; anything else is a 426.
-		log.Printf("backend wsws relay: %s", b.Target)
+		log.Printf("backend relay: %s", b.Target)
 		relay := zcodeGetRelay(b.Target)
 		return http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 			if !isWebSocketUpgrade(r) {
@@ -561,8 +561,8 @@ func upgradeAwareHandler(upgrade, plain http.Handler) http.Handler {
 }
 
 // ExactPathMatch reports whether a backend's routing prefix must match the
-// request path exactly instead of by prefix. In-process endpoints (the wsws
-// relay, api:// handlers) are single resources where a wider match would be
+// request path exactly instead of by prefix. In-process endpoints (the relay,
+// api:// handlers) are single resources where a wider match would be
 // wrong; tunnel-capable schemes (http/https/ws/wss/unix) match by prefix, so a
 // ws~ marked route can cover a whole subtree.
 func ExactPathMatch(b Backend) bool {

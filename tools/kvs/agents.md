@@ -14,14 +14,14 @@
 | 文件 | 职责 |
 |---|---|
 | `main.go` | CLI 分发（`help`/`demo`/`mirror`/`syncto` 子命令；无子命令=代理模式）、mux 装配、登录/内置端点、注入脚本服务 |
-| `pkg/config.go` | ini 解析 + 值模板展开、SVC_* 内部变量、版本覆盖（`GOverrideVersion`）、zcodex 预设注入（KVS_PROXIES 拼装 `wsws://`/`api://manager`） |
+| `pkg/config.go` | ini 解析 + 值模板展开、SVC_* 内部变量、版本覆盖（`GOverrideVersion`）、zcodex 预设注入（KVS_PROXIES 拼装 `relay://`/`api://manager`） |
 | `pkg/backend.go` | `Backend` 抽象；`CreateBackendHandler` 按 scheme 分发；`registerAPI`（api:// 进程内注册表）；ws 代理；`precompressedFileServer`（br/gz/zst 预压缩静态） |
 | `pkg/service.go` | service 生命周期：检测→版本解析→下载→解压→脚本→启停 |
 | `pkg/cache.go` | `/__cache/` 外部资源代理；`cc~` 缓存（命中按 sed 计划直出 sendfile/内存重写，元数据内存缓存 size+mtime+inode 判失效）；cache_sed once/each/none 与 `_.json` 元数据 |
 | `pkg/server.go` | 服务器构建（HTTP + HTTPS=port+1 自签 ECDSA P-256）、静态资产/登录页服务、`isBrowserRequest` |
 | `pkg/vscode.go` | VS Code 专有：web-extension-resource 本地化（上游乱码 issue microsoft/vscode#299425）、语言包/汉化链路 |
 | `pkg/vagent.go` | agent 端点：`vsc_agent_cmds` 预设表（JSON）、端点目录扫描（*.json） |
-| `pkg/zcode.go` | `wsws://` 进程内中继（设备注册/心跳/远程控制）；`zcodeStore`（zcodex.json 持久化 + 旧版迁移 + 防抖原子落盘）；`KVS_ZCODEX_NODE` 懒启动 |
+| `pkg/zcode.go` | `relay://` 进程内中继（设备注册/心跳/远程控制）；`zcodeStore`（zcodex.json 持久化 + 旧版迁移 + 防抖原子落盘）；`KVS_ZCODEX_NODE` 懒启动 |
 | `pkg/manager.go` | 应用中心：合并视图组装、REST API、在线探测（45s 缓存）、`registerAPI("manager")` |
 | `pkg/manager.html` | 管理页单文件前端（客户端渲染，PC 卡片/移动行双布局） |
 | `pkg/wsconn.go` | 最小 RFC 6455 WebSocket 服务端（stdlib 实现）；帧写单次 writev、写超时粗粒度刷新、读缓冲复用、unmask 字长化 |
@@ -54,7 +54,7 @@
 | `unix` | Unix domain socket |
 | `file` | 静态文件（含 br/gz/zst 预压缩优选） |
 | `text` | 直接返回文本，支持 `@now` |
-| `wsws://<name>` | 进程内 zcode 中继（zcode.go），如 `wsws://zcode-clients` |
+| `relay://<name>` | 进程内 zcode 中继（zcode.go），如 `relay://zcode-clients` |
 | `api://<name>` | 进程内 handler 注册表（`registerAPI`），目前仅 `api://manager` |
 
 service 生命周期（`&` 后端，service.go）：`check` 检测外部服务（已存在则只代理不托管启停）→ `bin_home` 非空跳过下载 → 解析下载地址（`download` 优先，否则 `download_info`+`download_field_url`）→ 跟随重定向取扩展名 `SVC_PACKAGE_EXT` → 下载到 `{cache_dir}/cache/version/{version}_{version_hash}.{ext}` → 解压到 `bin_home` → 执行 `init_shell`；`stop_shell` 仅 kvs 托管的后端退出时执行。
@@ -88,8 +88,8 @@ service 生命周期（`&` 后端，service.go）：`check` 检测外部服务�
 静默丢 1.8MiB，对端流里出现空洞）。读超时（源侧无数据）没有半成品数据，续期才是安全的。
 
 ws~ 路由前缀匹配与退避：`ExactPathMatch` = `ws~` 且目标非隧道类 scheme（http/https/ws/wss/unix）
-才按前缀匹配（这样一个 ws~ 路由能覆盖整棵子树）；进程内端点（`wsws://`、`api://`）仍要求路径完全
-相等。已核对 vscode 预设（只有 `&/` unix 与 `/__healthz`）与 zcodex 预设（`ws~/zcode/remote/ws=wsws://`
+才按前缀匹配（这样一个 ws~ 路由能覆盖整棵子树）；进程内端点（`relay://`、`api://`）仍要求路径完全
+相等。已核对 vscode 预设（只有 `&/` unix 与 `/__healthz`）与 zcodex 预设（`ws~/zcode/remote/ws=relay://`
 仍是精确匹配），线上路由不受该变更影响。
 
 基准（`temp/bench/`，300×1MiB 回环，经 kvs）：**用户态 CPU 21 ticks vs stdlib 44 ticks（-52%）**，
@@ -139,7 +139,7 @@ ws~ 路由前缀匹配与退避：`ExactPathMatch` = `ws~` 且目标非隧道类
 
 `-c zcodex` 预设注入的环境变量（用户显式设置优先）：`KVS_PATH_PUBLIC`、`KVS_SVC_CHECK_URL`（探活 `/api/server-info`，默认端口 7587）、`KVS_SVC_COMMAND`（本地 zcode 懒启动）、`KVS_PROXIES`（`/zcode` + `/=api://manager`）。
 
-管理页 `manager.html` 挂载于 `/=api://manager`（客户端渲染，支持深浅色主题）。条目四类：`[ZCD]local` 本机 zcode（`/zcode`，kvs 懒启动，始终可点）；`[ZCD]xxx` 通过 wsws 中继注册的远程 zcode 桌面端（在线时点击打开远程控制终端）；`[VSC]zzz` 手动添加的 VS Code 应用（同一设备的不同工作区以快捷方式挂同一卡片，访问地址 `{卡片同host}/?folder=<工作区路径>`，可编辑/删除）；`[APP]`/`[LNX]` 「其他」类型设备（Logo 四选一 vsc/zcd/linux/other）。卡片顺序固定（不按访问时间排序），拖拽调整后持久化到 `order` 段，新条目追加末尾。
+管理页 `manager.html` 挂载于 `/=api://manager`（客户端渲染，支持深浅色主题）。条目四类：`[ZCD]local` 本机 zcode（`/zcode`，kvs 懒启动，始终可点）；`[ZCD]xxx` 通过 relay 中继注册的远程 zcode 桌面端（在线时点击打开远程控制终端）；`[VSC]zzz` 手动添加的 VS Code 应用（同一设备的不同工作区以快捷方式挂同一卡片，访问地址 `{卡片同host}/?folder=<工作区路径>`，可编辑/删除）；`[APP]`/`[LNX]` 「其他」类型设备（Logo 四选一 vsc/zcd/linux/other）。卡片顺序固定（不按访问时间排序），拖拽调整后持久化到 `order` 段，新条目追加末尾。
 
 合并视图条目来源（`mgrBuildEntries`）：
 1. `zcd-local`：本机 zcode，URL=`/zcode`（相对，始终可点）
@@ -204,7 +204,7 @@ Update 菜单注入（vscode.go + logout.vsc.js）：`login_authz = true` 且代
 
 ## 5. 开发路线图
 
-已落地能力：多协议路由（http/ws/unix/file/text/wsws/api）、Cookie 双阶段认证、service 自动部署与 `/__restart` 版本覆盖、VS Code 专有（Update 注入/退出按钮/web-extension 本地化/语言包）、`/__cache/` 含 cache_sed、S3 mirror/syncto、zcodex 应用中心（拖拽排序/标记/备注/工具栏/ZCode控制复制/深浅色/移动适配）。
+已落地能力：多协议路由（http/ws/unix/file/text/relay/api）、Cookie 双阶段认证、service 自动部署与 `/__restart` 版本覆盖、VS Code 专有（Update 注入/退出按钮/web-extension 本地化/语言包）、`/__cache/` 含 cache_sed、S3 mirror/syncto、zcodex 应用中心（拖拽排序/标记/备注/工具栏/ZCode控制复制/深浅色/移动适配）。
 
 本轮已落地（性能）：
 - WS 升级快路径（裸 conn + splice + 握手期缓冲字节补齐 + 可选空闲超时）与 `ws_proxy` 开关
