@@ -41,16 +41,20 @@ func ClearOverrideVersion(svc string) {
 	delete(gOverrideVersions, svc)
 }
 
-// ClearServiceVersionEnv removes the reverse-assigned KVS_SVC_<NAME>_VERSION
-// env when it is kvs's own artifact (equals the last resolved version). The
-// config's version = {KVS_SVC_<NAME>_VERSION} placeholder would otherwise
-// read the value back on the next reload and silently re-pin it, breaking
-// "clear → upgrade to latest". An externally pinned env (different value) is
-// preserved. No-op for services without a resolved version.
+// ClearServiceVersionEnv drops kvs's self-assigned KVS_SVC_<NAME>_VERSION so
+// the version placeholder reads fresh on the next reload — but ONLY when a
+// refill source exists (download / version_latest_url). Services without one
+// keep their last known version: clearing would leave an empty value that
+// expands bin_home into …/servers//bin, and "last known" is the best answer a
+// service with no version source has. An externally pinned env (different
+// value from the resolved one) is always preserved.
 func ClearServiceVersionEnv(svc string) {
 	sc := Services().Get(svc)
 	if sc == nil || sc.Version == "" {
 		return
+	}
+	if sc.Download == "" && sc.VersionLatestURL == "" {
+		return // no refill path — keep the last known version
 	}
 	env := svcEnvKey(svc, "VERSION")
 	if os.Getenv(env) == sc.Version {
@@ -180,6 +184,7 @@ type Backend struct {
 	RawURL      string // original URL for logging
 	PathMode    string // -/+ path mode: ""=forward as-is, "-"=strip source prefix onto target path, "+"=append full request path after target path; honored by http(s)/ws(s)/unix/svc/file, ignored with a warning by text/relay/api
 	IsService   bool   // this backend is managed by kvs (svc:// target, or legacy & marker)
+	ServiceName string // svc:// target's service name ("" for non-svc backends); carried through the hosted-service proxy so response modifiers can attribute themselves
 	IsRegex     bool   // prefix is a regex pattern (^ prefix in [proxies])
 	VerTemplate bool   // prefix carries <verhash>/<version> (svc:// only; expanded from the service config per request)
 	IsCache     bool   // cc~ prefix: cache proxied responses on disk ({cache_dir:-/cache}/ccproxy/{scheme}:{host}/path)
@@ -1192,7 +1197,10 @@ func (c *Config) resolveService(sc *ServiceConfig) {
 	sc.VersionHashURL = expandValue(sc.VersionHashURL, "VERSION")
 
 	sc.Download = expandValue(sc.Download)
-	if sc.Download != "" || sc.VersionLatestURL != "" {
+	// The chain also runs on a version OVERRIDE alone (manager card / __restart
+	// pin): services without download/latest_url config must still honor
+	// "start this version next time" — the override switches bin_home etc.
+	if sc.Download != "" || sc.VersionLatestURL != "" || GetOverrideVersion(sc.Name) != "" {
 		version, vh, err := resolveVersion(sc.Name, sc.Version, sc.VersionLatestURL, sc.VersionHashURL)
 		if err != nil {
 			sc.InitError = fmt.Sprintf("resolve version %v", err)
@@ -1204,8 +1212,20 @@ func (c *Config) resolveService(sc *ServiceConfig) {
 	if sc.VersionHash == "" {
 		sc.VersionHash = sc.Version
 	}
-	os.Setenv(envKey("VERSION"), sc.Version)
-	os.Setenv(envKey("VERHASH"), sc.VersionHash)
+	// Never write an empty version back: KVS_SVC_<NAME>_VERSION is the last
+	// known good value that bin_home etc. expand from — an empty overwrite
+	// yields …/servers//bin style paths. Empty means "no source this pass",
+	// not "forget the version".
+	if sc.Version == "" {
+		if v := os.Getenv(envKey("VERSION")); v != "" {
+			sc.Version, sc.VersionHash = v, v
+			log.Printf("[version %s] no source this pass, keeping last known version %s", sc.Name, v)
+		}
+	}
+	if sc.Version != "" {
+		os.Setenv(envKey("VERSION"), sc.Version)
+		os.Setenv(envKey("VERHASH"), sc.VersionHash)
+	}
 
 	// Substitute the bare VERSION/VERHASH tokens in the download URL. VERHASH
 	// goes first — its name contains VERSION as a substring. This covers

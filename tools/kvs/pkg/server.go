@@ -183,7 +183,7 @@ func randomHex(n int) string {
 // remaining time drops to ≤ 1/4 of login_timeout, a refreshed cookie is set
 // (sliding expiration).
 //
-// Public paths (/__login, /__logout, /favicon.ico, /__logout.vsc.js, cache)
+// Public paths (/__login, /__logout, /favicon.ico, /__logout.svc.js, cache)
 // are always exempt.
 func AuthMiddleware(next http.Handler, cfg Config, setCookie func(http.ResponseWriter, string, int)) http.Handler {
 	return http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {

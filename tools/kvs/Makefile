@@ -28,7 +28,7 @@ vscode:
 
 zcodex:
 	KVS_DEBUG=1 KVS_PORT=7188 KVS_LOGIN_AUTHZ=true KVS_LOGIN_TOKEN=123456 \
-	KVS_HOME=../../temp KVS_COOKIE_TOKEN_KEY=zcodex-tkn \
+	KVS_HOME=../../temp KVS_COOKIE_TOKEN_KEY=vscode-tkn KVS_QUERY_TOKEN_KEY=tkn \
 	KVS_SVC_ZCODE_VERSION=3.14.3 \
 	go run main.go -n :zcodex
 

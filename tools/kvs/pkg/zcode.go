@@ -157,28 +157,30 @@ type zcodeDeviceRecord struct {
 
 // zcodeStoreFile is the on-disk state file format (version 1, zrelay-compatible).
 type zcodeStoreFile struct {
-	Version int                 `json:"version"`
-	Devices []zcodeDeviceRecord `json:"devices"`
-	Apps    []managerApp        `json:"apps,omitempty"`  // manager app records (zcode is one app type among several)
-	Order   []string            `json:"order,omitempty"` // manager card order (user-arranged entry ids)
-	Tools   []managerTool       `json:"tools,omitempty"` // manager toolbar quick links (name → addr)
-	Notes   map[string]string   `json:"notes,omitempty"` // manager per-entry remarks (entry id → note text)
+	Version    int                 `json:"version"`
+	Devices    []zcodeDeviceRecord `json:"devices"`
+	Apps       []managerApp        `json:"apps,omitempty"`         // manager app records (zcode is one app type among several)
+	Order      []string            `json:"order,omitempty"`        // manager card order (user-arranged entry ids)
+	Tools      []managerTool       `json:"tools,omitempty"`        // manager toolbar quick links (name → addr)
+	Notes      map[string]string   `json:"notes,omitempty"`        // manager per-entry remarks (entry id → note text)
+	VscOpenExt string              `json:"vsc_open_ext,omitempty"` // "open in VS Code" deep-link extension id (vscode://<ext>/open…)
 }
 
 // zcodeStore is a JSON-file backed registry with two in-memory indexes
 // (sid → record, mid → sid) plus the manager app list. Writes are atomic and
 // debounced (flush on change, at most once per second).
 type zcodeStore struct {
-	file   string
-	mu     sync.Mutex
-	bySid  map[string]*zcodeDeviceRecord
-	byMid  map[string]string
-	apps   []managerApp
-	order  []string          // manager card order (user-arranged entry ids)
-	tools  []managerTool     // manager toolbar quick links
-	notes  map[string]string // manager per-entry remarks (entry id → note)
-	notify chan struct{}
-	dirty  bool
+	file       string
+	mu         sync.Mutex
+	bySid      map[string]*zcodeDeviceRecord
+	byMid      map[string]string
+	apps       []managerApp
+	order      []string          // manager card order (user-arranged entry ids)
+	tools      []managerTool     // manager toolbar quick links
+	notes      map[string]string // manager per-entry remarks (entry id → note)
+	vscOpenExt string            // "open in VS Code" deep-link extension id ("" = env default)
+	notify     chan struct{}
+	dirty      bool
 }
 
 // zcodeLoadStore opens (or creates) the state file. When the file is absent
@@ -218,6 +220,7 @@ func zcodeLoadStore(file string) *zcodeStore {
 	s.order = parsed.Order
 	s.tools = parsed.Tools
 	s.notes = parsed.Notes
+	s.vscOpenExt = parsed.VscOpenExt
 	return s
 }
 
@@ -275,6 +278,26 @@ func (s *zcodeStore) size() int {
 	return len(s.bySid)
 }
 
+// remove forgets a device entirely (pairing state + mid index). Returns
+// whether the device existed. The manager's card delete needs this: device
+// cards are synthesized from the device list, so without removal the card
+// would re-appear on the next render. A live device re-registers (fresh
+// pairing) on its next reconnect.
+func (s *zcodeStore) remove(sid string) bool {
+	s.mu.Lock()
+	defer s.mu.Unlock()
+	r, ok := s.bySid[sid]
+	if !ok {
+		return false
+	}
+	delete(s.bySid, sid)
+	if s.byMid[r.DeviceMid] == sid {
+		delete(s.byMid, r.DeviceMid)
+	}
+	s.dirty = true
+	return true
+}
+
 // list returns all device records (map order; callers sort if needed).
 func (s *zcodeStore) list() []zcodeDeviceRecord {
 	s.mu.Lock()
@@ -286,6 +309,24 @@ func (s *zcodeStore) list() []zcodeDeviceRecord {
 	return out
 }
 
+// vscOpenExtValue returns the stored "open in VS Code" extension id
+// (vscode://<ext>/open… deep-link target); "" = use the env default.
+func (s *zcodeStore) vscOpenExtValue() string {
+	s.mu.Lock()
+	defer s.mu.Unlock()
+	return s.vscOpenExt
+}
+
+// saveVscOpenExt persists the "open in VS Code" extension id ("" = back to
+// the env default). Takes effect immediately — the value is read per request.
+func (s *zcodeStore) saveVscOpenExt(ext string) {
+	s.mu.Lock()
+	s.vscOpenExt = ext
+	s.dirty = true
+	s.mu.Unlock()
+	s.requestFlush()
+}
+
 // flush writes the state file atomically when dirty.
 func (s *zcodeStore) flush() {
 	s.mu.Lock()
@@ -294,12 +335,13 @@ func (s *zcodeStore) flush() {
 		return
 	}
 	out := zcodeStoreFile{
-		Version: 1,
-		Devices: make([]zcodeDeviceRecord, 0, len(s.bySid)),
-		Apps:    append([]managerApp(nil), s.apps...),
-		Order:   append([]string(nil), s.order...),
-		Tools:   append([]managerTool(nil), s.tools...),
-		Notes:   s.notes,
+		Version:    1,
+		Devices:    make([]zcodeDeviceRecord, 0, len(s.bySid)),
+		Apps:       append([]managerApp(nil), s.apps...),
+		Order:      append([]string(nil), s.order...),
+		Tools:      append([]managerTool(nil), s.tools...),
+		Notes:      s.notes,
+		VscOpenExt: s.vscOpenExt,
 	}
 	for _, r := range s.bySid {
 		out.Devices = append(out.Devices, *r)

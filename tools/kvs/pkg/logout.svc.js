@@ -1,6 +1,19 @@
 (function () {
   if (window.__kvs) return;
   window.__kvs = 1;
+  // The injected <script> URL carries ?svc=<name> — the hosted service this
+  // workbench belongs to. Forward it on every control-plane call below so the
+  // server targets OUR service instead of picking one arbitrarily (there is
+  // no default svc). /__logout stays global: it clears the auth cookie only.
+  var SVC = '';
+  try {
+    var m = ((document.currentScript && document.currentScript.src) || '').match(/[?&]svc=([^&]*)/);
+    if (m) SVC = decodeURIComponent(m[1]);
+  } catch (e) { SVC = ''; }
+  function withSvc(url) {
+    if (!SVC) return url;
+    return url + (url.indexOf('?') === -1 ? '?' : '&') + 'svc=' + encodeURIComponent(SVC);
+  }
   function el(t, c, s) {
     var e = document.createElement(t);
     if (c) e.className = c;
@@ -30,7 +43,7 @@
   // separator depends on what the server returned: it may already carry a
   // query (?token=...) so we append with & in that case, ? otherwise.
   function openInVSC() {
-    fetch('/__open_url', { credentials: 'include' })
+    fetch(withSvc('/__open_url'), { credentials: 'include' })
       .then(function (r) { return r.text(); })
       .then(function (u) {
         u = (u || '').trim();
@@ -145,7 +158,7 @@
       var old = agnRef.textContent;
       agnRef.textContent = '…';
       agnRef.disabled = true;
-      fetch('/__agents/entries', { credentials: 'include', signal: AbortSignal.timeout(5000) })
+      fetch(withSvc('/__agents/entries'), { credentials: 'include', signal: AbortSignal.timeout(5000) })
         .then(function (r) { return r.json(); })
         .then(function (d) {
           fillAgents(d);
@@ -169,7 +182,7 @@
       var url = '/__restart';
       if (v) url += '?v=' + encodeURIComponent(v);
       if (f) url += (url.indexOf('?') === -1 ? '?' : '&') + 'agent=' + encodeURIComponent(f);
-      fetch(url, { credentials: 'include' })
+      fetch(withSvc(url), { credentials: 'include' })
         .catch(function () {})
         .then(function () { setTimeout(function () { location.reload(); }, 1000); });
     }
@@ -180,7 +193,7 @@
       if (e.key === 'Enter') { e.preventDefault(); go(); }
       else if (e.key === 'Escape') { e.preventDefault(); close(); }
     });
-    fetch('/__version', { credentials: 'include', signal: AbortSignal.timeout(5000) })
+    fetch(withSvc('/__version'), { credentials: 'include', signal: AbortSignal.timeout(5000) })
       .then(function (r) { return r.text(); })
       .then(function (x) { h.textContent = 'Current version: ' + (x.trim() || 'unknown'); })
       .catch(function () { h.textContent = 'Current version: unknown'; });
@@ -311,7 +324,7 @@
         opt.headers = { 'Content-Type': 'application/json' };
         opt.body = JSON.stringify(body);
       }
-      fetch(url, opt)
+      fetch(withSvc(url), opt)
         .then(function (res) { return res.ok ? res.text() : res.text().then(function (t) { throw new Error(t); }); })
         .then(function () { setResult(okLabel); })
         .catch(function (e) { setResult(errPrefix + (e && e.message ? e.message : '')); })
@@ -339,13 +352,13 @@
       dis(bUpdate, true);
       setSpin(true);
       setResult('');
-      fetch('/__agents/entries', { credentials: 'include', signal: AbortSignal.timeout(5000) })
+      fetch(withSvc('/__agents/entries'), { credentials: 'include', signal: AbortSignal.timeout(5000) })
         .then(function (r) { return r.ok ? r.json() : []; })
         .catch(function () { return []; })
         .then(function (d) {
           var f = d && d.length ? d[0].file : '';
           if (!f) { setResult('No Agent File'); return; }
-          return fetch('/__restart?agent=' + encodeURIComponent(f), { credentials: 'include' })
+          return fetch(withSvc('/__restart?agent=' + encodeURIComponent(f)), { credentials: 'include' })
             .then(function () {
               setResult('Update Success');
               setTimeout(function () { location.reload(); }, 1000);
@@ -355,7 +368,7 @@
         .then(function () { setSpin(false); dis(bUpdate, false); refresh(); });
     });
     function refresh() {
-      fetch('/__agents/status', { credentials: 'include', signal: AbortSignal.timeout(5000) })
+      fetch(withSvc('/__agents/status'), { credentials: 'include', signal: AbortSignal.timeout(5000) })
         .then(function (r) { return r.json(); })
         .then(function (d) {
           i.value = d.command || '';

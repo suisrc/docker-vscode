@@ -29,6 +29,9 @@ package pkg
 //	                                           (VS Code, folders ok) | other
 //	DELETE /__manager?id=…                   remove a custom app
 //	POST   /__manager/visit                  record an access {id}
+//	POST   /__manager/stop?svc=…             stop a hosted service's backend
+//	POST   /__manager/vscext {ext}           "open in VS Code" extension id
+//	GET    /__manager/vscopen                signed vscode:// deep-link base
 //	POST   /__manager/order                  save the dragged card order {ids}
 //	POST   /__manager/tool                   upsert a toolbar quick link {name,addr,old?}
 //	DELETE /__manager/tool?name=…            remove a toolbar quick link
@@ -59,7 +62,6 @@ import (
 const (
 	mgrIDZcdLocal = "zcd-local"
 	mgrIDVscLocal = "vsc-local" // legacy stamps only; no synthesized entry anymore
-	mgrZcodePort  = "7587"      // fallback probe port when no [service.zcode] is configured
 	mgrProbeTTL   = 45 * time.Second
 	mgrFolderMax  = 12
 	mgrNoteMax    = 500 // per-entry remark note length cap (runes)
@@ -127,11 +129,11 @@ func ManagerResetSvcMounts() {
 // mgrSvcList returns the offered hosted services (mount order sorted by name).
 func mgrSvcList() []mgrSvcInfo {
 	mgrSvcMu.Lock()
-	defer mgrSvcMu.Unlock()
 	names := make([]string, 0, len(mgrSvcMounts))
 	for n := range mgrSvcMounts {
 		names = append(names, n)
 	}
+	mgrSvcMu.Unlock()
 	sort.Strings(names)
 	out := make([]mgrSvcInfo, 0, len(names))
 	for _, n := range names {
@@ -139,7 +141,9 @@ func mgrSvcList() []mgrSvcInfo {
 		if typ == "" {
 			continue // only zcode / vscode are offered
 		}
+		mgrSvcMu.Lock()
 		info := mgrSvcInfo{Svc: n, Type: typ, URL: mgrSvcMounts[n]}
+		mgrSvcMu.Unlock()
 		if sc := Services().Get(n); sc != nil {
 			info.Version = sc.Version
 			info.HasVersion = sc.VersionLatestURL != "" || sc.Download != "" || sc.Version != ""
@@ -147,9 +151,13 @@ func mgrSvcList() []mgrSvcInfo {
 		if typ == "zcd" {
 			// Current effective values: manager overrides first, then the
 			// config defaults (envs_default fills data dir with
-			// KVS_SVC_ZCODE_HOME; the command's --workspace default is /home).
-			info.DataDir = firstNonEmptyEnv("ZCODE_DATA_BASE_DIR", "KVS_SVC_ZCODE_HOME")
-			info.WSC = firstNonEmptyEnv("KVS_SVC_ZCODE_WSC", "/home")
+			// KVS_SVC_<NAME>_HOME; the command's --workspace default is
+			// /home). WSC is per-service end to end (svcEnvKey derives
+			// KVS_SVC_<NAME>_WSC, the command's placeholder); the data dir
+			// rides the shared ZCODE_DATA_BASE_DIR env — one data dir across
+			// zcd-typed services until envs_default grows subprocess scoping.
+			info.DataDir = firstNonEmptyEnv("ZCODE_DATA_BASE_DIR", svcEnvKey(n, "HOME"))
+			info.WSC = firstNonEmptyEnv(svcEnvKey(n, "WSC"), "/home")
 		}
 		out = append(out, info)
 	}
@@ -169,12 +177,25 @@ func firstNonEmptyEnv(names ...string) string {
 
 // mgrApplyHook is registered by main: it reloads the service config (re-
 // expanding command/download with the env the manager just set) and resets
-// the service state so the next request re-prepares. nil → env-only apply.
-var mgrApplyHook func(svc string)
+// the service state so the next request re-prepares. The returned note
+// ("" = nothing to add) is surfaced to the manager UI — e.g. when the service
+// is provided by an unmanaged external process this instance cannot restart.
+// nil → env-only apply.
+var mgrApplyHook func(svc string) (note string)
+
+// mgrLoginInfo is registered by main: the login config needed to issue
+// vscode:// deep links with a short-lived query token (the same token shape
+// /__open_url appends). nil → deep links go out unsigned.
+var mgrLoginInfo func() (loginToken, queryKey string, timeout int)
+
+// SetManagerLoginInfo wires the login config for deep-link token issuing.
+func SetManagerLoginInfo(f func() (loginToken, queryKey string, timeout int)) {
+	mgrLoginInfo = f
+}
 
 // SetManagerApplyHook wires the manager's apply step to main's reload+reset
 // flow (the same machinery /__restart uses).
-func SetManagerApplyHook(f func(svc string)) { mgrApplyHook = f }
+func SetManagerApplyHook(f func(svc string) (note string)) { mgrApplyHook = f }
 
 // mgrApplyBuiltIn applies the delta between the stored and the new built-in
 // card: data-dir / workspace go into the process env (zcode only, empty →
@@ -182,9 +203,10 @@ func SetManagerApplyHook(f func(svc string)) { mgrApplyHook = f }
 // override map ("" = clear → version_latest_url decides). The apply hook
 // (config reload + service reset) fires only when something actually changed,
 // so a rename or an all-defaults create never disturbs a running service.
-func mgrApplyBuiltIn(old, app managerApp) {
+// Returns the hook's user-facing note ("" when nothing changed or none).
+func mgrApplyBuiltIn(old, app managerApp) string {
 	if app.Svc == "" {
-		return
+		return ""
 	}
 	changed := false
 	if app.Type == "zcd" && app.DataDir != old.DataDir {
@@ -198,10 +220,11 @@ func mgrApplyBuiltIn(old, app managerApp) {
 		changed = true
 	}
 	if app.Type == "zcd" && app.WSC != old.WSC {
+		wscEnv := svcEnvKey(app.Svc, "WSC") // KVS_SVC_<NAME>_WSC — the command's --workspace placeholder
 		if app.WSC != "" {
-			os.Setenv("KVS_SVC_ZCODE_WSC", app.WSC)
+			os.Setenv(wscEnv, app.WSC)
 		} else {
-			os.Unsetenv("KVS_SVC_ZCODE_WSC")
+			os.Unsetenv(wscEnv)
 		}
 		changed = true
 	}
@@ -217,12 +240,14 @@ func mgrApplyBuiltIn(old, app managerApp) {
 		changed = true
 	}
 	if !changed {
-		return
+		return ""
 	}
 	log.Printf("[manager] built-in %s: data_dir=%q wsc=%q ver=%q applied", app.Svc, app.DataDir, app.WSC, app.Ver)
+	mgrInvalidateProbe(Services().Get(app.Svc))
 	if mgrApplyHook != nil {
-		mgrApplyHook(app.Svc)
+		return mgrApplyHook(app.Svc)
 	}
+	return ""
 }
 
 // ManagerReapplyOverrides re-applies the built-in cards' persisted overrides
@@ -243,7 +268,7 @@ func ManagerReapplyOverrides() bool {
 				applied = true
 			}
 			if app.WSC != "" {
-				os.Setenv("KVS_SVC_ZCODE_WSC", app.WSC)
+				os.Setenv(svcEnvKey(app.Svc, "WSC"), app.WSC)
 				applied = true
 			}
 		}
@@ -544,17 +569,23 @@ func mgrProbe(target string) (string, bool) {
 	return v, true
 }
 
-// mgrZcodeCheckURL is the local zcode web app probe URL: the registered
-// [service.zcode] healthz (with its "#@<code>" suffix stripped), falling back
-// to the default zcode port when the service is not configured.
-func mgrZcodeCheckURL() string {
-	if sc := Services().Get("zcode"); sc != nil && sc.Healthz != "" {
-		if i := strings.LastIndex(sc.Healthz, "#@"); i >= 0 {
-			return sc.Healthz[:i]
-		}
-		return sc.Healthz
+// mgrStripProbeCode strips the "#@<code>" expectation suffix from a healthz.
+func mgrStripProbeCode(h string) string {
+	if i := strings.LastIndex(h, "#@"); i >= 0 {
+		return h[:i]
 	}
-	return "http://127.0.0.1:" + mgrZcodePort + "/api/server-info"
+	return h
+}
+
+// mgrInvalidateProbe drops a service's cached healthz probe so the online
+// badge reflects stop/start on the very next poll instead of after the TTL.
+func mgrInvalidateProbe(sc *ServiceConfig) {
+	if sc == nil || sc.Healthz == "" {
+		return
+	}
+	mgrProbeMu.Lock()
+	delete(mgrProbeCache, mgrStripProbeCode(sc.Healthz))
+	mgrProbeMu.Unlock()
 }
 
 // ---------------------------------------------------------------------------
@@ -753,10 +784,26 @@ func mgrBuildEntries() []mgrEntry {
 			Version: app.Version, OS: app.OS,
 			Custom: app.Custom, CreatedAt: app.CreatedAt, LastSeen: app.LastSeen,
 		}
-		if app.Svc != "" && app.Type == "zcd" {
-			// Built-in zcode: probe the hosted service's own healthz for the
-			// online badge; version comes from the service, not the probe.
-			mgrApplyProbe(&e, mgrZcodeCheckURL())
+		if app.Svc != "" {
+			// Live service attribution: the card's CURRENT version comes from
+			// its own hosted service (the record's snapshot goes stale across
+			// restarts/upgrades); empty when the service is not configured.
+			if sc := Services().Get(app.Svc); sc != nil {
+				// Online badge, per-service shape: unix-addressed backends
+				// (vscode.sock) are "online" while their socket file exists —
+				// their healthz may point at an http port nobody listens on.
+				// Everything else probes the healthz (cached).
+				if target, ok := unixSocketPath(sc.Address); ok {
+					_, err := os.Stat(target)
+					on := err == nil
+					e.Online = &on
+				} else if sc.Healthz != "" {
+					mgrApplyProbe(&e, mgrStripProbeCode(sc.Healthz))
+				}
+				if e.Version != sc.Version {
+					e.Version = sc.Version
+				}
+			}
 		}
 		if u, err := url.Parse(app.URL); err == nil && (u.Scheme == "http" || u.Scheme == "https") {
 			e.Host = u.Hostname()
@@ -833,6 +880,55 @@ func managerHandler(w http.ResponseWriter, r *http.Request) {
 			http.Error(w, "method not allowed", http.StatusMethodNotAllowed)
 		}
 
+	case "/__manager/stop":
+		// POST /__manager/stop?svc=<name> — stop the hosted service's backend
+		// process (runs stop_shell, removes the unix socket) and reset its
+		// state so the next request to the mount re-prepares (lazy start).
+		if r.Method != http.MethodPost {
+			http.Error(w, "POST required", http.StatusMethodNotAllowed)
+			return
+		}
+		svcName := strings.TrimSpace(r.URL.Query().Get("svc"))
+		if svcName == "" || Services().Get(svcName) == nil {
+			http.Error(w, "unknown service", http.StatusBadRequest)
+			return
+		}
+		stopped := Services().StopOne(svcName, true)
+		note := ""
+		if !stopped && ServiceAlive(Services().Get(svcName)) {
+			// Alive but not ours (external process / previous instance) —
+			// by design kvs never kills processes it did not start.
+			note = "服务由外部进程提供，无法关闭"
+		}
+		Services().State(svcName).Reset()
+		mgrInvalidateProbe(Services().Get(svcName))
+		log.Printf("[manager] service %s stop requested (stopped=%v)", svcName, stopped)
+		mgrWriteJSON(w, http.StatusOK, map[string]any{"success": true, "note": note})
+
+	case "/__manager/vscext":
+		// POST /__manager/vscext {ext} — persist the "open in VS Code"
+		// deep-link extension id ("" = back to the env/default).
+		if r.Method != http.MethodPost {
+			http.Error(w, "POST required", http.StatusMethodNotAllowed)
+			return
+		}
+		managerSetVscOpenExt(w, r)
+
+	case "/__manager/vscopen":
+		// GET /__manager/vscopen — issue the "open in VS Code" deep-link base
+		// with a short-lived query token (the same shape /__open_url returns):
+		// vscode://<ext>/open?<QueryTokenKey>=<tkn>. The client appends
+		// &addr=<origin>&folder=<path>, exactly like the workbench's
+		// logout.svc.js "open in vscode" flow.
+		u := "vscode://" + mgrVscOpenExt() + "/open"
+		if mgrLoginInfo != nil {
+			if loginToken, queryKey, timeout := mgrLoginInfo(); queryKey != "" && timeout > 0 {
+				u += "?" + queryKey + "=" + GenerateTokenValue(loginToken, timeout)
+			}
+		}
+		w.Header().Set("Content-Type", "text/plain; charset=utf-8")
+		_, _ = io.WriteString(w, u)
+
 	case "/__manager/order":
 		if r.Method != http.MethodPost {
 			http.Error(w, "POST required", http.StatusMethodNotAllowed)
@@ -897,10 +993,50 @@ func mgrWriteJSON(w http.ResponseWriter, status int, v any) {
 // managerListApps serves the merged entry list.
 func managerListApps(w http.ResponseWriter, r *http.Request) {
 	mgrWriteJSON(w, http.StatusOK, map[string]any{
-		"now":   time.Now().UnixMilli(),
-		"apps":  mgrBuildEntries(),
-		"tools": zcodeState().toolsList(),
+		"now":    time.Now().UnixMilli(),
+		"apps":   mgrBuildEntries(),
+		"tools":  zcodeState().toolsList(),
+		"vscExt": mgrVscOpenExt(),
 	})
+}
+
+// mgrVscOpenExt resolves the effective "open in VS Code" extension id used by
+// the vscode://<ext>/open… deep links: the manager-stored override first, then
+// KVS_VSCODE_OPEN_EXT, then the suisrc.remote-server default.
+func mgrVscOpenExt() string {
+	if v := strings.TrimSpace(zcodeState().vscOpenExtValue()); v != "" {
+		return v
+	}
+	if v := strings.TrimSpace(os.Getenv("KVS_VSCODE_OPEN_EXT")); v != "" {
+		return v
+	}
+	return "suisrc.remote-server"
+}
+
+// managerSetVscOpenExt persists the "open in VS Code" extension id from the
+// VS Code-logo config button. Read per click, so a save takes effect
+// immediately.
+func managerSetVscOpenExt(w http.ResponseWriter, r *http.Request) {
+	var req struct {
+		Ext string `json:"ext"`
+	}
+	if !mgrDecode(w, r, &req) {
+		return
+	}
+	ext := strings.TrimSpace(req.Ext)
+	if ext != "" && len(ext) > 80 {
+		http.Error(w, "ext too long (max 80)", http.StatusBadRequest)
+		return
+	}
+	for _, c := range ext {
+		if !(c == '.' || c == '-' || c == '_' || c >= '0' && c <= '9' || c >= 'a' && c <= 'z' || c >= 'A' && c <= 'Z') {
+			http.Error(w, "invalid extension id", http.StatusBadRequest)
+			return
+		}
+	}
+	zcodeState().saveVscOpenExt(ext)
+	log.Printf("[manager] vscode open ext: %q", ext)
+	mgrWriteJSON(w, http.StatusOK, map[string]any{"success": true, "ext": mgrVscOpenExt()})
 }
 
 // mgrAppReq is the add/edit-app request body. A non-empty ID switches to edit
@@ -1059,8 +1195,8 @@ func mgrAddBuiltIn(w http.ResponseWriter, req mgrAppReq, store *zcodeStore) {
 		}
 		store.appSave(app)
 		log.Printf("[manager] built-in app updated: %s [%s] %s", app.Name, app.Svc, app.URL)
-		mgrApplyBuiltIn(old, app)
-		mgrWriteJSON(w, http.StatusOK, app)
+		note := mgrApplyBuiltIn(old, app)
+		mgrWriteJSON(w, http.StatusOK, map[string]any{"success": true, "note": note, "app": app})
 		return
 	}
 
@@ -1087,8 +1223,8 @@ func mgrAddBuiltIn(w http.ResponseWriter, req mgrAppReq, store *zcodeStore) {
 	app.Ver = req.Ver
 	store.appSave(app)
 	log.Printf("[manager] built-in app added: %s [%s] %s", app.Name, app.Svc, app.URL)
-	mgrApplyBuiltIn(managerApp{Type: app.Type}, app)
-	mgrWriteJSON(w, http.StatusOK, app)
+	note := mgrApplyBuiltIn(managerApp{Type: app.Type}, app)
+	mgrWriteJSON(w, http.StatusOK, map[string]any{"success": true, "note": note, "app": app})
 }
 
 // mgrParseFolders normalizes an inbound folder list: names default to the
@@ -1123,8 +1259,11 @@ func mgrPathName(p string) string {
 	return p
 }
 
-// managerDeleteApp removes a custom app (defaults and relay stamps are not
-// deletable).
+// managerDeleteApp removes ANY persisted app record: custom apps, built-in
+// cards, legacy default stamps (zcd-local / vsc-local) and relay-device
+// stamps. Underlying metadata is intentionally not cleaned — a connected
+// device re-derives its card on the next list build, while legacy stamps
+// (never rendered anymore) are gone for good.
 func managerDeleteApp(w http.ResponseWriter, r *http.Request) {
 	id := strings.TrimSpace(r.URL.Query().Get("id"))
 	if id == "" {
@@ -1134,21 +1273,29 @@ func managerDeleteApp(w http.ResponseWriter, r *http.Request) {
 	store := zcodeState()
 	app, ok := store.appFind(id)
 	if !ok {
-		http.Error(w, "unknown app id", http.StatusNotFound)
-		return
-	}
-	if !app.Custom {
-		http.Error(w, "only custom apps can be deleted", http.StatusForbidden)
-		return
+		// Synthesized cards (relay device / legacy local stamp) may never
+		// have been persisted — validate through the stub path before
+		// refusing, same as tags / note writes.
+		if app, ok = mgrStubApp(store, id, time.Now().UnixMilli()); !ok {
+			http.Error(w, "unknown app id", http.StatusNotFound)
+			return
+		}
 	}
 	store.appDelete(id)
 	store.noteSet(id, "") // 同步清理该应用的备注，避免 notes 段残留孤儿数据
+	if sid, ok := strings.CutPrefix(id, "zcd-"); ok {
+		// Relay device card: forget the device itself (pairing state), else
+		// the card is re-synthesized from the device list on the next render.
+		// A live device re-registers on its next reconnect.
+		store.remove(sid)
+	}
 	log.Printf("[manager] app removed: %s (%s)", app.Name, id)
+	note := ""
 	if app.Svc != "" {
 		// 内置卡删除：撤销其 env/版本覆盖并让服务回到配置默认值
-		mgrApplyBuiltIn(app, managerApp{Svc: app.Svc, Type: app.Type})
+		note = mgrApplyBuiltIn(app, managerApp{Svc: app.Svc, Type: app.Type})
 	}
-	mgrWriteJSON(w, http.StatusOK, map[string]bool{"success": true})
+	mgrWriteJSON(w, http.StatusOK, map[string]any{"success": true, "note": note})
 }
 
 // managerSaveOrder persists the user-arranged card order (full id list as

@@ -1,6 +1,7 @@
 package pkg
 
 import (
+	"bytes"
 	"encoding/json"
 	"io"
 	"net/http"
@@ -208,16 +209,19 @@ func TestManagerBuiltInApps(t *testing.T) {
 	}
 }
 
-// TestClearServiceVersionEnv checks that only kvs's self-assigned version env
-// is cleared (the version placeholder would otherwise read it back and re-pin
-// the old value); an externally pinned value survives.
+// TestClearServiceVersionEnv checks the version-env lifecycle: with a refill
+// source (version_latest_url) only kvs's self-assigned env is cleared (the
+// version placeholder would otherwise read it back and re-pin the old value)
+// and an externally pinned value survives; WITHOUT a refill source the last
+// known value is always kept (never emptied — bin_home would expand
+// …/servers//bin).
 func TestClearServiceVersionEnv(t *testing.T) {
 	Services().Register(map[string]*ServiceConfig{
-		"tver": {Name: "tver", Version: "1.2.3"},
+		"tver": {Name: "tver", Version: "1.2.3", VersionLatestURL: "http://127.0.0.1:1/latest"},
 	})
 	t.Cleanup(func() { Services().Register(map[string]*ServiceConfig{}) })
 
-	// Self-assigned artifact (equals the resolved version) → cleared.
+	// Self-assigned artifact (equals the resolved version) + refill source → cleared.
 	t.Setenv("KVS_SVC_TVER_VERSION", "1.2.3")
 	ClearServiceVersionEnv("tver")
 	if v := os.Getenv("KVS_SVC_TVER_VERSION"); v != "" {
@@ -229,6 +233,16 @@ func TestClearServiceVersionEnv(t *testing.T) {
 	ClearServiceVersionEnv("tver")
 	if v := os.Getenv("KVS_SVC_TVER_VERSION"); v != "9.9.9" {
 		t.Fatalf("external pin must survive, got %q", v)
+	}
+
+	// No refill source → last known value kept even when self-assigned.
+	Services().Register(map[string]*ServiceConfig{
+		"tnosrc": {Name: "tnosrc", Version: "2.0.0"},
+	})
+	t.Setenv("KVS_SVC_TNOSRC_VERSION", "2.0.0")
+	ClearServiceVersionEnv("tnosrc")
+	if v := os.Getenv("KVS_SVC_TNOSRC_VERSION"); v != "2.0.0" {
+		t.Fatalf("last known version must be kept without a refill source, got %q", v)
 	}
 }
 
@@ -282,8 +296,42 @@ func TestParseBackendsPathMode(t *testing.T) {
 	if backends[2].Target != "vscode" || !backends[2].IsService {
 		t.Fatalf("svc target mangled by mode strip: %+v", backends[2])
 	}
+	if backends[2].ServiceName != "vscode" {
+		t.Fatalf("ServiceName = %q, want vscode: %+v", backends[2].ServiceName, backends[2])
+	}
 	if backends[7].Target != "manager" {
 		t.Fatalf("api target mangled by mode strip: %+v", backends[7])
+	}
+}
+
+// TestInjectLogoutButtonSvc checks the injected logout-script tag carries the
+// backend's hosted-service name as ?svc= (so the script targets its own
+// service); a non-svc backend injects the plain script without a query.
+func TestInjectLogoutButtonSvc(t *testing.T) {
+	page := []byte(`<html><body data-config="vscode-workbench-web-configuration"></body></html>`)
+	resp := func() *http.Response {
+		return &http.Response{
+			StatusCode: 200,
+			Header:     http.Header{"Content-Type": []string{"text/html; charset=utf-8"}},
+			Body:       io.NopCloser(bytes.NewReader(bytes.Clone(page))),
+			Request:    httptest.NewRequest(http.MethodGet, "/", nil),
+		}
+	}
+	r := resp()
+	if err := injectLogoutButtonFor("vscode")(r); err != nil {
+		t.Fatal(err)
+	}
+	b, _ := io.ReadAll(r.Body)
+	if !bytes.Contains(b, []byte(`src="/__logout.svc.js?svc=vscode"`)) {
+		t.Fatalf("script tag missing ?svc= query: %s", b)
+	}
+	r2 := resp()
+	if err := injectLogoutButtonFor("")(r2); err != nil {
+		t.Fatal(err)
+	}
+	b2, _ := io.ReadAll(r2.Body)
+	if !bytes.Contains(b2, []byte(`src="/__logout.svc.js"></script>`)) || bytes.Contains(b2, []byte(`?svc=`)) {
+		t.Fatalf("plain tag expected: %s", b2)
 	}
 }
 
@@ -340,6 +388,39 @@ func TestFileBackendPathMode(t *testing.T) {
 
 // TestSplitSvcTarget checks svc:// target splitting: "name.ext" → service
 // "name" + extension "ext" (last dot); plain names have no extension.
+// TestManagerDeleteDeviceCard deletes a relay-device card that was never
+// persisted as an app record: the stub path validates the id, and the device
+// itself is forgotten (else the card would re-synthesize on the next render).
+func TestManagerDeleteDeviceCard(t *testing.T) {
+	sid := "testsid-deletecard"
+	t.Cleanup(func() {
+		zcodeState().remove(sid)
+		zcodeState().appDelete("zcd-" + sid)
+	})
+	zcodeState().upsert(zcodeDeviceRecord{
+		DeviceSid: sid,
+		DeviceMid: "mid-" + sid,
+		Meta:      zcodeMeta{"name": "测试设备"},
+	})
+
+	call := func(method, target string) *httptest.ResponseRecorder {
+		req := httptest.NewRequest(method, target, nil)
+		rec := httptest.NewRecorder()
+		managerHandler(rec, req)
+		return rec
+	}
+	if rec := call("DELETE", "/__manager?id=zcd-"+sid); rec.Code != 200 {
+		t.Fatalf("DELETE device card -> %d: %s", rec.Code, rec.Body.String())
+	}
+	if zcodeState().get(sid) != nil {
+		t.Fatal("device record still present after card delete")
+	}
+	// Unknown ids still 404.
+	if rec := call("DELETE", "/__manager?id=zcd-nope"); rec.Code != 404 {
+		t.Fatalf("DELETE unknown device -> %d, want 404", rec.Code)
+	}
+}
+
 func TestSplitSvcTarget(t *testing.T) {
 	if svc, ext, ok := SplitSvcTarget("vscode.ext"); !ok || svc != "vscode" || ext != "ext" {
 		t.Fatalf("SplitSvcTarget(vscode.ext) = %q %q %v", svc, ext, ok)

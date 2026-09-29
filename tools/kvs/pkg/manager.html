@@ -166,6 +166,8 @@ a { color: inherit; }
 
 .sync-zone { margin-left: auto; display: flex; align-items: center; gap: 10px; flex: none; }
 .sync-time { font-size: 11.5px; color: var(--text-3); font-family: var(--mono); white-space: nowrap; }
+.poll-sel { height: 33px; padding: 0 6px; font-size: 12.5px; color: var(--text-2); background: var(--surface-1); border: 1px solid var(--border); border-radius: 8px; cursor: pointer; outline: none; transition: color .15s, border-color .15s; }
+.poll-sel:hover { color: var(--text); border-color: var(--border-strong); }
 .act-btn.refresh { height: 33px; min-width: 33px; padding: 0 12px; font-size: 12.5px; }
 .act-btn.refresh svg { width: 15px; height: 15px; }
 
@@ -215,7 +217,9 @@ a { color: inherit; }
 .app-ico.note-btn:active { transform: scale(.94); }
 .app-ico.note-btn:focus-visible { outline: 2px solid var(--zcd-bd); outline-offset: 2px; }
 
-.head-mid { min-width: 0; display: flex; flex-direction: column; gap: 5px; }
+.head-mid { min-width: 0; flex: 1 1 auto; display: flex; flex-direction: column; gap: 5px; }
+.title-row { display: flex; align-items: center; gap: 8px; min-width: 0; }
+.title-row .app-name { flex: 1 1 auto; min-width: 0; }
 .app-name { font-size: 15.5px; font-weight: 620; letter-spacing: -.15px; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
 .tag-row { display: flex; gap: 6px; align-items: center; }
 .tag {
@@ -262,6 +266,8 @@ a { color: inherit; }
 
 /* 头部右侧操作组：编辑 + 删除，常显、可点 */
 .card-acts { margin-left: auto; flex: none; display: flex; gap: 6px; }
+.card-acts .card-act { width: 28px; height: 28px; border-radius: 8px; }
+.card-acts .card-act svg { width: 14px; height: 14px; }
 .card-act {
   width: 32px; height: 32px; border-radius: 9px;
   display: grid; place-items: center; color: var(--text-3);
@@ -270,6 +276,7 @@ a { color: inherit; }
 }
 .card-act svg { width: 16px; height: 16px; }
 .card-act.edit:hover { color: var(--text); border-color: var(--border-strong); background: var(--surface-2); }
+.card-act.stop:hover { color: var(--warning, #d19a66); border-color: var(--warning, #d19a66); background: color-mix(in srgb, var(--warning, #d19a66) 12%, transparent); }
 .card-act.del:hover { color: var(--danger); border-color: var(--danger); background: var(--danger-bg); }
 
 /* 工作区（VS Code 专属）：卡片内小胶囊，点击直达对应工作区；
@@ -293,29 +300,29 @@ a { color: inherit; }
    背景为半透明玻璃。 */
 .fld-acts {
   position: absolute; bottom: calc(100% + 7px); left: 50%; transform: translateX(-50%);
-  display: flex; gap: 2px; padding: 3px; z-index: 12;
-  background: rgba(16, 20, 29, .72);   /* 半透明 */
+  display: flex; gap: 4px; padding: 5px 6px; z-index: 12;
+  background: rgba(16, 20, 29, .55);   /* 半透明 */
   backdrop-filter: blur(10px); -webkit-backdrop-filter: blur(10px);
-  border: 1px solid var(--border-strong); border-radius: 10px;
+  border: 1px solid var(--border-strong); border-radius: 12px;
   box-shadow: 0 10px 26px -10px rgba(0, 0, 0, .5);
   opacity: 0; visibility: hidden;
   transition: opacity .18s ease 1s, visibility 0s linear 1s;   /* 收起延迟 1s */
 }
-:root.light .fld-acts { background: rgba(255, 255, 255, .75); }
+:root.light .fld-acts { background: rgba(255, 255, 255, .6); }
 @media (prefers-color-scheme: light) {
-  :root:not(.dark):not(.light) .fld-acts { background: rgba(255, 255, 255, .75); }
+  :root:not(.dark):not(.light) .fld-acts { background: rgba(255, 255, 255, .6); }
 }
 .fld:hover .fld-acts, .fld:focus-within .fld-acts {
   opacity: 1; visibility: visible;
   transition: opacity .13s ease, visibility 0s;                /* 出现即时 */
 }
 .fa-btn {
-  width: 27px; height: 27px; border-radius: 7px;
+  width: 32px; height: 32px; border-radius: 8px;
   display: grid; place-items: center; color: var(--text-2);
   transition: color .13s, background .13s;
   background: none;
 }
-.fa-btn svg { width: 14px; height: 14px; }
+.fa-btn svg { width: 16px; height: 16px; }
 .fa-btn:hover { background: rgba(127, 140, 170, .22); color: var(--text); }
 .fa-btn.del:hover { color: var(--danger); background: var(--danger-bg); }
 
@@ -538,6 +545,11 @@ body.drag-in-progress .card.openable, body.drag-in-progress .mrow.openable { cur
   resize: horizontal;
 }
 #tagsModal .modal { width: 360px; }
+/* 系统配置弹窗：默认半屏（可拖把手调整），最大占屏幕 90% */
+#settingsModal .modal {
+  width: 50vw;
+  max-width: 90vw;
+}
 /* 备注弹窗：宽高双向，输入区随弹窗伸缩 */
 #noteModal .modal {
   display: flex; flex-direction: column;
@@ -639,6 +651,13 @@ body.drag-in-progress .card.openable, body.drag-in-progress .mrow.openable { cur
     </div>
     <div class="sync-zone">
       <span id="lastUpdate" class="sync-time">加载中…</span>
+      <select id="pollSel" class="poll-sel" title="自动刷新间隔">
+        <option value="300000">5 分钟</option>
+        <option value="120000">2 分钟</option>
+        <option value="60000">1 分钟</option>
+        <option value="30000">30 秒</option>
+        <option value="0">不刷新</option>
+      </select>
       <button class="act-btn refresh" id="btnRefresh" type="button" title="立即刷新"></button>
     </div>
   </nav>
@@ -660,8 +679,8 @@ body.drag-in-progress .card.openable, body.drag-in-progress .mrow.openable { cur
   </div>
 
   <p class="foot-hint">
-    <span class="only-pc">点击卡片打开应用 · 点击 Logo 写备注 · 拖拽卡片调整顺序 · 每 15 秒自动刷新</span>
-    <span class="only-m">点击行打开应用 · 长按拖动调整顺序 · 每 15 秒自动刷新</span>
+    <span class="only-pc">点击卡片打开应用 · 点击 Logo 写备注 · 拖拽卡片调整顺序</span>
+    <span class="only-m">点击行打开应用 · 长按拖动调整顺序</span>
   </p>
 </main>
 
@@ -698,7 +717,7 @@ body.drag-in-progress .card.openable, body.drag-in-progress .mrow.openable { cur
       </label>
       <p class="modal-sub" id="svcUrlInfo"></p>
     </div>
-    <!-- 远程：任意设备 / 地址，选 Logo；VS Code Logo 带扩展文件夹 -->
+    <!-- 远程：任意设备 / 地址，选 Logo；选 VSCode 图标带扩展文件夹 -->
     <div id="remotePane" style="display:none">
       <label class="field"><span>Logo</span>
         <div class="logo-picker" id="logoPicker">
@@ -714,7 +733,7 @@ body.drag-in-progress .card.openable, body.drag-in-progress .mrow.openable { cur
       <label class="field"><span>访问地址</span>
         <input id="inpURL" placeholder="https://ws02-7080-wsc.example.com" autocomplete="off">
       </label>
-      <label class="field" id="foldersField"><span>扩展文件夹 <span class="opt">仅 VS Code Logo · 每行一个「名称=工作区路径」，也可只填路径</span></span>
+      <label class="field" id="foldersField"><span>扩展文件夹 <span class="opt">仅 VSCode · 每行一个「名称=工作区路径」，也可只填路径</span></span>
         <textarea id="inpFolders" rows="3" placeholder="proj1=/wsc/go/proj1
 /wsc/api"></textarea>
       </label>
@@ -740,6 +759,20 @@ body.drag-in-progress .card.openable, body.drag-in-progress .mrow.openable { cur
     <div class="modal-acts">
       <button class="btn" id="folderCancel" type="button">取消</button>
       <button class="btn primary" id="folderOk" type="button">添加</button>
+    </div>
+  </div>
+</div>
+
+<div class="modal-mask xw" id="settingsModal" hidden>
+  <div class="modal" role="dialog" aria-modal="true" aria-label="系统配置">
+    <h2>系统配置</h2>
+    <p class="modal-sub">以下配置保存在 zcodex.json，保存后即时生效；后续会在这里扩展更多配置项</p>
+    <label class="field"><span>VS Code 打开插件 <span class="opt">vscode://&lt;插件名&gt;/open… · 留空用环境变量 KVS_VSCODE_OPEN_EXT</span></span>
+      <input id="inpVscExt" placeholder="suisrc.remote-server" maxlength="80" autocomplete="off">
+    </label>
+    <div class="modal-acts">
+      <button class="btn" id="settingsCancel" type="button">取消</button>
+      <button class="btn primary" id="settingsOk" type="button">保存</button>
     </div>
   </div>
 </div>
@@ -810,6 +843,7 @@ body.drag-in-progress .card.openable, body.drag-in-progress .mrow.openable { cur
   <span class="toolbar-label" id="toolbarLabel">工具</span>
   <div class="toolbar-tools" id="toolbarTools"></div>
   <button class="tool-btn manage" id="btnToolManage" type="button" title="配置常用工具"></button>
+  <button class="tool-btn" id="btnSettings" type="button" title="系统配置"></button>
 </footer>
 
 <div id="toast" class="toast" hidden></div>
@@ -829,6 +863,7 @@ var I = {
   brand:  '<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><rect x="3" y="3" width="7.5" height="7.5" rx="2"/><rect x="13.5" y="3" width="7.5" height="7.5" rx="2"/><rect x="3" y="13.5" width="7.5" height="7.5" rx="2"/><rect x="13.5" y="13.5" width="7.5" height="7.5" rx="2"/></svg>',
   zcd:    '<img class="logo-zcd" alt="" src="data:image/png;base64,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">',
   vsc:    '<svg viewBox="0 0 256 256" xmlns="http://www.w3.org/2000/svg" fill="none"><path fill="#0065A9" d="M246.94 27.6383L194.193 2.24138C188.088 -0.698302 180.791 0.541721 175.999 5.33332L3.32371 162.773C-1.32082 167.008 -1.31548 174.32 3.33523 178.548L17.4399 191.37C21.2421 194.827 26.9682 195.081 31.0619 191.976L239.003 34.2269C245.979 28.9347 255.999 33.9103 255.999 42.6667V42.0543C255.999 35.9078 252.478 30.3047 246.94 27.6383Z"/><path fill="#007ACC" d="M246.94 228.362L194.193 253.759C188.088 256.698 180.791 255.458 175.999 250.667L3.32371 93.2272C-1.32082 88.9925 -1.31548 81.6802 3.33523 77.4523L17.4399 64.6298C21.2421 61.1733 26.9682 60.9188 31.0619 64.0245L239.003 221.773C245.979 227.065 255.999 222.09 255.999 213.333V213.946C255.999 220.092 252.478 225.695 246.94 228.362Z"/><path fill="#1F9CF0" d="M194.196 253.763C188.089 256.7 180.792 255.459 176 250.667C181.904 256.571 192 252.389 192 244.039V11.9606C192 3.61057 181.904 -0.571175 176 5.33321C180.792 0.541166 188.089 -0.700607 194.196 2.23648L246.934 27.5985C252.476 30.2635 256 35.8686 256 42.0178V213.983C256 220.132 252.476 225.737 246.934 228.402L194.196 253.763Z"/></svg>',
+  gear:   '<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.9" stroke-linecap="round" stroke-linejoin="round"><circle cx="12" cy="12" r="3"/><path d="M19.4 15a1.65 1.65 0 0 0 .33 1.82l.06.06a2 2 0 0 1-2.83 2.83l-.06-.06a1.65 1.65 0 0 0-1.82-.33 1.65 1.65 0 0 0-1 1.51V21a2 2 0 0 1-4 0v-.09A1.65 1.65 0 0 0 9 19.4a1.65 1.65 0 0 0-1.82.33l-.06.06a2 2 0 0 1-2.83-2.83l.06-.06a1.65 1.65 0 0 0 .33-1.82 1.65 1.65 0 0 0-1.51-1H3a2 2 0 0 1 0-4h.09A1.65 1.65 0 0 0 4.6 9a1.65 1.65 0 0 0-.33-1.82l-.06-.06a2 2 0 0 1 2.83-2.83l.06.06a1.65 1.65 0 0 0 1.82.33H9a1.65 1.65 0 0 0 1-1.51V3a2 2 0 0 1 4 0v.09a1.65 1.65 0 0 0 1 1.51 1.65 1.65 0 0 0 1.82-.33l.06-.06a2 2 0 0 1 2.83 2.83l-.06.06a1.65 1.65 0 0 0-.33 1.82V9a1.65 1.65 0 0 0 1.51 1H21a2 2 0 0 1 0 4h-.09a1.65 1.65 0 0 0-1.51 1z"/></svg>',
   folder: '<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><path d="M3.5 7.2A1.7 1.7 0 0 1 5.2 5.5h4.1l2 2.4h7.5a1.7 1.7 0 0 1 1.7 1.7v8.2a1.7 1.7 0 0 1-1.7 1.7H5.2a1.7 1.7 0 0 1-1.7-1.7Z"/></svg>',
   tag:    '<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><path d="M3.5 12.6 12.6 3.5H20.5V11.4L11.4 20.5z"/><circle cx="16.2" cy="7.8" r="1.4"/></svg>',
   os:     '<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><rect x="2.5" y="4" width="19" height="13" rx="2"/><path d="M8 21h8M12 17v4"/></svg>',
@@ -933,13 +968,13 @@ $('btnZctl').addEventListener('click', function () {
 });
 
 /* ============================================================ 数据与渲染 */
-var state = { apps: [], tools: [], filter: 'all', expanded: {}, loaded: false, refetchTimer: null };
-var POLL_MS = 15000;
+var state = { apps: [], tools: [], filter: 'all', expanded: {}, loaded: false, refetchTimer: null, vscExt: '' };
 
 $('brandMark').innerHTML = I.brand;
 $('toolbarLabel').insertBefore(icon('tag'), $('toolbarLabel').firstChild);
 $('btnToolManage').innerHTML = I.plus;
 $('btnAdd').innerHTML = I.plus + '<span>添加</span>';
+$('btnSettings').innerHTML = I.gear;
 $('btnRefresh').innerHTML = I.refresh + '<span>刷新</span>';
 $('btnZctl').innerHTML = I.copy + '<span>ZCode控制</span>';
 $('emptyIcon').innerHTML = I.box;
@@ -1021,7 +1056,11 @@ function buildCard(a) {
   head.appendChild(noteLogo(a, icoKey));
 
   var mid = el('div', 'head-mid');
-  mid.appendChild(el('div', 'app-name', a.name || a.id));
+  /* 标题行：名称 + 右侧操作（关闭/编辑/删除）同处一行，标签行独立在其下，
+     操作按钮在任何标签数量/卡片宽度下都不会挤占标签 */
+  var titleRow = el('div', 'title-row');
+  titleRow.appendChild(el('div', 'app-name', a.name || a.id));
+  mid.appendChild(titleRow);
   var tags = el('div', 'tag-row');
   var tagInfo = TAGS[icoKey];
   tags.appendChild(el('span', 'tag ' + icoKey, tagInfo[0]));
@@ -1048,18 +1087,31 @@ function buildCard(a) {
   mid.appendChild(tags);
   head.appendChild(mid);
 
-  /* 头部右侧操作：编辑 + 删除（仅自定义应用） */
-  if (a.custom) {
+  /* 头部右侧操作：关闭仅内置卡（停后端进程）；删除所有卡都有；编辑仅限可编辑的卡 */
+  {
     var acts = el('div', 'card-acts');
-    var editBtn = el('button', 'card-act edit');
-    editBtn.type = 'button';
-    editBtn.title = '编辑 ' + a.name;
-    editBtn.innerHTML = I.pencil;
-    editBtn.addEventListener('click', function (e) {
-      e.stopPropagation();
-      openAddModal(a);
-    });
-    acts.appendChild(editBtn);
+    if (a.svc) {
+      var stopBtn = el('button', 'card-act stop');
+      stopBtn.type = 'button';
+      stopBtn.title = '关闭服务 ' + a.name;
+      stopBtn.innerHTML = I.power;
+      stopBtn.addEventListener('click', function (e) {
+        e.stopPropagation();
+        stopSvc(a);
+      });
+      acts.appendChild(stopBtn);
+    }
+    if (a.custom) {
+      var editBtn = el('button', 'card-act edit');
+      editBtn.type = 'button';
+      editBtn.title = '编辑 ' + a.name;
+      editBtn.innerHTML = I.pencil;
+      editBtn.addEventListener('click', function (e) {
+        e.stopPropagation();
+        openAddModal(a);
+      });
+      acts.appendChild(editBtn);
+    }
     var del = el('button', 'card-act del');
     del.type = 'button';
     del.title = '删除 ' + a.name;
@@ -1069,7 +1121,7 @@ function buildCard(a) {
       deleteApp(a);
     });
     acts.appendChild(del);
-    head.appendChild(acts);
+    titleRow.appendChild(acts);
   }
   card.appendChild(head);
 
@@ -1174,6 +1226,27 @@ function buildFolderChip(a, f) {
   });
   acts.appendChild(delBtn);
   acts.appendChild(editBtn);
+  var vscBtn = el('button', 'fa-btn');
+  vscBtn.type = 'button';
+  vscBtn.title = '使用 VS Code 打开 ' + f.name;
+  vscBtn.innerHTML = I.vsc;
+  vscBtn.addEventListener('click', function (e) {
+    e.stopPropagation();
+    if (!state.vscExt) { toast('请先在右下角配置 VS Code 打开插件', true); return; }
+    /* 与 logout.svc.js 的「在 vscode 中打开」同款流程：先向服务端领取
+       带短时令牌的 vscode:// 基址，再追加 addr/folder */
+    fetch(MGR_BASE + '/__manager/vscopen', { credentials: 'include' })
+      .then(function (r) { return r.text(); })
+      .then(function (u) {
+        u = (u || '').trim();
+        if (u.indexOf('://') === -1) { toast('VS Code 打开未配置', true); return; }
+        var sep = u.indexOf('?') === -1 ? '?' : '&';
+        location.href = u + sep + 'addr=' + encodeURIComponent(location.origin) +
+          '&folder=' + encodeURIComponent(f.path);
+      })
+      .catch(function () { toast('VS Code 打开失败', true); });
+  });
+  acts.appendChild(vscBtn);
   chip.appendChild(acts);
 
   chip.addEventListener('click', function (e) {
@@ -1489,6 +1562,7 @@ function loadApps(manual) {
     .then(function (data) {
       state.apps = data.apps || [];
       state.tools = data.tools || [];
+      if (data.vscExt) state.vscExt = data.vscExt;
       state.loaded = true;
       hideError();
       render();
@@ -1606,8 +1680,14 @@ $('logoPicker').addEventListener('click', function (e) {
   document.querySelectorAll('#logoPicker .logo-opt').forEach(function (b) {
     b.classList.toggle('active', b === btn);
   });
-  /* VS Code Logo 才有扩展文件夹 */
+  /* 仅 VSCode（选了 VSCode 图标）才有扩展文件夹 */
   $('foldersField').style.display = addIcon === 'vsc' ? '' : 'none';
+});
+
+/* 静态 Logo 选项补上默认图标（与卡片同源，见 logoNode/I） */
+document.querySelectorAll('#logoPicker .logo-opt').forEach(function (b) {
+  var ico = b.querySelector('.app-ico');
+  if (ico && I[b.dataset.i]) ico.innerHTML = I[b.dataset.i];
 });
 
 function refreshAddPane() {
@@ -1630,11 +1710,12 @@ function renderSvcPicker() {
     addSvc = offer[0] || null;
   }
   offer.forEach(function (sv) {
+    var key = sv.type === 'zcd' ? 'zcd' : 'vsc';
     var b = el('button', 'logo-opt' + (addSvc && sv.svc === addSvc.svc ? ' active' : ''));
     b.type = 'button';
     b.dataset.svc = sv.svc;
-    b.innerHTML = '<span class="app-ico i-' + (sv.type === 'zcd' ? 'zcd' : 'vsc') + '"></span>' +
-      (sv.type === 'zcd' ? 'ZCode' : 'VS Code');
+    b.appendChild(logoNode(key));
+    b.appendChild(document.createTextNode(key === 'zcd' ? 'ZCode' : 'VS Code'));
     b.addEventListener('click', function () { selectSvc(sv); });
     picker.appendChild(b);
   });
@@ -1660,7 +1741,15 @@ function syncSvcFields() {
     $('inpSvcVer').placeholder = addSvc.version ? '当前 ' + addSvc.version + ' · 留空升级最新' : '留空升级最新版本';
     $('inpSvcData').placeholder = addSvc.data_dir || '留空使用配置默认';
     $('inpSvcWsc').placeholder = addSvc.wsc || '留空使用配置默认';
-    $('svcUrlInfo').textContent = '地址：' + addSvc.url;
+    /* 挂载地址带 origin 展示（可点击预览）；存储仍是相对路径，跟随页面所在源 */
+    var info = $('svcUrlInfo');
+    info.textContent = '地址：';
+    var link = document.createElement('a');
+    link.href = addSvc.url;
+    link.textContent = link.href;   // 相对挂载解析成带 origin 的绝对地址
+    link.target = '_blank';
+    link.rel = 'noopener';
+    info.appendChild(link);
   } else {
     $('svcUrlInfo').textContent = '';
   }
@@ -1719,7 +1808,7 @@ function openAddModal(a) {
     $(addKind === 'svc' ? 'inpSvcName' : 'inpName').focus();
   }, 60);
 }
-$('btnAdd').addEventListener('click', openAddModal);
+$('btnAdd').addEventListener('click', function () { openAddModal(); });
 $('addCancel').addEventListener('click', function () { closeModal('addModal'); });
 
 /* 每行「名称=工作区路径」；只填路径时名称取末段 */
@@ -1764,8 +1853,10 @@ $('addOk').addEventListener('click', function () {
       body: JSON.stringify(sbody)
     }).then(function (res) {
       if (!res.ok) return res.text().then(function (t) { throw new Error(t || ('HTTP ' + res.status)); });
+      return res.json().catch(function () { return {}; });
+    }).then(function (d) {
       closeModal('addModal');
-      toast(editingApp ? '已保存「' + sname + '」' : '已添加「' + sname + '」');
+      toast((editingApp ? '已保存「' : '已添加「') + sname + '」' + (d && d.note ? '：' + d.note : ''));
       loadApps(false);
     }).catch(function (err) { toast(editingApp ? '保存失败：' : '添加失败：' + err.message, true); });
     return;
@@ -1783,8 +1874,10 @@ $('addOk').addEventListener('click', function () {
     body: JSON.stringify(body)
   }).then(function (res) {
     if (!res.ok) return res.text().then(function (t) { throw new Error(t || ('HTTP ' + res.status)); });
+    return res.json().catch(function () { return {}; });
+  }).then(function (d) {
     closeModal('addModal');
-    toast(editingApp ? '已保存「' + name + '」' : '已添加「' + name + '」');
+    toast((editingApp ? '已保存「' : '已添加「') + name + '」' + (d && d.note ? '：' + d.note : ''));
     loadApps(false);
   }).catch(function (err) { toast(editingApp ? '保存失败：' : '添加失败：' + err.message, true); });
 });
@@ -2032,6 +2125,28 @@ function openToolsModal() {
   openModal('toolsModal');
   setTimeout(function () { $('inpToolName').focus(); }, 60);
 }
+$('btnSettings').addEventListener('click', function () {
+  $('inpVscExt').value = state.vscExt || '';
+  openModal('settingsModal');
+  setTimeout(function () { $('inpVscExt').focus(); }, 60);
+});
+$('settingsCancel').addEventListener('click', function () { closeModal('settingsModal'); });
+$('settingsOk').addEventListener('click', function () {
+  var ext = $('inpVscExt').value.trim();
+  fetch(MGR_BASE + '/__manager/vscext', {
+    method: 'POST', credentials: 'include',
+    headers: { 'Content-Type': 'application/json' },
+    body: JSON.stringify({ ext: ext })
+  }).then(function (res) {
+    if (!res.ok) return res.text().then(function (t) { throw new Error(t || ('HTTP ' + res.status)); });
+    return res.json();
+  }).then(function (d) {
+    state.vscExt = d.ext || ext;
+    closeModal('settingsModal');
+    toast('已保存，VS Code 打开插件：' + (state.vscExt || '默认（环境变量）'));
+  }).catch(function (err) { toast('保存失败：' + err.message, true); });
+});
+
 $('btnToolManage').addEventListener('click', openToolsModal);
 $('toolCancel').addEventListener('click', function () { closeModal('toolsModal'); });
 $('toolOk').addEventListener('click', function () {
@@ -2057,6 +2172,25 @@ $('toolOk').addEventListener('click', function () {
 });
 
 /* ---- 删除 ---- */
+/* 关闭内置服务：停后端进程（跑 stop_shell、清理 socket）并复位状态，
+   下次打开应用时按当前版本/配置懒启动。外部进程由后端返回 note 说明。 */
+function stopSvc(a) {
+  confirmBox({ title: '关闭服务', msg: '确定关闭「' + a.name + '」的后端进程？下次打开应用时会自动重新启动。' })
+    .then(function (ok) {
+      if (!ok) return;
+      fetch(MGR_BASE + '/__manager/stop?svc=' + encodeURIComponent(a.svc), { method: 'POST', credentials: 'include' })
+        .then(function (res) {
+          if (!res.ok) return res.text().then(function (t) { throw new Error(t || ('HTTP ' + res.status)); });
+          return res.json().catch(function () { return {}; });
+        })
+        .then(function (d) {
+          toast('已关闭「' + a.name + '」' + (d && d.note ? '：' + d.note : ''));
+          loadApps(false);
+        })
+        .catch(function (err) { toast('关闭失败：' + err.message, true); });
+    });
+}
+
 function deleteApp(a) {
   confirmBox({ title: '删除应用', msg: '确定删除「' + a.name + '」？该操作不可恢复。' })
     .then(function (ok) {
@@ -2064,7 +2198,10 @@ function deleteApp(a) {
       fetch(MGR_BASE + '/__manager?id=' + encodeURIComponent(a.id), { method: 'DELETE', credentials: 'include' })
         .then(function (res) {
           if (!res.ok) return res.text().then(function (t) { throw new Error(t || ('HTTP ' + res.status)); });
-          toast('已删除「' + a.name + '」');
+          return res.json().catch(function () { return {}; });
+        })
+        .then(function (d) {
+          toast('已删除「' + a.name + '」' + (d && d.note ? '：' + d.note : ''));
           loadApps(false);
         })
         .catch(function (err) { toast('删除失败：' + err.message, true); });
@@ -2102,9 +2239,20 @@ document.querySelectorAll('#logoPicker .logo-opt').forEach(function (b) {
 });
 showSkeletons();
 loadApps(false);
-setInterval(function () {
-  if (!document.hidden) loadApps(false);
-}, POLL_MS);
+/* 自动刷新间隔（右上角可选 5min/2min/1min/30s/不刷新），localStorage 记忆；
+   0 = 不自动刷新，配合「刷新」按钮手动拉取。回到标签页仍拉一次。 */
+var pollSel = $('pollSel');
+var pollTimer = null;
+function applyPoll() {
+  var ms = parseInt(pollSel.value, 10) || 0;
+  localStorage.setItem('mgr-poll', String(ms));
+  if (pollTimer) { clearInterval(pollTimer); pollTimer = null; }
+  if (ms > 0) pollTimer = setInterval(function () { if (!document.hidden) loadApps(false); }, ms);
+}
+pollSel.addEventListener('change', applyPoll);
+var savedPoll = parseInt(localStorage.getItem('mgr-poll'), 10);
+pollSel.value = String([300000, 120000, 60000, 30000, 0].indexOf(savedPoll) !== -1 ? savedPoll : 30000);
+applyPoll();
 document.addEventListener('visibilitychange', function () {
   if (!document.hidden) loadApps(false);
 });

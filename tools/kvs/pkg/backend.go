@@ -24,7 +24,7 @@ import (
 	"time"
 )
 
-//go:embed favicon.ico manager.html loading.html login.html logout.vsc.js kvs.ini
+//go:embed favicon.ico manager.html loading.html login.html logout.svc.js kvs.ini
 var staticFS embed.FS
 
 // MustAsset reads an embedded asset by name, failing fast at startup if missing.
@@ -33,7 +33,7 @@ var staticFS embed.FS
 //
 // When DEBUG=1 is set in the environment, assets are read from the current
 // working directory instead of the embed. This allows live-editing assets
-// (e.g. logout.vsc.js, login.html) without recompiling.
+// (e.g. logout.svc.js, login.html) without recompiling.
 func MustAsset(name string) []byte {
 	if gDebug {
 		if b, err := os.ReadFile(name); err == nil {
@@ -125,6 +125,9 @@ func parseBackends(entries [][2]string) []Backend {
 		if isRegex := strings.HasPrefix(prefix, "^"); isRegex {
 			if b := newBackend(prefix[1:], urlStr); b != nil {
 				b.IsService = b.Scheme == "svc"
+				if b.IsService {
+					b.ServiceName, _, _ = SplitSvcTarget(b.Target)
+				}
 				b.IsRegex = true
 				b.IsCache = isCache
 				b.IsWSock = isWSock
@@ -147,6 +150,9 @@ func parseBackends(entries [][2]string) []Backend {
 				// svc://<name> targets are hosted services by definition —
 				// the scheme itself is the explicit service marker.
 				b.IsService = b.Scheme == "svc"
+				if b.IsService {
+					b.ServiceName, _, _ = SplitSvcTarget(b.Target)
+				}
 				b.IsCache = isCache
 				b.IsWSock = isWSock
 				// <verhash>/<version> route template: the prefix is matched
@@ -280,6 +286,9 @@ func CreateBackendHandler(b Backend, cacheHeaders map[string]string, loginAuthz 
 	if b.IsWSock {
 		mount = "ws~" + mount
 	}
+	// Hosted-service name for self-attribution (injected logout script's
+	// ?svc= query): set by parseBackends, carried through the svc:// proxy.
+	svcName := b.ServiceName
 	switch b.Scheme {
 	case "http", "https", "ws", "wss":
 		log.Printf("backend %s → %s", mount, b.RawURL)
@@ -305,7 +314,7 @@ func CreateBackendHandler(b Backend, cacheHeaders map[string]string, loginAuthz 
 			BufferPool:    sharedProxyBufferPool,
 		}
 		if loginAuthz {
-			rp.ModifyResponse = cacheResponseModifier()
+			rp.ModifyResponse = cacheResponseModifier(svcName)
 		}
 		// Upgrade requests take the raw-conn tunnel (pkg/wsproxy.go); every
 		// other request keeps using the standard ReverseProxy.
@@ -333,7 +342,7 @@ func CreateBackendHandler(b Backend, cacheHeaders map[string]string, loginAuthz 
 			BufferPool:    sharedProxyBufferPool,
 		}
 		if loginAuthz {
-			rp.ModifyResponse = cacheResponseModifier()
+			rp.ModifyResponse = cacheResponseModifier(svcName)
 		}
 		up := &wsUpstream{b: b, target: unixSyntheticTarget, hdrs: cacheHeaders, mods: rp.ModifyResponse}
 		fast := wsUpgradeHandler(up, rp)
@@ -400,6 +409,7 @@ func CreateBackendHandler(b Backend, cacheHeaders map[string]string, loginAuthz 
 		nb := b
 		nb.Scheme, nb.Target, nb.RawURL = scheme, target, sc.Address
 		nb.IsService = false // lifecycle handled by the service manager
+		nb.ServiceName = svcName
 		log.Printf("backend %s → svc://%s (hosted service, address %s)", mount, name, sc.Address)
 		return CreateBackendHandler(nb, cacheHeaders, loginAuthz)
 
@@ -493,9 +503,11 @@ func applyCacheHeaders(req *http.Request, hdrs map[string]string) {
 
 // cacheResponseModifier returns the composed response modifier applied to all
 // reverse-proxy backends: replace 401/403 with the login page, then inject the
-// logout-button script into recognised HTML apps.
-func cacheResponseModifier() func(*http.Response) error {
-	return chainModifiers(authRedirectModifier(), injectLogoutButton)
+// logout-button script into recognised HTML apps. svcName attributes the
+// injected script to the backend's hosted service (?svc= on the script URL) —
+// empty for non-svc backends.
+func cacheResponseModifier(svcName string) func(*http.Response) error {
+	return chainModifiers(authRedirectModifier(), injectLogoutButtonFor(svcName))
 }
 
 // authRedirectModifier returns a ModifyResponse that replaces 401/403 from the
@@ -546,53 +558,58 @@ func chainModifiers(mods ...func(*http.Response) error) func(*http.Response) err
 // of appending an entry here (plus the script + its route).
 type appDetector struct {
 	fingerprint []byte // substring searched for in the response body
-	scriptTag   []byte // <script src="..."> appended when the fingerprint matches
+	scriptPath  string // script URL appended as <script src="...[?svc=]"> on fingerprint match
 }
 
 // appDetectors lists the apps whose logout-button scripts are injected into
 // recognised HTML pages. Each entry pairs a fingerprint (a byte substring
-// unique to that app's HTML) with the <script> tag to inject.
+// unique to that app's HTML) with the script to inject. The ?svc= query (the
+// backend's hosted-service name) is appended by matchAppScript so the script
+// talks to its own service instead of letting the server pick one arbitrarily.
 var appDetectors = []appDetector{
 	{
 		// VS Code Server web workbench — the meta id is present in workbench.html.
 		fingerprint: []byte(`vscode-workbench-web-configuration`),
-		scriptTag:   []byte(`<script src="/__logout.vsc.js"></script>`),
+		scriptPath:  "/__logout.svc.js",
 	},
 }
 
-// injectLogoutButton inspects proxied HTML document responses and, when the body
-// matches a known app fingerprint, appends that app's logout-button script tag.
-// Unrecognised pages pass through untouched, so non-VS-Code backends are not
-// polluted with a useless script.
+// injectLogoutButtonFor inspects proxied HTML document responses and, when the
+// body matches a known app fingerprint, appends that app's logout-button script
+// tag. svcName is the backend's hosted-service name ("" for non-svc backends)
+// and is appended to the script URL as ?svc=. Unrecognised pages pass through
+// untouched, so non-VS-Code backends are not polluted with a useless script.
 //
 // Only top-level HTML documents (Content-Type: text/html, GET) are inspected,
 // so static assets, API calls and Server-Sent-Events are unaffected.
-func injectLogoutButton(r *http.Response) error {
-	if r.Request == nil || r.Request.Method != http.MethodGet {
-		return nil
-	}
-	// Only inspect top-level navigations; skip iframes / fetches.
-	if dest := r.Request.Header.Get("Sec-Fetch-Dest"); dest != "" && dest != "document" {
-		return nil
-	}
-	ct := r.Header.Get("Content-Type")
-	if !strings.HasPrefix(ct, "text/html") {
-		return nil
-	}
+func injectLogoutButtonFor(svcName string) func(*http.Response) error {
+	return func(r *http.Response) error {
+		if r.Request == nil || r.Request.Method != http.MethodGet {
+			return nil
+		}
+		// Only inspect top-level navigations; skip iframes / fetches.
+		if dest := r.Request.Header.Get("Sec-Fetch-Dest"); dest != "" && dest != "document" {
+			return nil
+		}
+		ct := r.Header.Get("Content-Type")
+		if !strings.HasPrefix(ct, "text/html") {
+			return nil
+		}
 
-	body, err := io.ReadAll(r.Body)
-	if err != nil {
-		return err
-	}
+		body, err := io.ReadAll(r.Body)
+		if err != nil {
+			return err
+		}
 
-	// Detect the app by fingerprint; inject only on a match.
-	if tag := matchAppScript(body); tag != nil {
-		setResponseBody(r, injectScript(body, tag))
+		// Detect the app by fingerprint; inject only on a match.
+		if tag := matchAppScript(body, svcName); tag != nil {
+			setResponseBody(r, injectScript(body, tag))
+			return nil
+		}
+		// No match — restore body as-is.
+		r.Body = io.NopCloser(bytes.NewReader(body))
 		return nil
 	}
-	// No match — restore body as-is.
-	r.Body = io.NopCloser(bytes.NewReader(body))
-	return nil
 }
 
 // injectScript inserts tag into body before the last </body> (or appends if none).
@@ -605,11 +622,16 @@ func injectScript(body, tag []byte) []byte {
 }
 
 // matchAppScript returns the logout-script tag for the first app whose
-// fingerprint is found in body, or nil if no app matches.
-func matchAppScript(body []byte) []byte {
+// fingerprint is found in body, or nil if no app matches. The tag carries the
+// backend's service name as ?svc= so the script targets its own service.
+func matchAppScript(body []byte, svcName string) []byte {
 	for _, d := range appDetectors {
 		if bytes.Contains(body, d.fingerprint) {
-			return d.scriptTag
+			tag := `<script src="` + d.scriptPath
+			if svcName != "" {
+				tag += `?svc=` + url.QueryEscape(svcName)
+			}
+			return []byte(tag + `"></script>`)
 		}
 	}
 	return nil

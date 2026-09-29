@@ -324,22 +324,41 @@ func main() {
 	// 应用中心内置卡保存（zcode 数据文件夹/工作目录）后的应用动作：env 已由
 	// manager 写入进程，这里重载配置（命令行按新 env 重新展开）并复位服务状态，
 	// 下次访问按新值重新准备 —— 与 /__restart 同一套机制。
-	pkg.SetManagerApplyHook(func(svcName string) {
+	// vscode:// 深链签发需要登录配置（短时 query token，与 /__open_url 同源）。
+	pkg.SetManagerLoginInfo(func() (string, string, int) {
+		return cfg.LoginToken, cfg.QueryTokenKey, cfg.TokenTimeout
+	})
+	pkg.SetManagerApplyHook(func(svcName string) string {
 		if pkg.Services().Get(svcName) == nil {
-			return
+			return ""
 		}
 		newCfg := pkg.LoadInitConfig()
 		pkg.Services().Register(newCfg.Services)
 		cfg = newCfg
 		routesPtr.Store(buildRoutes(newCfg)) // 版本/地址变更后路由跟随
-		pkg.Services().StopOne(svcName, true)
+		stopped := pkg.Services().StopOne(svcName, true)
 		pkg.Services().State(svcName).Reset()
-		if sc := pkg.Services().Get(svcName); sc != nil && sc.InitError != "" {
-			if st := pkg.Services().State(svcName); st != nil {
-				st.Finish(fmt.Errorf("%s", sc.InitError))
+		note := ""
+		if sc := pkg.Services().Get(svcName); sc != nil {
+			if sc.InitError != "" {
+				if st := pkg.Services().State(svcName); st != nil {
+					st.Finish(fmt.Errorf("%s", sc.InitError))
+				}
+			} else if !stopped && pkg.ServiceAlive(sc) {
+				// 存活但非本实例管理（外部进程/上一任实例遗留）：StopOne
+				// 停不掉它，新版本只能等该进程自己重启后由 prepare 接管。
+				note = "服务由外部进程提供，未被重启；所选版本/配置将在该进程重启后生效"
+			} else if stopped && sc.Version != "" {
+				// 原本在跑：已按规格停掉，标注下次访问将以哪个版本启动。
+				note = "服务已停止，下次访问时将以版本 " + sc.Version + " 启动"
 			}
 		}
-		log.Printf("[manager:%s] env applied, service will re-prepare on next request", svcName)
+		if note != "" {
+			log.Printf("[manager:%s] env applied, service will re-prepare on next request (%s)", svcName, note)
+		} else {
+			log.Printf("[manager:%s] env applied, service will re-prepare on next request", svcName)
+		}
+		return note
 	})
 
 	//======================================================================================
@@ -561,13 +580,14 @@ func main() {
 		mux.HandleFunc(pkg.CachePathPrefix(), pkg.HandleCache)
 	}
 
-	// /__logout.vsc.js – VS Code logout-button script injected into proxied HTML.
-	// Named .vsc because it targets the VS Code activity-bar toolbar; other apps
-	// can get their own script (e.g. /__logout.xxx.js) later.
-	mux.HandleFunc("/__logout.vsc.js", func(w http.ResponseWriter, r *http.Request) {
+	// /__logout.svc.js – logout-button script injected into proxied HTML.
+	// Named .svc because it targets the hosted-service workbench generically;
+	// the ?svc= query on the injected <script> URL tells the script which
+	// service's /__version, /__open_url, /__agents/* and /__restart to call.
+	mux.HandleFunc("/__logout.svc.js", func(w http.ResponseWriter, r *http.Request) {
 		w.Header().Set("Content-Type", "application/javascript; charset=utf-8")
 		w.Header().Set("Cache-Control", "no-cache")
-		_, _ = w.Write(pkg.MustAsset("logout.vsc.js"))
+		_, _ = w.Write(pkg.MustAsset("logout.svc.js"))
 	})
 
 	// All other requests: dispatch to backends. The service backend is
@@ -728,6 +748,9 @@ func main() {
 
 // svcBackendName returns the service name behind a svc:// backend ("" otherwise).
 func svcBackendName(b pkg.Backend) string {
+	if b.ServiceName != "" {
+		return b.ServiceName
+	}
 	if b.Scheme == "svc" {
 		name, _, _ := pkg.SplitSvcTarget(b.Target) // svc://name.ext → name
 		return name

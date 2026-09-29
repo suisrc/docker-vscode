@@ -150,6 +150,12 @@ func PrepareService(sc *ServiceConfig, srvState *ServiceState) (bool, error) {
 		alive = isServiceAlive(sc.Healthz)
 	}
 	if alive {
+		// Unmanaged-but-running backend: the resolved version (a manager pin,
+		// a /__restart override) cannot be applied to a process kvs doesn't
+		// own — say so instead of silently serving the old build.
+		if sc.Version != "" {
+			log.Printf("[prepare:%s] WARNING: backend already alive but unmanaged — pinned version %s takes effect only after that process restarts", sc.Name, sc.Version)
+		}
 		log.Printf("[prepare:%s] backend already alive: %s (external service, not managed by kvs)", sc.Name, sc.Healthz)
 		return false, nil
 	}
@@ -193,7 +199,15 @@ func PrepareService(sc *ServiceConfig, srvState *ServiceState) (bool, error) {
 		}
 	}
 	if downloadURL == "" {
-		// nothing to download → nothing to deploy (but kvs may still start command)
+		// nothing to download → nothing to deploy (but kvs may still start
+		// command). A pinned/switched version whose bin_home was never
+		// installed would otherwise fail later with an opaque exec error —
+		// say so here, on the loading page.
+		if sc.BinHome != "" {
+			if installed, _ := isServiceInstalled(sc.BinHome); !installed {
+				return false, fmt.Errorf("version %s is not installed at %s and no download is configured", sc.Version, sc.BinHome)
+			}
+		}
 		return runShellScripts(sc, srvState)
 	}
 	if sc.BinHome == "" {
@@ -270,6 +284,24 @@ func unixSocketPath(addr string) (string, bool) {
 // isServiceAlive probes a backend URL. Any response proves reachability,
 // unless the URL carries a "#@<code>" suffix, which requires exactly that
 // status. unix probes dial the socket, file probes stat the path.
+// ServiceAlive reports whether the service's backend is currently up.
+// Unix-addressed services (e.g. vscode.sock) are checked by socket-file
+// presence — their healthz may point at an http address that never listens.
+// Everything else probes the healthz URL.
+func ServiceAlive(sc *ServiceConfig) bool {
+	if sc == nil {
+		return false
+	}
+	if target, ok := unixSocketPath(sc.Address); ok {
+		_, err := os.Stat(target)
+		return err == nil
+	}
+	if sc.Healthz == "" {
+		return false
+	}
+	return isServiceAlive(sc.Healthz)
+}
+
 func isServiceAlive(probeURL string) bool {
 	scheme, target, ok := strings.Cut(probeURL, "://")
 	if !ok {
