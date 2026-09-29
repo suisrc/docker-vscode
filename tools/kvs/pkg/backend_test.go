@@ -421,6 +421,71 @@ func TestManagerDeleteDeviceCard(t *testing.T) {
 	}
 }
 
+// TestVscLocalAuthToggleAndDeepLink covers the 系统配置 local-auth checkbox:
+// the deep-link issuer signs a tkn by default and omits it while the mode is
+// on; the toggle persists through the store and an absent localAuth field
+// keeps the current mode.
+func TestVscLocalAuthToggleAndDeepLink(t *testing.T) {
+	t.Cleanup(func() {
+		zcodeState().saveVscLocalAuth(false)
+		zcodeState().saveVscOpenExt("")
+	})
+	SetManagerLoginInfo(func() (string, string, int) { return "login-secret", "tkn", 3600 })
+	defer SetManagerLoginInfo(nil)
+
+	call := func(method, target string, body io.Reader) *httptest.ResponseRecorder {
+		req := httptest.NewRequest(method, target, body)
+		rec := httptest.NewRecorder()
+		managerHandler(rec, req)
+		return rec
+	}
+	post := func(payload string) *httptest.ResponseRecorder {
+		return call("POST", "/__manager/vscext", strings.NewReader(payload))
+	}
+
+	// 默认（未勾选）：vscopen 签发 tkn。
+	if rec := post(`{"ext":"suisrc.remote-server","localAuth":false}`); rec.Code != 200 {
+		t.Fatalf("vscext save -> %d: %s", rec.Code, rec.Body.String())
+	}
+	rec := call("GET", "/__manager/vscopen", nil)
+	if rec.Code != 200 {
+		t.Fatalf("vscopen -> %d", rec.Code)
+	}
+	if link := rec.Body.String(); !strings.HasPrefix(link, "vscode://suisrc.remote-server/open?tkn=") {
+		t.Fatalf("default mode should sign a tkn, got %q", link)
+	}
+
+	// 勾选本地认证：vscopen 不再携带 tkn，存储位翻转。
+	if rec := post(`{"ext":"suisrc.remote-server","localAuth":true}`); rec.Code != 200 {
+		t.Fatalf("vscext save(localAuth) -> %d: %s", rec.Code, rec.Body.String())
+	}
+	if link := call("GET", "/__manager/vscopen", nil).Body.String(); link != "vscode://suisrc.remote-server/open" {
+		t.Fatalf("local-auth mode must omit tkn, got %q", link)
+	}
+	if !zcodeState().vscLocalAuthValue() {
+		t.Fatal("local auth flag not persisted in the store")
+	}
+
+	// 缺省请求（不带 localAuth 字段）保持现状不变。
+	if rec := post(`{"ext":""}`); rec.Code != 200 {
+		t.Fatalf("vscext save(ext only) -> %d: %s", rec.Code, rec.Body.String())
+	}
+	if !zcodeState().vscLocalAuthValue() {
+		t.Fatal("absent localAuth field must keep the current mode")
+	}
+}
+
+// TestVscLocalAuthStoreRoundTrip verifies the toggle survives the state file.
+func TestVscLocalAuthStoreRoundTrip(t *testing.T) {
+	file := filepath.Join(t.TempDir(), "zcodex.json")
+	s := zcodeLoadStore(file)
+	s.saveVscLocalAuth(true)
+	s.flush()
+	if got := zcodeLoadStore(file).vscLocalAuthValue(); !got {
+		t.Fatal("vsc_local_auth did not survive the store file round-trip")
+	}
+}
+
 func TestSplitSvcTarget(t *testing.T) {
 	if svc, ext, ok := SplitSvcTarget("vscode.ext"); !ok || svc != "vscode" || ext != "ext" {
 		t.Fatalf("SplitSvcTarget(vscode.ext) = %q %q %v", svc, ext, ok)

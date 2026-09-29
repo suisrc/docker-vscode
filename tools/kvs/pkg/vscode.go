@@ -25,7 +25,7 @@ import (
 // file = {svcHome}/extensions/{publisher}.{name}-{version}/{path}
 // svc 扩展（svc://<name>.<ext>）：
 //   - vscode.ext — /stable-<verhash>/web-extension-resource/ 的扩展资源
-//   - vscode.nls — NLS 翻译重映射（挂载点来自路由，如 /__cache/vscode/nls/）
+//   - vscode.nls — NLS 翻译重映射（挂载点来自路由，如 /__caehe/vscode/nls/）
 func init() {
 	RegisterSvcExt("vscode", "ext", func(w http.ResponseWriter, r *http.Request, sc *ServiceConfig, mount string) {
 		if sc.VersionHash == "" {
@@ -89,8 +89,8 @@ func VscodeExtHandle(w http.ResponseWriter, r *http.Request, prePath, svcHome st
 // B. https://marketplace.visualstudio.com/_apis/public/gallery/publishers/ms-ceintl/vsextensions/vscode-language-pack-zh-hans/latest/vspackage
 // C. https://MS-CEINTL.vscode-unpkg.net/MS-CEINTL/vscode-language-pack-zh-hans/1.131.2026072717/extension/translations/main.i18n.json
 // D. https://marketplace.visualstudio.com/_apis/public/gallery/publishers/ms-ceintl/vsextensions/vscode-language-pack-zh-hans/1.131.2026072717/vspackage
-// E. https://example.com/__cache/vscode/nls/a5b500951314efd502d07465bd138dfbd714a960/1.133.0/zh-cn/nls-messages.js
-// F. {svcHome}/cache/ccproxy/__cache/vscode/nls/a5b500951314efd502d07465bd138dfbd714a960/1.133.0/zh-cn/
+// E. https://example.com/__caehe/vscode/nls/a5b500951314efd502d07465bd138dfbd714a960/1.133.0/zh-cn/nls-messages.js
+// F. {svcHome}/cache/ccproxy/__caehe/vscode/nls/a5b500951314efd502d07465bd138dfbd714a960/1.133.0/zh-cn/
 // G. {svcHome}/extensions/ms-ceintl.vscode-language-pack-zh-hans-1.131.2026072717/translations/
 // H. {binHome}/out/nls.keys.json + {binHome}/out/nls.messages.json
 //    # the local app's nls.keys.json order differs from the CDN's; nls.messages.json is the English fallback.
@@ -115,7 +115,7 @@ func VscodeNlsHandle(w http.ResponseWriter, r *http.Request, prePath, svcHome, b
 	cacheOnce.Do(initCache)
 
 	// 1. Parse URL: {prePath}{commit}/{version}/{lang}/nls-messages.js
-	//    prePath is KVS_SVC_VSCODE_NLS_URL, e.g. "/__cache/vscode/nls/"
+	//    prePath is KVS_SVC_VSCODE_NLS_URL, e.g. "/__caehe/vscode/nls/"
 	//    After stripping prePath: "{commit}/{version}/{lang}/nls-messages.js"
 	parts := strings.Split(strings.TrimPrefix(r.URL.Path, prePath), "/")
 	if len(parts) < 4 || (parts[3] != "nls-messages.js" && parts[3] != "nls.messages.js") {

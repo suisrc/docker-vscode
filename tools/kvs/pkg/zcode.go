@@ -164,23 +164,27 @@ type zcodeStoreFile struct {
 	Tools      []managerTool       `json:"tools,omitempty"`        // manager toolbar quick links (name → addr)
 	Notes      map[string]string   `json:"notes,omitempty"`        // manager per-entry remarks (entry id → note text)
 	VscOpenExt string              `json:"vsc_open_ext,omitempty"` // "open in VS Code" deep-link extension id (vscode://<ext>/open…)
+	// VscLocalAuth: deep links carry no gateway-signed tkn; the extension
+	// resolves per-domain credentials from its own local store instead.
+	VscLocalAuth bool `json:"vsc_local_auth,omitempty"`
 }
 
 // zcodeStore is a JSON-file backed registry with two in-memory indexes
 // (sid → record, mid → sid) plus the manager app list. Writes are atomic and
 // debounced (flush on change, at most once per second).
 type zcodeStore struct {
-	file       string
-	mu         sync.Mutex
-	bySid      map[string]*zcodeDeviceRecord
-	byMid      map[string]string
-	apps       []managerApp
-	order      []string          // manager card order (user-arranged entry ids)
-	tools      []managerTool     // manager toolbar quick links
-	notes      map[string]string // manager per-entry remarks (entry id → note)
-	vscOpenExt string            // "open in VS Code" deep-link extension id ("" = env default)
-	notify     chan struct{}
-	dirty      bool
+	file         string
+	mu           sync.Mutex
+	bySid        map[string]*zcodeDeviceRecord
+	byMid        map[string]string
+	apps         []managerApp
+	order        []string          // manager card order (user-arranged entry ids)
+	tools        []managerTool     // manager toolbar quick links
+	notes        map[string]string // manager per-entry remarks (entry id → note)
+	vscOpenExt   string            // "open in VS Code" deep-link extension id ("" = env default)
+	vscLocalAuth bool              // deep links omit the gateway tkn; extension uses its local per-domain credentials
+	notify       chan struct{}
+	dirty        bool
 }
 
 // zcodeLoadStore opens (or creates) the state file. When the file is absent
@@ -221,6 +225,7 @@ func zcodeLoadStore(file string) *zcodeStore {
 	s.tools = parsed.Tools
 	s.notes = parsed.Notes
 	s.vscOpenExt = parsed.VscOpenExt
+	s.vscLocalAuth = parsed.VscLocalAuth
 	return s
 }
 
@@ -327,6 +332,24 @@ func (s *zcodeStore) saveVscOpenExt(ext string) {
 	s.requestFlush()
 }
 
+// vscLocalAuthValue reports whether vscode:// deep links should omit the
+// gateway-signed tkn (the extension then resolves credentials per domain
+// from its own local store).
+func (s *zcodeStore) vscLocalAuthValue() bool {
+	s.mu.Lock()
+	defer s.mu.Unlock()
+	return s.vscLocalAuth
+}
+
+// saveVscLocalAuth toggles the "use local auth info" mode. Read per request.
+func (s *zcodeStore) saveVscLocalAuth(on bool) {
+	s.mu.Lock()
+	s.vscLocalAuth = on
+	s.dirty = true
+	s.mu.Unlock()
+	s.requestFlush()
+}
+
 // flush writes the state file atomically when dirty.
 func (s *zcodeStore) flush() {
 	s.mu.Lock()
@@ -335,13 +358,14 @@ func (s *zcodeStore) flush() {
 		return
 	}
 	out := zcodeStoreFile{
-		Version:    1,
-		Devices:    make([]zcodeDeviceRecord, 0, len(s.bySid)),
-		Apps:       append([]managerApp(nil), s.apps...),
-		Order:      append([]string(nil), s.order...),
-		Tools:      append([]managerTool(nil), s.tools...),
-		Notes:      s.notes,
-		VscOpenExt: s.vscOpenExt,
+		Version:      1,
+		Devices:      make([]zcodeDeviceRecord, 0, len(s.bySid)),
+		Apps:         append([]managerApp(nil), s.apps...),
+		Order:        append([]string(nil), s.order...),
+		Tools:        append([]managerTool(nil), s.tools...),
+		Notes:        s.notes,
+		VscOpenExt:   s.vscOpenExt,
+		VscLocalAuth: s.vscLocalAuth,
 	}
 	for _, r := range s.bySid {
 		out.Devices = append(out.Devices, *r)

@@ -564,15 +564,6 @@ func main() {
 		pkg.ServeStaticAsset(w, "favicon.ico")
 	})
 
-	// Intercept VS Code NLS requests for translation remapping. The prefix
-	// comes from KVS_SVC_VSCODE_NLS_URL — the same variable the [service.vsc]
-	// once_shell template uses; the fallback matches the ini default
-	// {KVS_SVC_VSCODE_NLS_URL:-/__cache/vscode/nls/}. A /__ prefix serves NLS
-	// through kvs itself; any other value (e.g. an external URL) needs no
-	// local route.
-	// NLS（KVS_SVC_VSCODE_NLS_URL）不再在 main 绑定：由路由表达，
-	// 如 /__cache/vscode/nls/=svc://vscode.nls（svc 服务扩展）。
-
 	// cache proxy – {proxy_path}/{scheme}:{host}/path → {scheme}://{host}/path
 	// Only registered when both cache_dir (disk storage) and proxy_path (route
 	// prefix) are configured. Either one empty disables the cache proxy route.

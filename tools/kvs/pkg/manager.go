@@ -30,8 +30,8 @@ package pkg
 //	DELETE /__manager?id=…                   remove a custom app
 //	POST   /__manager/visit                  record an access {id}
 //	POST   /__manager/stop?svc=…             stop a hosted service's backend
-//	POST   /__manager/vscext {ext}           "open in VS Code" extension id
-//	GET    /__manager/vscopen                signed vscode:// deep-link base
+//	POST   /__manager/vscext {ext,localAuth} "open in VS Code" extension id + local-auth toggle
+//	GET    /__manager/vscopen                vscode:// deep-link base (signed tkn, or none in local-auth mode)
 //	POST   /__manager/order                  save the dragged card order {ids}
 //	POST   /__manager/tool                   upsert a toolbar quick link {name,addr,old?}
 //	DELETE /__manager/tool?name=…            remove a toolbar quick link
@@ -920,8 +920,10 @@ func managerHandler(w http.ResponseWriter, r *http.Request) {
 		// vscode://<ext>/open?<QueryTokenKey>=<tkn>. The client appends
 		// &addr=<origin>&folder=<path>, exactly like the workbench's
 		// logout.svc.js "open in vscode" flow.
+		// 本地认证模式（系统配置勾选）不签发 tkn：链接只带扩展 id，由
+		// suisrc.remote-server 按域名查询自己的本地认证信息直接访问。
 		u := "vscode://" + mgrVscOpenExt() + "/open"
-		if mgrLoginInfo != nil {
+		if !zcodeState().vscLocalAuthValue() && mgrLoginInfo != nil {
 			if loginToken, queryKey, timeout := mgrLoginInfo(); queryKey != "" && timeout > 0 {
 				u += "?" + queryKey + "=" + GenerateTokenValue(loginToken, timeout)
 			}
@@ -993,10 +995,11 @@ func mgrWriteJSON(w http.ResponseWriter, status int, v any) {
 // managerListApps serves the merged entry list.
 func managerListApps(w http.ResponseWriter, r *http.Request) {
 	mgrWriteJSON(w, http.StatusOK, map[string]any{
-		"now":    time.Now().UnixMilli(),
-		"apps":   mgrBuildEntries(),
-		"tools":  zcodeState().toolsList(),
-		"vscExt": mgrVscOpenExt(),
+		"now":          time.Now().UnixMilli(),
+		"apps":         mgrBuildEntries(),
+		"tools":        zcodeState().toolsList(),
+		"vscExt":       mgrVscOpenExt(),
+		"vscLocalAuth": zcodeState().vscLocalAuthValue(),
 	})
 }
 
@@ -1013,12 +1016,13 @@ func mgrVscOpenExt() string {
 	return "suisrc.remote-server"
 }
 
-// managerSetVscOpenExt persists the "open in VS Code" extension id from the
-// VS Code-logo config button. Read per click, so a save takes effect
-// immediately.
+// managerSetVscOpenExt persists the "open in VS Code" extension id and the
+// local-auth toggle from the 系统配置 panel. Read per click, so a save takes
+// effect immediately. localAuth is a pointer: absent = keep the current mode.
 func managerSetVscOpenExt(w http.ResponseWriter, r *http.Request) {
 	var req struct {
-		Ext string `json:"ext"`
+		Ext       string `json:"ext"`
+		LocalAuth *bool  `json:"localAuth"`
 	}
 	if !mgrDecode(w, r, &req) {
 		return
@@ -1035,8 +1039,11 @@ func managerSetVscOpenExt(w http.ResponseWriter, r *http.Request) {
 		}
 	}
 	zcodeState().saveVscOpenExt(ext)
-	log.Printf("[manager] vscode open ext: %q", ext)
-	mgrWriteJSON(w, http.StatusOK, map[string]any{"success": true, "ext": mgrVscOpenExt()})
+	if req.LocalAuth != nil {
+		zcodeState().saveVscLocalAuth(*req.LocalAuth)
+	}
+	log.Printf("[manager] vscode open ext: %q, local auth: %v", ext, zcodeState().vscLocalAuthValue())
+	mgrWriteJSON(w, http.StatusOK, map[string]any{"success": true, "ext": mgrVscOpenExt(), "localAuth": zcodeState().vscLocalAuthValue()})
 }
 
 // mgrAppReq is the add/edit-app request body. A non-empty ID switches to edit

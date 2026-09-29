@@ -46,7 +46,9 @@ Route formats ([proxies.<name>] section / -n argument):
   /=text://Hello World              plain text response (@now replaced with current time)
   /=svc://<name>                    kvs-hosted service ([service.<name>] section):
                                     probe → download → extract → start, then proxy
-  /=relay://<name>                  in-process WebSocket relay (zcode pairing)
+  /=relay://<name>                  in-process relay: relay://vscode is the Remote-Server
+                                    raw-byte relay (hosts /agent, clients /connect,
+                                    pairing via ?tkn=); other names: zcode pairing WS relay
   /=api://<name>                    in-process handler registry (api://manager)
   ^/api/\d+=http://localhost:8080   ^ prefix: regex matching
   cc~/path=https://up.stream        cc prefix: cache proxied responses on disk

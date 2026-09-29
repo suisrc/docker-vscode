@@ -186,15 +186,9 @@ a { color: inherit; }
   transition: transform .16s ease, border-color .16s ease, box-shadow .16s ease;
   outline: none;
 }
-.card.openable { cursor: pointer; user-select: none; -webkit-user-select: none; -webkit-touch-callout: none; }
-@media (hover: hover) {
-  .card.openable:hover { transform: translateY(-2px); }
-  .card.i-zcd.openable:hover { border-color: var(--zcd-bd); }
-  .card.i-vsc.openable:hover { border-color: var(--vsc-bd); }
-  .card.i-linux.openable:hover { border-color: rgba(252, 198, 36, .45); }
-  .card.i-other.openable:hover { border-color: var(--border-strong); }
-}
-.card.openable:focus-visible { border-color: var(--vsc-bd); box-shadow: 0 0 0 3px var(--vsc-bg), var(--shadow); }
+/* 整卡不再承担点击进入（易误触），入口收敛到卡内按钮与工作区胶囊；
+   openable 仅保留拖拽排序所需的禁止选中样式（配合 dragging 的 grabbing 光标） */
+.card.openable { user-select: none; -webkit-user-select: none; -webkit-touch-callout: none; }
 .card.locked { opacity: .78; }
 .card.locked .app-ico, .card.locked .app-name { opacity: .6; }
 
@@ -294,6 +288,20 @@ a { color: inherit; }
 .fld:hover { color: var(--vsc); border-color: var(--vsc-bd); background: var(--vsc-bg); }
 .fld.add { border-style: dashed; color: var(--text-3); }
 .fld.add:hover { color: var(--text-2); border-color: var(--border-strong); background: var(--surface-2); }
+
+/* 「进入应用」：整卡点击移除后，非 VS Code 卡片底部的显式入口 */
+.enter-row { padding-top: 13px; border-top: 1px dashed var(--border); margin-top: auto; }
+.enter-btn {
+  width: 100%; display: inline-flex; align-items: center; justify-content: center; gap: 7px;
+  font-size: 12.5px; color: var(--text-2); cursor: pointer;
+  padding: 7px 11px; border-radius: 8px; border: 1px solid var(--border); background: var(--surface);
+  transition: color .14s, border-color .14s, background .14s;
+}
+.enter-btn svg { width: 13px; height: 13px; flex: none; }
+.enter-btn:hover { color: var(--text); border-color: var(--border-strong); background: var(--surface-2); }
+.enter-btn:focus-visible { outline: 2px solid var(--vsc-bd); outline-offset: 2px; }
+/* 工作区胶囊可用键盘进入（Tab 聚焦后 Enter/Space） */
+.fld[tabindex]:focus-visible { outline: 2px solid var(--vsc-bd); outline-offset: 2px; }
 
 /* 悬停浮出的操作条：左删除、右编辑。
    鼠标移开后延迟 1s 才收起（期间保持可见可点），方便从胶囊移到按钮上；
@@ -536,6 +544,10 @@ body.drag-in-progress .card.openable, body.drag-in-progress .mrow.openable { cur
 }
 .field textarea { resize: vertical; min-height: 64px; font-family: var(--mono); font-size: 12.5px; }
 .field textarea.note { font-family: var(--font); font-size: 13.5px; min-height: 118px; }
+/* 复选框行（系统配置）：对齐 field 版式，勾选框不吃 input 的边框/内边距样式 */
+.field.check-field { flex-direction: column; gap: 4px; cursor: pointer; }
+.field.check-field .check-line { display: flex; align-items: center; gap: 8px; font-size: 13px; color: var(--text); }
+.field.check-field input[type="checkbox"] { width: 15px; height: 15px; margin: 0; padding: 0; border: none; background: none; border-radius: 3px; accent-color: var(--vsc-bd); cursor: pointer; flex: none; }
 
 /* 可拉伸弹窗：蒙层带 .xw，拖右下角把手左右调宽；
    初始 430（标记弹窗 360），范围 300 ~ min(720px, 视口-44px) */
@@ -770,6 +782,9 @@ body.drag-in-progress .card.openable, body.drag-in-progress .mrow.openable { cur
     <label class="field"><span>VS Code 打开插件 <span class="opt">vscode://&lt;插件名&gt;/open… · 留空用环境变量 KVS_VSCODE_OPEN_EXT</span></span>
       <input id="inpVscExt" placeholder="suisrc.remote-server" maxlength="80" autocomplete="off">
     </label>
+    <label class="field check-field"><span class="check-line"><input type="checkbox" id="chkVscLocalAuth"> 使用本地认证信息</span>
+      <span class="opt">选中后 vscode:// 链接不再签发 tkn，由插件按域名查询本地认证信息直接访问</span>
+    </label>
     <div class="modal-acts">
       <button class="btn" id="settingsCancel" type="button">取消</button>
       <button class="btn primary" id="settingsOk" type="button">保存</button>
@@ -865,6 +880,7 @@ var I = {
   vsc:    '<svg viewBox="0 0 256 256" xmlns="http://www.w3.org/2000/svg" fill="none"><path fill="#0065A9" d="M246.94 27.6383L194.193 2.24138C188.088 -0.698302 180.791 0.541721 175.999 5.33332L3.32371 162.773C-1.32082 167.008 -1.31548 174.32 3.33523 178.548L17.4399 191.37C21.2421 194.827 26.9682 195.081 31.0619 191.976L239.003 34.2269C245.979 28.9347 255.999 33.9103 255.999 42.6667V42.0543C255.999 35.9078 252.478 30.3047 246.94 27.6383Z"/><path fill="#007ACC" d="M246.94 228.362L194.193 253.759C188.088 256.698 180.791 255.458 175.999 250.667L3.32371 93.2272C-1.32082 88.9925 -1.31548 81.6802 3.33523 77.4523L17.4399 64.6298C21.2421 61.1733 26.9682 60.9188 31.0619 64.0245L239.003 221.773C245.979 227.065 255.999 222.09 255.999 213.333V213.946C255.999 220.092 252.478 225.695 246.94 228.362Z"/><path fill="#1F9CF0" d="M194.196 253.763C188.089 256.7 180.792 255.459 176 250.667C181.904 256.571 192 252.389 192 244.039V11.9606C192 3.61057 181.904 -0.571175 176 5.33321C180.792 0.541166 188.089 -0.700607 194.196 2.23648L246.934 27.5985C252.476 30.2635 256 35.8686 256 42.0178V213.983C256 220.132 252.476 225.737 246.934 228.402L194.196 253.763Z"/></svg>',
   gear:   '<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.9" stroke-linecap="round" stroke-linejoin="round"><circle cx="12" cy="12" r="3"/><path d="M19.4 15a1.65 1.65 0 0 0 .33 1.82l.06.06a2 2 0 0 1-2.83 2.83l-.06-.06a1.65 1.65 0 0 0-1.82-.33 1.65 1.65 0 0 0-1 1.51V21a2 2 0 0 1-4 0v-.09A1.65 1.65 0 0 0 9 19.4a1.65 1.65 0 0 0-1.82.33l-.06.06a2 2 0 0 1-2.83-2.83l.06-.06a1.65 1.65 0 0 0 .33-1.82 1.65 1.65 0 0 0-1.51-1H3a2 2 0 0 1 0-4h.09A1.65 1.65 0 0 0 4.6 9a1.65 1.65 0 0 0-.33-1.82l-.06-.06a2 2 0 0 1 2.83-2.83l.06.06a1.65 1.65 0 0 0 1.82.33H9a1.65 1.65 0 0 0 1-1.51V3a2 2 0 0 1 4 0v.09a1.65 1.65 0 0 0 1 1.51 1.65 1.65 0 0 0 1.82-.33l.06-.06a2 2 0 0 1 2.83 2.83l-.06.06a1.65 1.65 0 0 0-.33 1.82V9a1.65 1.65 0 0 0 1.51 1H21a2 2 0 0 1 0 4h-.09a1.65 1.65 0 0 0-1.51 1z"/></svg>',
   folder: '<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><path d="M3.5 7.2A1.7 1.7 0 0 1 5.2 5.5h4.1l2 2.4h7.5a1.7 1.7 0 0 1 1.7 1.7v8.2a1.7 1.7 0 0 1-1.7 1.7H5.2a1.7 1.7 0 0 1-1.7-1.7Z"/></svg>',
+  enter:  '<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><path d="M13.5 4.5h6v6"/><path d="M19.5 4.5 11 13"/><path d="M19.5 14v3.5a2 2 0 0 1-2 2h-11a2 2 0 0 1-2-2v-11a2 2 0 0 1 2-2H10"/></svg>',
   tag:    '<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><path d="M3.5 12.6 12.6 3.5H20.5V11.4L11.4 20.5z"/><circle cx="16.2" cy="7.8" r="1.4"/></svg>',
   os:     '<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><rect x="2.5" y="4" width="19" height="13" rx="2"/><path d="M8 21h8M12 17v4"/></svg>',
   clock:  '<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><circle cx="12" cy="12" r="8.5"/><path d="M12 7.5V12l3 2.2"/></svg>',
@@ -968,7 +984,7 @@ $('btnZctl').addEventListener('click', function () {
 });
 
 /* ============================================================ 数据与渲染 */
-var state = { apps: [], tools: [], filter: 'all', expanded: {}, loaded: false, refetchTimer: null, vscExt: '' };
+var state = { apps: [], tools: [], filter: 'all', expanded: {}, loaded: false, refetchTimer: null, vscExt: '', vscLocalAuth: false };
 
 $('brandMark').innerHTML = I.brand;
 $('toolbarLabel').insertBefore(icon('tag'), $('toolbarLabel').firstChild);
@@ -1045,12 +1061,8 @@ function monoNode(s) { var n = el('span', 'mono'); n.textContent = s; return n; 
 function buildCard(a) {
   var st = statusOf(a);
   var icoKey = iconOf(a);
+  /* openable 不再代表可点击进入：仅保留拖拽排序的样式钩子，入口在卡内按钮/工作区 */
   var card = el('article', 'card i-' + icoKey + (a.url ? ' openable' : ' locked'));
-  if (a.url) {
-    card.tabIndex = 0;
-    card.setAttribute('role', 'link');
-    card.setAttribute('aria-label', '打开 ' + a.name);
-  }
 
   var head = el('div', 'card-head');
   head.appendChild(noteLogo(a, icoKey));
@@ -1165,12 +1177,14 @@ function buildCard(a) {
     card.appendChild(metaRow('folder', cfgRow));
   }
 
-  /* 工作区（VS Code 专属） */
+  /* 工作区（VS Code 专属）：点击胶囊进入对应工作区 */
   if (a.type === 'vsc' && a.url) {
     var folders = el('div', 'folders');
     (a.folders || []).forEach(function (f) {
       folders.appendChild(buildFolderChip(a, f));
     });
+    /* 尚未配置工作区时补一个兜底入口，避免卡片无法进入 */
+    if (!(a.folders || []).length) folders.appendChild(enterChip(a));
     var add = el('button', 'fld add');
     add.type = 'button';
     add.title = '添加工作区';
@@ -1182,13 +1196,9 @@ function buildCard(a) {
     });
     folders.appendChild(add);
     card.appendChild(folders);
-  }
-
-  if (a.url) {
-    card.addEventListener('click', function () { openApp(a); });
-    card.addEventListener('keydown', function (e) {
-      if (e.key === 'Enter' || e.key === ' ') { e.preventDefault(); openApp(a); }
-    });
+  } else if (a.url) {
+    /* 非 VS Code：底部显式「进入应用」按钮（整卡点击已移除，避免误触） */
+    card.appendChild(enterRow(a));
   }
   attachDrag(card, a.id);
   return card;
@@ -1200,10 +1210,41 @@ function folderHref(a, f) {
   return base + '/?folder=' + encodeURIComponent(f.path);
 }
 
+/* 「进入应用」按钮：非 VS Code 卡片底部的显式入口 */
+function enterRow(a) {
+  var row = el('div', 'enter-row');
+  var btn = el('button', 'enter-btn');
+  btn.type = 'button';
+  btn.appendChild(icon('enter'));
+  btn.appendChild(el('span', null, '进入应用'));
+  btn.addEventListener('click', function (e) {
+    e.stopPropagation();
+    openApp(a);
+  });
+  row.appendChild(btn);
+  return row;
+}
+
+/* VS Code 卡片未配置工作区时的兜底入口（样式与工作区胶囊一致） */
+function enterChip(a) {
+  var chip = el('button', 'fld');
+  chip.type = 'button';
+  chip.appendChild(icon('enter'));
+  chip.appendChild(el('span', 'fld-name', '进入应用'));
+  chip.addEventListener('click', function (e) {
+    e.stopPropagation();
+    openApp(a);
+  });
+  return chip;
+}
+
 /* 工作区胶囊：点击打开；悬停上方浮出 [删除|编辑] */
 function buildFolderChip(a, f) {
   var chip = el('div', 'fld');
   chip.title = f.path;
+  chip.tabIndex = 0;
+  chip.setAttribute('role', 'link');
+  chip.setAttribute('aria-label', '打开工作区 ' + f.name);
   chip.appendChild(icon('folder'));
   chip.appendChild(el('span', 'fld-name', f.name));
 
@@ -1251,6 +1292,12 @@ function buildFolderChip(a, f) {
 
   chip.addEventListener('click', function (e) {
     if (e.target.closest('.fa-btn')) return;
+    openApp(a, folderHref(a, f));
+  });
+  chip.addEventListener('keydown', function (e) {
+    if (e.key !== 'Enter' && e.key !== ' ') return;
+    if (e.target.closest('.fa-btn')) return;
+    e.preventDefault();
     openApp(a, folderHref(a, f));
   });
   return chip;
@@ -1563,6 +1610,7 @@ function loadApps(manual) {
       state.apps = data.apps || [];
       state.tools = data.tools || [];
       if (data.vscExt) state.vscExt = data.vscExt;
+      state.vscLocalAuth = !!data.vscLocalAuth;
       state.loaded = true;
       hideError();
       render();
@@ -2127,23 +2175,27 @@ function openToolsModal() {
 }
 $('btnSettings').addEventListener('click', function () {
   $('inpVscExt').value = state.vscExt || '';
+  $('chkVscLocalAuth').checked = !!state.vscLocalAuth;
   openModal('settingsModal');
   setTimeout(function () { $('inpVscExt').focus(); }, 60);
 });
 $('settingsCancel').addEventListener('click', function () { closeModal('settingsModal'); });
 $('settingsOk').addEventListener('click', function () {
   var ext = $('inpVscExt').value.trim();
+  var localAuth = $('chkVscLocalAuth').checked;
   fetch(MGR_BASE + '/__manager/vscext', {
     method: 'POST', credentials: 'include',
     headers: { 'Content-Type': 'application/json' },
-    body: JSON.stringify({ ext: ext })
+    body: JSON.stringify({ ext: ext, localAuth: localAuth })
   }).then(function (res) {
     if (!res.ok) return res.text().then(function (t) { throw new Error(t || ('HTTP ' + res.status)); });
     return res.json();
   }).then(function (d) {
     state.vscExt = d.ext || ext;
+    state.vscLocalAuth = !!d.localAuth;
     closeModal('settingsModal');
-    toast('已保存，VS Code 打开插件：' + (state.vscExt || '默认（环境变量）'));
+    toast('已保存，VS Code 打开插件：' + (state.vscExt || '默认（环境变量）')
+      + '，认证：' + (state.vscLocalAuth ? '本地认证信息（链接不带 tkn）' : '链接签发 tkn'));
   }).catch(function (err) { toast('保存失败：' + err.message, true); });
 });
 
