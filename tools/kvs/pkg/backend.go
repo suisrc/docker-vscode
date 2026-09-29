@@ -173,6 +173,8 @@ func parseBackends(entries [][2]string) []Backend {
 //   - "+": append — the full request path (prefix included) is appended
 //     after the target's own path
 //   - none: the request path is forwarded unchanged
+//
+// Only text:// ignores the marker (with a warning).
 func newBackend(prefix, rawURL string) *Backend {
 	var mode string
 	if strings.HasPrefix(rawURL, "-") || strings.HasPrefix(rawURL, "+") {
@@ -184,7 +186,12 @@ func newBackend(prefix, rawURL string) *Backend {
 		return nil
 	}
 	scheme = strings.ToLower(scheme)
-	log.Printf("backend %q → prefix=%q scheme=%q target=%q mode=%q", rawURL, prefix, scheme, target, mode)
+	if mode != "" && scheme == "text" {
+		// text:// serves one literal body regardless of path — the -/+ path
+		// rewrite has no meaning there. Every other scheme honors the marker.
+		log.Printf("WARNING: backend %q: text:// targets do not support -/+ path modes, ignoring %q", rawURL, mode)
+		mode = ""
+	}
 	return &Backend{
 		Source:   prefix,
 		Scheme:   scheme,
@@ -247,6 +254,10 @@ func SplitSvcTarget(target string) (svc, ext string, hasExt bool) {
 	return target, "", false
 }
 
+// unixSyntheticTarget labels unix-socket requests for rewriteProxyRequest:
+// the transport dials the socket directly, the URL only carries scheme/host.
+var unixSyntheticTarget = &url.URL{Scheme: "http", Host: "unix"}
+
 // CreateBackendHandler builds an http.Handler for the given backend.
 // Supported schemes: http, https, ws, wss (reverse proxy), unix (reverse proxy),
 // file (directory), text (literal).
@@ -257,8 +268,19 @@ func SplitSvcTarget(target string) (svc, ext string, hasExt bool) {
 //   - ws~ / ws:// / wss:// (b.IsWSock): WebSocket-aware route — upgrade requests
 //     are detected and handled through the upgrade-capable proxy transport.
 func CreateBackendHandler(b Backend, cacheHeaders map[string]string, loginAuthz bool) http.Handler {
+	// Route mount as written in the ini (cc~/ws~ markers included) — every
+	// scheme case logs "backend <mount> → <resolved target>" exactly once
+	// per (re)build, so reloads stay debuggable from the log alone.
+	mount := b.Source
+	if b.IsCache {
+		mount = "cc~" + mount
+	}
+	if b.IsWSock {
+		mount = "ws~" + mount
+	}
 	switch b.Scheme {
 	case "http", "https", "ws", "wss":
+		log.Printf("backend %s → %s", mount, b.RawURL)
 		// ws/wss backends are plain HTTP under the hood; mark them as
 		// WebSocket routes so upgrade requests get the dedicated handling.
 		if b.Scheme == "ws" || b.Scheme == "wss" {
@@ -296,12 +318,13 @@ func CreateBackendHandler(b Backend, cacheHeaders map[string]string, loginAuthz 
 
 	case "unix":
 		socketPath := b.Target
-		log.Printf("backend unix socket: %s", socketPath)
+		log.Printf("backend %s → unix://%s", mount, socketPath)
+		// Path modes go through the same rewriteProxyRequest as http(s)
+		// targets: "" forwards the full path, "-" strips the mount prefix,
+		// "+" appends after the (empty) target path — i.e. keeps it whole.
 		rp := &httputil.ReverseProxy{
 			Director: func(req *http.Request) {
-				req.URL.Scheme = "http"
-				req.URL.Host = "unix"
-				applyCacheHeaders(req, cacheHeaders)
+				rewriteProxyRequest(req, b, unixSyntheticTarget, cacheHeaders)
 			},
 			Transport:     unixProxyTransport(socketPath),
 			FlushInterval: proxyFlushInterval,
@@ -310,7 +333,7 @@ func CreateBackendHandler(b Backend, cacheHeaders map[string]string, loginAuthz 
 		if loginAuthz {
 			rp.ModifyResponse = cacheResponseModifier()
 		}
-		up := &wsUpstream{b: b, hdrs: cacheHeaders, mods: rp.ModifyResponse}
+		up := &wsUpstream{b: b, target: unixSyntheticTarget, hdrs: cacheHeaders, mods: rp.ModifyResponse}
 		fast := wsUpgradeHandler(up, rp)
 		if b.IsCache {
 			return upgradeAwareHandler(fast, HandleCCBackend(b))
@@ -319,9 +342,15 @@ func CreateBackendHandler(b Backend, cacheHeaders map[string]string, loginAuthz 
 
 	case "file":
 		dir := b.Target
-		log.Printf("backend file server: %s", dir)
-		// return http.StripPrefix(b.Source, http.FileServer(http.Dir(dir))) + .gz or .br
-		return http.StripPrefix(b.Source, precompressedFileServer(dir, http.FileServer(http.Dir(dir))))
+		log.Printf("backend %s → file://%s", mount, dir)
+		fs := precompressedFileServer(dir, http.FileServer(http.Dir(dir)))
+		if b.PathMode == "+" {
+			// "+": the mount prefix stays in the file layout (dir + full path).
+			return fs
+		}
+		// "" and "-": strip the mount prefix before mapping into dir,
+		// + .gz/.br pre-compressed sibling support.
+		return http.StripPrefix(b.Source, fs)
 
 	case "svc":
 		// kvs-hosted service backend: the target names a [service.<name>]
@@ -345,7 +374,7 @@ func CreateBackendHandler(b Backend, cacheHeaders map[string]string, loginAuthz 
 			if !known {
 				log.Fatalf("backend svc://%s: unknown extension %q (in %q)", name, ext, b.RawURL)
 			}
-			log.Printf("backend svc://%s.%s → service extension", name, ext)
+			log.Printf("backend %s → svc://%s.%s (service extension)", mount, name, ext)
 			return http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 				cur := Services().Get(name)
 				if cur == nil {
@@ -369,7 +398,7 @@ func CreateBackendHandler(b Backend, cacheHeaders map[string]string, loginAuthz 
 		nb := b
 		nb.Scheme, nb.Target, nb.RawURL = scheme, target, sc.Address
 		nb.IsService = false // lifecycle handled by the service manager
-		log.Printf("backend svc://%s → %s (hosted service)", name, sc.Address)
+		log.Printf("backend %s → svc://%s (hosted service, address %s)", mount, name, sc.Address)
 		return CreateBackendHandler(nb, cacheHeaders, loginAuthz)
 
 	case "relay":
@@ -378,8 +407,9 @@ func CreateBackendHandler(b Backend, cacheHeaders map[string]string, loginAuthz 
 		// zcodeGetRelay (optionally "/state-file"), not a host:port. The
 		// relay is role-agnostic — the routing prefix (any prefix) is where
 		// both desktop and web clients connect. Upgrade requests are handed
-		// to the relay state machine; anything else is a 426.
-		log.Printf("backend relay: %s", b.Target)
+		// to the relay state machine; anything else is a 426. -/+ path modes
+		// are accepted but no-op: the relay never sees path distinctions.
+		log.Printf("backend %s → relay://%s", mount, b.Target)
 		relay := zcodeGetRelay(b.Target)
 		return http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 			if !isWebSocketUpgrade(r) {
@@ -396,18 +426,20 @@ func CreateBackendHandler(b Backend, cacheHeaders map[string]string, loginAuthz 
 		// (no subprocess). Handlers are registered via registerAPI from
 		// their owning modules (e.g. manager.go registers "manager").
 		if h, ok := apiHandleMap[b.Target]; ok {
-			// Handlers are written against the root ("/"), so mount them at
-			// the route prefix by stripping it from the request path — the
-			// same semantics as file:// backends. This lets an api:// service
-			// live at any path (e.g. /admin=api://manager serves the page at
-			// /admin and its API at /admin/__manager*); root mounts ("/") are
-			// passed through untouched. Template mounts (<verhash>/<version>)
-			// skip the strip: the expanded prefix is only known per request,
-			// and such handlers locate themselves in the raw path.
-			if !b.VerTemplate && b.Source != "" && b.Source != "/" {
+			// Handlers are written against the root ("/"), so by default they
+			// are mounted at the route prefix by stripping it from the request
+			// path — the same semantics as file:// backends. This lets an
+			// api:// service live at any path (e.g. /admin=api://manager serves
+			// the page at /admin and its API at /admin/__manager*); root mounts
+			// ("/") are passed through untouched. "-" means the same strip
+			// explicitly; "+" opts out — the handler then sees the full request
+			// path. Template mounts (<verhash>/<version>) always do: the
+			// expanded prefix is only known per request, and such handlers
+			// locate themselves in the raw path.
+			if !b.VerTemplate && b.PathMode != "+" && b.Source != "" && b.Source != "/" {
 				h = http.StripPrefix(b.Source, h)
 			}
-			log.Printf("backend api handler: %s (mounted at %s)", b.Target, b.Source)
+			log.Printf("backend %s → api://%s", mount, b.Target)
 			return h
 		}
 		log.Fatalf("unknown api handler %q in %q", b.Target, b.RawURL)
@@ -415,7 +447,8 @@ func CreateBackendHandler(b Backend, cacheHeaders map[string]string, loginAuthz 
 
 	case "text":
 		content := b.Target
-		log.Printf("backend text: %d bytes", len(content))
+		// RawURL is the literal content — never log it, log the size instead.
+		log.Printf("backend %s → text (%d bytes)", mount, len(content))
 		return http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 			w.Header().Set("Content-Type", "text/plain; charset=utf-8")
 			// @now is replaced with the current time on every request.

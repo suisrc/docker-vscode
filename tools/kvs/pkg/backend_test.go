@@ -7,6 +7,7 @@ import (
 	"net/http/httptest"
 	"net/url"
 	"os"
+	"path/filepath"
 	"strings"
 	"testing"
 )
@@ -253,6 +254,81 @@ func TestParseBackendsVerTemplate(t *testing.T) {
 	}
 	if !backends[0].IsService || backends[2].IsService {
 		t.Fatalf("service flag wrong: %+v / %+v", backends[0], backends[2])
+	}
+}
+
+// TestParseBackendsPathMode checks the -/+ path mode markers: kept for every
+// scheme except text:// (one literal body, no paths — ignored with a warning).
+func TestParseBackendsPathMode(t *testing.T) {
+	backends := parseBackends([][2]string{
+		{"/api/", "-http://127.0.0.1:1/x"},
+		{"/app/", "+http://127.0.0.1:1"},
+		{"/vscode", "-svc://vscode"},
+		{"/sock/", "-unix:///run/app.sock"},
+		{"/f/", "+file:///var/www"},
+		{"/t/", "-text://hello"},
+	})
+	if len(backends) != 6 {
+		t.Fatalf("got %d backends: %+v", len(backends), backends)
+	}
+	for i, want := range []string{"-", "+", "-", "-", "+", ""} {
+		if backends[i].PathMode != want {
+			t.Fatalf("backends[%d].PathMode = %q, want %q: %+v", i, backends[i].PathMode, want, backends[i])
+		}
+	}
+	if backends[2].Target != "vscode" || !backends[2].IsService {
+		t.Fatalf("svc target mangled by mode strip: %+v", backends[2])
+	}
+}
+
+// TestRewritePathModes checks rewriteProxyRequest against the synthetic unix
+// target: "" forwards the full path, "-" strips the mount, "+" appends the
+// full path after the (empty) target path — same result as "" there.
+func TestRewritePathModes(t *testing.T) {
+	rewrite := func(mode string) string {
+		req := httptest.NewRequest(http.MethodGet, "/vscode/x/y?q=1", nil)
+		rewriteProxyRequest(req, Backend{Source: "/vscode", PathMode: mode}, unixSyntheticTarget, nil)
+		return req.URL.Path
+	}
+	for mode, want := range map[string]string{"": "/vscode/x/y", "-": "/x/y", "+": "/vscode/x/y"} {
+		if got := rewrite(mode); got != want {
+			t.Fatalf("mode %q: path = %q, want %q", mode, got, want)
+		}
+	}
+	// "-" onto a target with its own base path.
+	req := httptest.NewRequest(http.MethodGet, "/vscode/x/y", nil)
+	rewriteProxyRequest(req, Backend{Source: "/vscode", PathMode: "-"}, &url.URL{Scheme: "http", Host: "h", Path: "/base"}, nil)
+	if req.URL.Path != "/base/x/y" {
+		t.Fatalf("replace mode: path = %q, want /base/x/y", req.URL.Path)
+	}
+}
+
+// TestFileBackendPathMode checks the file backend's -/+ semantics: the
+// default (like "-") strips the mount prefix before mapping into the dir,
+// "+" keeps the mount prefix in the file layout.
+func TestFileBackendPathMode(t *testing.T) {
+	dir := t.TempDir()
+	if err := os.MkdirAll(filepath.Join(dir, "cdn"), 0o755); err != nil {
+		t.Fatal(err)
+	}
+	if err := os.WriteFile(filepath.Join(dir, "a.txt"), []byte("root"), 0o644); err != nil {
+		t.Fatal(err)
+	}
+	if err := os.WriteFile(filepath.Join(dir, "cdn", "a.txt"), []byte("kept"), 0o644); err != nil {
+		t.Fatal(err)
+	}
+	get := func(h http.Handler, path string) *httptest.ResponseRecorder {
+		rec := httptest.NewRecorder()
+		h.ServeHTTP(rec, httptest.NewRequest(http.MethodGet, path, nil))
+		return rec
+	}
+	strip := CreateBackendHandler(Backend{Source: "/cdn/", Scheme: "file", Target: dir}, nil, false)
+	if rec := get(strip, "/cdn/a.txt"); rec.Code != 200 || rec.Body.String() != "root" {
+		t.Fatalf("default strip: %d %q", rec.Code, rec.Body.String())
+	}
+	keep := CreateBackendHandler(Backend{Source: "/cdn/", Scheme: "file", Target: dir, PathMode: "+"}, nil, false)
+	if rec := get(keep, "/cdn/a.txt"); rec.Code != 200 || rec.Body.String() != "kept" {
+		t.Fatalf("keep mode: %d %q", rec.Code, rec.Body.String())
 	}
 }
 

@@ -249,7 +249,8 @@ func AuthMiddleware(next http.Handler, cfg Config, setCookie func(http.ResponseW
 		// Hashed mode: parse "<hash>.<ts>.<salt>".
 		ok, refresh := validateHashedToken(ckn.Value, cfg.LoginToken, cfg.LoginTimeout)
 		if !ok {
-			log.Printf("[authz] cookie validation failed: %q", ckn.Value)
+			// Never log the cookie value itself (it is bearer-token material).
+			log.Printf("[authz] invalid %s cookie from %s", cfg.CookieTknName, r.RemoteAddr)
 			ServeLoginAsset(w, r, "")
 			return
 		}

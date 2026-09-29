@@ -178,7 +178,7 @@ type Backend struct {
 	Scheme      string // http, https, unix, file, text, relay, api, svc
 	Target      string // host:port, socket path, dir path, literal text, relay/api/service name
 	RawURL      string // original URL for logging
-	PathMode    string // http(s) path handling: ""=forward as-is, "-"=replace (strip source prefix onto target path), "+"=append (request path after target path)
+	PathMode    string // -/+ path mode: ""=forward as-is, "-"=strip source prefix onto target path, "+"=append full request path after target path; all schemes honor it except text:// (warning) and relay:// (no-op)
 	IsService   bool   // this backend is managed by kvs (svc:// target, or legacy & marker)
 	IsRegex     bool   // prefix is a regex pattern (^ prefix in [proxies])
 	VerTemplate bool   // prefix carries <verhash>/<version> (svc:// only; expanded from the service config per request)

@@ -694,19 +694,8 @@ func main() {
 		log.Printf("cookie auth: enabled (cookie %s, mode: %s)", cfg.CookieTknName, mode)
 	}
 	log.Printf("backends: %d", len(cfg.Proxies))
-	for i, b := range cfg.Proxies {
-		marker := ""
-		if b.IsService {
-			marker += " (service)"
-		}
-		if b.IsCache {
-			marker += " (cc cache)"
-		}
-		if b.IsWSock {
-			marker += " (ws serve)"
-		}
-		log.Printf("  route[%d] %s → %s://%s%s", i, b.Source, b.Scheme, b.Target, marker)
-	}
+	// Per-route "backend <mount> → <target>" lines are logged by
+	// pkg.CreateBackendHandler on every route (re)build.
 	if len(cfg.Headers) > 0 {
 		log.Printf("proxy headers: %v", cfg.Headers)
 	}

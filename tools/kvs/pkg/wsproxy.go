@@ -83,7 +83,7 @@ func SetWSTunnelOptions(mode string, idleSeconds int) {
 // wsUpstream 描述升级快路径如何到达后端。
 type wsUpstream struct {
 	b      Backend
-	target *url.URL // http/https/ws/wss 目标；unix 后端为 nil
+	target *url.URL // http/https/ws/wss 目标；unix 后端为合成 http://unix（仅作改写标签）
 	hdrs   map[string]string
 	mods   func(*http.Response) error // login_authz 的响应修饰链（非 101 响应同标准路径一致）
 }
@@ -96,14 +96,9 @@ func (u *wsUpstream) describe() string {
 	return u.b.Scheme + "://" + u.target.Host
 }
 
-// rewrite 把入站请求改写成发往后端的请求（与 ReverseProxy 的 Director 同规则）。
+// rewrite 把入站请求改写成发往后端的请求（与 ReverseProxy 的 Director 同规则，
+// 含 -/+ 路径模式；unix 后端经合成 target 走同一条路径）。
 func (u *wsUpstream) rewrite(req *http.Request) {
-	if u.b.Scheme == "unix" {
-		req.URL.Scheme = "http"
-		req.URL.Host = "unix"
-		applyCacheHeaders(req, u.hdrs)
-		return
-	}
 	rewriteProxyRequest(req, u.b, u.target, u.hdrs)
 }
 
