@@ -131,6 +131,10 @@ type ServiceConfig struct {
 	PackageExt string // resolved download package extension (cache filename suffix)
 	InitError  string // non-fatal resolve error (e.g. version fetch); surfaced on the loading page
 
+	// Extensions holds the service-provided extension handlers (registered via
+	// RegisterSvcExt, routed as svc://<name>.<ext>); attached at config load.
+	Extensions map[string]SvcExtHandler
+
 	// vscode-specific service options (also present on other services but
 	// only consumed by the VS Code flows). *Raw hold the unexpanded JSON
 	// source values until resolveService expands them.
@@ -981,9 +985,12 @@ func LoadInitConfig() Config {
 		target := strings.TrimSpace(e[1])
 		target = strings.TrimLeft(target, "-+")
 		if name, ok := strings.CutPrefix(target, "svc://"); ok {
-			if name = strings.TrimSpace(name); name != "" && !seenRef[name] {
-				seenRef[name] = true
-				svcRefs = append(svcRefs, name)
+			// svc://<name>.<ext> 引用的仍是服务 <name>（扩展随服务解析）
+			if name = strings.TrimSpace(name); name != "" {
+				if svcName, _, _ := SplitSvcTarget(name); svcName != "" && !seenRef[svcName] {
+					seenRef[svcName] = true
+					svcRefs = append(svcRefs, svcName)
+				}
 			}
 		}
 	}
@@ -994,10 +1001,11 @@ func LoadInitConfig() Config {
 		cfg.Services[name] = sections[name]
 	}
 	if len(svcRefs) > 0 {
-		log.Printf("services in use: %v (available: %v, default: %q)", svcRefs, serviceOrder, svcRefs[0])
+		log.Printf("services in use: %v (available: %v)", svcRefs, serviceOrder)
 	}
 	for _, name := range svcRefs {
 		cfg.resolveService(cfg.Services[name])
+		cfg.Services[name].Extensions = svcExtensions(name) // svc://<name>.<ext> 扩展
 	}
 
 	// --- cache_dir / cache_sed / proxy_path (top-level keys) ---------------

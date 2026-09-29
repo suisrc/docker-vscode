@@ -150,11 +150,14 @@ func parseBackends(entries [][2]string) []Backend {
 				b.IsCache = isCache
 				b.IsWSock = isWSock
 				// <verhash>/<version> route template: the prefix is matched
-				// against the target service's resolved VersionHash/Version
-				// per request (svc:// resolves its own service; other schemes
-				// use the table's primary service). api:// template mounts
-				// keep the raw request path — the handler self-locates.
+				// against the TARGET service's resolved VersionHash/Version
+				// per request. svc:// only — other schemes have no service to
+				// resolve from and match the placeholder text literally.
 				b.VerTemplate = hasVerTemplate(p)
+				if b.VerTemplate && b.Scheme != "svc" {
+					log.Printf("WARNING: backend %q: <verhash>/<version> placeholders resolve only for svc:// targets, matching literally", b.RawURL)
+					b.VerTemplate = false
+				}
 				backends = append(backends, *b)
 			}
 		}
@@ -206,10 +209,43 @@ func registerAPI(name string, h http.Handler) {
 	apiHandleMap[name] = h
 }
 
-// RegisterAPI exposes the api:// registry to main, where handlers that need
-// the route-table context (e.g. the primary service) can be registered after
-// the config is loaded but before the routes are built.
-func RegisterAPI(name string, h http.Handler) { registerAPI(name, h) }
+// SvcExtHandler is one hosted-service extension handler (svc://<name>.<ext>).
+// It receives the service config resolved for the CURRENT request (the
+// version hash and dirs may change across config reloads) and the route
+// prefix it is mounted at (expanded per request for templated routes) so the
+// handler can self-locate in the raw request path.
+type SvcExtHandler func(w http.ResponseWriter, r *http.Request, sc *ServiceConfig, mount string)
+
+// svcExtRegistry holds the service-provided extension handlers:
+// service name → extension name → handler. Modules register via
+// RegisterSvcExt at init time (e.g. vscode.go provides "ext").
+var svcExtRegistry = map[string]map[string]SvcExtHandler{}
+
+// RegisterSvcExt attaches an extension handler to a named hosted service.
+func RegisterSvcExt(svc, ext string, h SvcExtHandler) {
+	m := svcExtRegistry[svc]
+	if m == nil {
+		m = map[string]SvcExtHandler{}
+		svcExtRegistry[svc] = m
+	}
+	m[ext] = h
+}
+
+// svcExtensions returns the registered extension map of a service (nil when
+// none — attached onto ServiceConfig.Extensions at config load).
+func svcExtensions(svc string) map[string]SvcExtHandler {
+	return svcExtRegistry[svc]
+}
+
+// SplitSvcTarget splits an svc:// target into service name and optional
+// extension: "vscode.ext" → ("vscode", "ext", true); "zcode" → ("zcode",
+// "", false). The extension is the part after the LAST dot.
+func SplitSvcTarget(target string) (svc, ext string, hasExt bool) {
+	if i := strings.LastIndexByte(target, '.'); i > 0 && i < len(target)-1 {
+		return target[:i], target[i+1:], true
+	}
+	return target, "", false
+}
 
 // CreateBackendHandler builds an http.Handler for the given backend.
 // Supported schemes: http, https, ws, wss (reverse proxy), unix (reverse proxy),
@@ -293,10 +329,37 @@ func CreateBackendHandler(b Backend, cacheHeaders map[string]string, loginAuthz 
 		// address (http/https/unix); preparation (download/extract/start) is
 		// orchestrated by the route loop in main.go, which only reaches this
 		// handler once the service is ready.
-		name := b.Target
+		//
+		// svc://<name>.<ext> dispatches to the service's own extension handler
+		// (registered via RegisterSvcExt) instead of the reverse proxy — e.g.
+		// svc://vscode.ext serves the VS Code web-extension resources. The
+		// service config is resolved per request (version hash changes across
+		// reloads); the handler locates itself in the raw request path.
+		name, ext, hasExt := SplitSvcTarget(b.Target)
 		sc := Services().Get(name)
 		if sc == nil || sc.Address == "" {
 			log.Fatalf("backend svc://%s: service not configured or address missing (in %q)", name, b.RawURL)
+		}
+		if hasExt {
+			h, known := sc.Extensions[ext]
+			if !known {
+				log.Fatalf("backend svc://%s: unknown extension %q (in %q)", name, ext, b.RawURL)
+			}
+			log.Printf("backend svc://%s.%s → service extension", name, ext)
+			return http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+				cur := Services().Get(name)
+				if cur == nil {
+					http.NotFound(w, r)
+					return
+				}
+				mount := b.Source
+				if b.VerTemplate {
+					if p, ok := ExpandVerTemplate(b.Source, cur); ok {
+						mount = p
+					}
+				}
+				h(w, r, cur, mount)
+			})
 		}
 		scheme, target, ok := strings.Cut(sc.Address, "://")
 		scheme = strings.ToLower(scheme)

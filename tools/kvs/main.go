@@ -8,6 +8,7 @@ import (
 	"io"
 	"log"
 	"net/http"
+	"net/url"
 	"os"
 	"os/signal"
 	"path/filepath"
@@ -81,23 +82,6 @@ func main() {
 	// 可选 pprof（KVS_PPROF=1 | <port> | <addr>），默认关闭。
 	pkg.StartPProfIfEnabled()
 
-	// api://vscode-ext — VS Code web-extension-resource 资源（原 root 拦截，
-	// 现由路由表达，如 /stable-<verhash>/web-extension-resource/=api://vscode-ext）。
-	// 服务按请求解析（版本 hash 随 restart 变化），handler 自定位原始路径。
-	pkg.RegisterAPI("vscode-ext", http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
-		sc := svcDefault(cfg)
-		if sc == nil || sc.VersionHash == "" {
-			http.NotFound(w, r)
-			return
-		}
-		prePath := "/stable-" + sc.VersionHash + "/web-extension-resource/"
-		if !strings.HasPrefix(r.URL.Path, prePath) {
-			http.NotFound(w, r)
-			return
-		}
-		pkg.VscodeExtHandle(w, r, prePath, sc.Home)
-	}))
-
 	// Build (prefix → handler) routes for each backend. Hosted svc:// services
 	// get their own lazy preparation flow through the service manager (loading
 	// page while download/extract/start is in progress).
@@ -145,6 +129,27 @@ func main() {
 	}
 	var routesPtr atomic.Value // []route — swapped after every config reload
 	routesPtr.Store(buildRoutes(cfg))
+
+	// svcPick resolves the target service of a global endpoint: ?svc=<name>
+	// selects explicitly; without it, the first service in route-table order
+	// whose config provides the capability answers. There is NO default-service
+	// concept — the scan only asks "which service provides this feature".
+	svcPick := func(r *http.Request, pred func(*pkg.ServiceConfig) bool) *pkg.ServiceConfig {
+		if name := r.URL.Query().Get("svc"); name != "" {
+			return pkg.Services().Get(name)
+		}
+		for _, b := range cfg.Proxies {
+			name := svcBackendName(b)
+			if name == "" {
+				continue
+			}
+			if sc := pkg.Services().Get(name); sc != nil && pred(sc) {
+				return sc
+			}
+		}
+		return nil
+	}
+	agentsProvided := func(sc *pkg.ServiceConfig) bool { return sc.VscAgentsCmd != "" || sc.VscAgentsDir != "" }
 
 	// setCookie writes a cookie with the given value and MaxAge.
 	setCookie := func(w http.ResponseWriter, value string, maxAge int) {
@@ -213,14 +218,10 @@ func main() {
 	// ?svc=<name> selects a specific named service (default: the table's
 	// first svc:// service).
 	mux.HandleFunc("/__version", func(w http.ResponseWriter, r *http.Request) {
+		// ?svc=<name> 显式选择；缺省时按路由表顺序取第一个已解析版本的服务。
 		v := ""
-		if sc := svcDefault(cfg); sc != nil {
+		if sc := svcPick(r, func(sc *pkg.ServiceConfig) bool { return sc.Version != "" }); sc != nil {
 			v = sc.Version
-		}
-		if name := r.URL.Query().Get("svc"); name != "" {
-			if sc := pkg.Services().Get(name); sc != nil {
-				v = sc.Version
-			}
 		}
 		if v == "" {
 			v = "0.0.0"
@@ -240,15 +241,10 @@ func main() {
 		// Extract optional version: query (?v=1.32.1) is the primary method.
 		overrideVersion := r.URL.Query().Get("v")
 		svcName := r.URL.Query().Get("svc")
-		if svcName == "" {
-			if sc := svcDefault(cfg); sc != nil {
-				svcName = sc.Name
-			}
-		}
 		if svcName == "" || pkg.Services().Get(svcName) == nil {
 			w.Header().Set("Content-Type", "text/html; charset=utf-8")
 			w.WriteHeader(http.StatusOK)
-			fmt.Fprintln(w, `<!DOCTYPE html><html><body><h3>No service backend configured.</h3><a href="/">Go Home</a></body></html>`)
+			fmt.Fprintln(w, `<!DOCTYPE html><html><body><h3>Service required: /__restart?svc=&lt;name&gt;</h3><a href="/">Go Home</a></body></html>`)
 			return
 		}
 
@@ -315,7 +311,7 @@ func main() {
 			log.Printf("[restart] config reload error: %s", initErr)
 			w.Header().Set("Content-Type", "text/html; charset=utf-8")
 			w.WriteHeader(http.StatusInternalServerError)
-			fmt.Fprintf(w, `<!DOCTYPE html><html><body><h3>Restart failed: %s</h3><p><a href="/">Go Home</a> | <a href="/__restart">Retry Restart</a></p></body></html>`, initErr)
+			fmt.Fprintf(w, `<!DOCTYPE html><html><body><h3>Restart failed: %s</h3><p><a href="/">Go Home</a> | <a href="/__restart?svc=%s">Retry Restart</a></p></body></html>`, initErr, url.QueryEscape(svcName))
 			return
 		}
 
@@ -364,7 +360,7 @@ func main() {
 	mux.HandleFunc("/__open_url", func(w http.ResponseWriter, r *http.Request) {
 		w.Header().Set("Content-Type", "text/plain; charset=utf-8")
 		openURL := ""
-		if sc := svcDefault(cfg); sc != nil {
+		if sc := svcPick(r, func(sc *pkg.ServiceConfig) bool { return sc.VscOpenURL != "" }); sc != nil {
 			openURL = sc.VscOpenURL
 		}
 		if openURL == "" || !strings.Contains(openURL, "://") {
@@ -397,7 +393,7 @@ func main() {
 		resp := map[string]any{
 			"running": agentvs.Running(),
 		}
-		if sc := svcDefault(cfg); sc != nil {
+		if sc := svcPick(r, agentsProvided); sc != nil {
 			resp["command"] = sc.VscAgentsCmd
 			resp["cmds"] = sc.VscAgentCmds
 		}
@@ -407,7 +403,7 @@ func main() {
 	mux.HandleFunc("/__agents/entries", func(w http.ResponseWriter, r *http.Request) {
 		w.Header().Set("Content-Type", "application/json; charset=utf-8")
 		dir := ""
-		if sc := svcDefault(cfg); sc != nil {
+		if sc := svcPick(r, agentsProvided); sc != nil {
 			dir = sc.VscAgentsDir
 		}
 		resp := pkg.ListAgentEntries(dir)
@@ -428,7 +424,7 @@ func main() {
 			http.Error(w, "agents already running", http.StatusConflict)
 			return
 		}
-		sc := svcDefault(cfg)
+		sc := svcPick(r, agentsProvided)
 		if r.Body != nil {
 			var req struct {
 				Command string `json:"command"`
@@ -476,7 +472,7 @@ func main() {
 			http.Error(w, "POST required", http.StatusMethodNotAllowed)
 			return
 		}
-		sc := svcDefault(cfg)
+		sc := svcPick(r, agentsProvided)
 		if r.Body != nil {
 			var req struct {
 				Command string `json:"command"`
@@ -512,7 +508,10 @@ func main() {
 			http.Error(w, "action name required", http.StatusBadRequest)
 			return
 		}
-		sc := svcDefault(cfg)
+		sc := svcPick(r, func(sc *pkg.ServiceConfig) bool {
+			_, ok := sc.Actions[name]
+			return ok
+		})
 		if sc == nil {
 			http.Error(w, "unknown action", http.StatusNotFound)
 			return
@@ -552,19 +551,8 @@ func main() {
 	// {KVS_SVC_VSCODE_NLS_URL:-/__cache/vscode/nls/}. A /__ prefix serves NLS
 	// through kvs itself; any other value (e.g. an external URL) needs no
 	// local route.
-	nlsPathPrefix := os.Getenv("KVS_SVC_VSCODE_NLS_URL")
-	if nlsPathPrefix == "" {
-		nlsPathPrefix = "/__cache/vscode/nls/"
-	}
-	if strings.HasPrefix(nlsPathPrefix, "/__") {
-		mux.HandleFunc(nlsPathPrefix, func(w http.ResponseWriter, r *http.Request) {
-			if sc := svcDefault(cfg); sc != nil {
-				pkg.VscodeNlsHandle(w, r, nlsPathPrefix, sc.Home, sc.BinHome, sc.VscLanguage)
-				return
-			}
-			http.NotFound(w, r)
-		})
-	}
+	// NLS（KVS_SVC_VSCODE_NLS_URL）不再在 main 绑定：由路由表达，
+	// 如 /__cache/vscode/nls/=svc://vscode.nls（svc 服务扩展）。
 
 	// cache proxy – {proxy_path}/{scheme}:{host}/path → {scheme}://{host}/path
 	// Only registered when both cache_dir (disk storage) and proxy_path (route
@@ -598,13 +586,9 @@ func main() {
 				}
 			} else if rt.templated {
 				// <verhash>/<version> 前缀按目标服务当前配置展开后做前缀匹配
-				// （仅前缀匹配，不支持正则）；服务未准备（版本未解析）时跳过。
-				// svc:// 用自己的服务；其他 scheme（如 api://）用表的首个服务。
-				target := pkg.Services().Get(rt.svc)
-				if rt.svc == "" {
-					target = svcDefault(cfg)
-				}
-				p, ok := pkg.ExpandVerTemplate(rt.prefix, target)
+				// （仅前缀匹配，不支持正则；模板仅对 svc:// 有效）；服务未
+				// 准备（版本未解析）时跳过。
+				p, ok := pkg.ExpandVerTemplate(rt.prefix, pkg.Services().Get(rt.svc))
 				if !ok || !strings.HasPrefix(r.URL.Path, p) {
 					continue
 				}
@@ -756,20 +740,8 @@ func main() {
 // svcBackendName returns the service name behind a svc:// backend ("" otherwise).
 func svcBackendName(b pkg.Backend) string {
 	if b.Scheme == "svc" {
-		return b.Target
+		name, _, _ := pkg.SplitSvcTarget(b.Target) // svc://name.ext → name
+		return name
 	}
 	return ""
-}
-
-// svcDefault returns the config of the first svc:// service referenced by the
-// current route table (nil when the table hosts no managed service). The
-// global service endpoints (/__version, /__agents/*, /__open_url, NLS…)
-// operate on it; ?svc=<name> selects a different service where supported.
-func svcDefault(cfg pkg.Config) *pkg.ServiceConfig {
-	for _, b := range cfg.Proxies {
-		if name := svcBackendName(b); name != "" {
-			return pkg.Services().Get(name)
-		}
-	}
-	return nil
 }

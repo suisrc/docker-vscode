@@ -3,6 +3,7 @@ package pkg
 import (
 	"encoding/json"
 	"io"
+	"net/http"
 	"net/http/httptest"
 	"net/url"
 	"os"
@@ -231,26 +232,64 @@ func TestClearServiceVersionEnv(t *testing.T) {
 }
 
 // TestParseBackendsVerTemplate checks <verhash>/<version> route-template
-// detection: any non-regex scheme can be templated (svc:// resolves its own
-// service, other schemes the table's primary service); regex routes never are.
+// detection: templates are svc://-only (the placeholders resolve from the
+// target service); other schemes match the placeholder text literally and
+// regex routes never template.
 func TestParseBackendsVerTemplate(t *testing.T) {
 	backends := parseBackends([][2]string{
 		{"/stable-<verhash>/", "svc://vscode"},
 		{"/v<version>/x", "svc://vscode"},
-		{"/stable-<verhash>/web-extension-resource/", "api://vscode-ext"},
+		{"/stable-<verhash>/web-extension-resource/", "api://whatever"},
 		{"/stable-<verhash>/", "http://127.0.0.1:1"},
 		{"^/stable-[a-z]+/", "svc://vscode"},
 	})
 	if len(backends) != 5 {
 		t.Fatalf("got %d backends: %+v", len(backends), backends)
 	}
-	for i, want := range []bool{true, true, true, true, false} {
+	for i, want := range []bool{true, true, false, false, false} {
 		if backends[i].VerTemplate != want {
 			t.Fatalf("backends[%d].VerTemplate = %v, want %v: %+v", i, backends[i].VerTemplate, want, backends[i])
 		}
 	}
 	if !backends[0].IsService || backends[2].IsService {
 		t.Fatalf("service flag wrong: %+v / %+v", backends[0], backends[2])
+	}
+}
+
+// TestSplitSvcTarget checks svc:// target splitting: "name.ext" → service
+// "name" + extension "ext" (last dot); plain names have no extension.
+func TestSplitSvcTarget(t *testing.T) {
+	if svc, ext, ok := SplitSvcTarget("vscode.ext"); !ok || svc != "vscode" || ext != "ext" {
+		t.Fatalf("SplitSvcTarget(vscode.ext) = %q %q %v", svc, ext, ok)
+	}
+	if svc, ext, ok := SplitSvcTarget("a.b.ext"); !ok || svc != "a.b" || ext != "ext" {
+		t.Fatalf("SplitSvcTarget(a.b.ext) = %q %q %v", svc, ext, ok)
+	}
+	if _, ext, ok := SplitSvcTarget("zcode"); ok || ext != "" {
+		t.Fatalf("plain target must have no extension")
+	}
+}
+
+// TestSvcExtensionDispatch checks the svc://<name>.<ext> route: the extension
+// handler registered on the service is dispatched with the service config
+// resolved for the current request.
+func TestSvcExtensionDispatch(t *testing.T) {
+	RegisterSvcExt("tsvc", "ext", func(w http.ResponseWriter, r *http.Request, sc *ServiceConfig, mount string) {
+		_, _ = w.Write([]byte("svc=" + sc.Name + " home=" + sc.Home + " mount=" + mount))
+	})
+	t.Cleanup(func() { delete(svcExtRegistry, "tsvc") })
+
+	Services().Register(map[string]*ServiceConfig{
+		"tsvc": {Name: "tsvc", Address: "http://127.0.0.1:1", Home: "/tmp/tsvc-home",
+			Extensions: svcExtensions("tsvc")},
+	})
+	t.Cleanup(func() { Services().Register(map[string]*ServiceConfig{}) })
+
+	h := CreateBackendHandler(Backend{Source: "/x", Scheme: "svc", Target: "tsvc.ext", RawURL: "svc://tsvc.ext"}, nil, false)
+	rec := httptest.NewRecorder()
+	h.ServeHTTP(rec, httptest.NewRequest("GET", "/x/stable-abc/web-extension-resource/a.b.c/1.0/p", nil))
+	if rec.Code != 200 || rec.Body.String() != "svc=tsvc home=/tmp/tsvc-home mount=/x" {
+		t.Fatalf("extension dispatch -> %d %q", rec.Code, rec.Body.String())
 	}
 }
 

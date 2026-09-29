@@ -23,6 +23,27 @@ import (
 // /stable-{commit}/web-extension-resource/{publisher}.vscode-unpkg.net/{publisher}/{name}/{version}/{path}
 // prePath = /stable-{commit}/web-extension-resource/
 // file = {svcHome}/extensions/{publisher}.{name}-{version}/{path}
+// svc 扩展（svc://<name>.<ext>）：
+//   - vscode.ext — /stable-<verhash>/web-extension-resource/ 的扩展资源
+//   - vscode.nls — NLS 翻译重映射（挂载点来自路由，如 /__cache/vscode/nls/）
+func init() {
+	RegisterSvcExt("vscode", "ext", func(w http.ResponseWriter, r *http.Request, sc *ServiceConfig, mount string) {
+		if sc.VersionHash == "" {
+			http.NotFound(w, r)
+			return
+		}
+		prePath := "/stable-" + sc.VersionHash + "/web-extension-resource/"
+		if !strings.HasPrefix(r.URL.Path, prePath) {
+			http.NotFound(w, r)
+			return
+		}
+		VscodeExtHandle(w, r, prePath, sc.Home)
+	})
+	RegisterSvcExt("vscode", "nls", func(w http.ResponseWriter, r *http.Request, sc *ServiceConfig, mount string) {
+		VscodeNlsHandle(w, r, mount, sc.Home, sc.BinHome, sc.VscLanguage)
+	})
+}
+
 // VscodeExtHandle serves VS Code web-extension-resource requests.
 func VscodeExtHandle(w http.ResponseWriter, r *http.Request, prePath, svcHome string) {
 	// Strip prePath to get the relative path, e.g.:
