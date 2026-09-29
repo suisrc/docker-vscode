@@ -41,6 +41,23 @@ func ClearOverrideVersion(svc string) {
 	delete(gOverrideVersions, svc)
 }
 
+// ClearServiceVersionEnv removes the reverse-assigned KVS_SVC_<NAME>_VERSION
+// env when it is kvs's own artifact (equals the last resolved version). The
+// config's version = {KVS_SVC_<NAME>_VERSION} placeholder would otherwise
+// read the value back on the next reload and silently re-pin it, breaking
+// "clear → upgrade to latest". An externally pinned env (different value) is
+// preserved. No-op for services without a resolved version.
+func ClearServiceVersionEnv(svc string) {
+	sc := Services().Get(svc)
+	if sc == nil || sc.Version == "" {
+		return
+	}
+	env := svcEnvKey(svc, "VERSION")
+	if os.Getenv(env) == sc.Version {
+		os.Unsetenv(env)
+	}
+}
+
 // GetOverrideVersion returns the version override of the given service (""=none).
 func GetOverrideVersion(svc string) string {
 	gOverrideMu.Lock()
@@ -153,15 +170,16 @@ func svcEnvKey(name, suffix string) string {
 
 // Backend describes a single proxy target with its routing prefix.
 type Backend struct {
-	Source    string // routing Source, "/" for root
-	Scheme    string // http, https, unix, file, text, relay, api, svc
-	Target    string // host:port, socket path, dir path, literal text, relay/api/service name
-	RawURL    string // original URL for logging
-	PathMode  string // http(s) path handling: ""=forward as-is, "-"=replace (strip source prefix onto target path), "+"=append (request path after target path)
-	IsService bool   // this backend is managed by kvs (svc:// target, or legacy & marker)
-	IsRegex   bool   // prefix is a regex pattern (^ prefix in [proxies])
-	IsCache   bool   // cc~ prefix: cache proxied responses on disk ({cache_dir:-/cache}/ccproxy/{scheme}:{host}/path)
-	IsWSock   bool   // ws~ prefix (or ws://wss:// url scheme): WebSocket-aware route, upgrade requests detected and handled separately
+	Source      string // routing Source, "/" for root
+	Scheme      string // http, https, unix, file, text, relay, api, svc
+	Target      string // host:port, socket path, dir path, literal text, relay/api/service name
+	RawURL      string // original URL for logging
+	PathMode    string // http(s) path handling: ""=forward as-is, "-"=replace (strip source prefix onto target path), "+"=append (request path after target path)
+	IsService   bool   // this backend is managed by kvs (svc:// target, or legacy & marker)
+	IsRegex     bool   // prefix is a regex pattern (^ prefix in [proxies])
+	VerTemplate bool   // prefix carries <verhash>/<version> (svc:// only; expanded from the service config per request)
+	IsCache     bool   // cc~ prefix: cache proxied responses on disk ({cache_dir:-/cache}/ccproxy/{scheme}:{host}/path)
+	IsWSock     bool   // ws~ prefix (or ws://wss:// url scheme): WebSocket-aware route, upgrade requests detected and handled separately
 }
 
 // iniFile holds parsed key-value pairs from kvs.ini.

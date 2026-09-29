@@ -665,33 +665,60 @@ body.drag-in-progress .card.openable, body.drag-in-progress .mrow.openable { cur
   </p>
 </main>
 
-<!-- 添加应用 -->
+<!-- 添加应用（内置 / 远程） -->
 <div class="modal-mask xw" id="addModal" hidden>
   <div class="modal" role="dialog" aria-modal="true" aria-label="添加应用">
     <h2 id="addTitle">添加应用</h2>
-    <p class="modal-sub" id="addSub">接入一台 VS Code 或其他任意设备（如 Linux 桌面）</p>
-    <div class="seg" id="segType">
-      <button type="button" data-t="vsc" class="active">VS Code</button>
-      <button type="button" data-t="other">其他</button>
+    <p class="modal-sub" id="addSub">内置为 kvs 托管服务，远程接入一台设备或地址</p>
+    <div class="seg" id="segKind">
+      <button type="button" data-k="svc" class="active">内置</button>
+      <button type="button" data-k="remote">远程</button>
     </div>
-    <label class="field" id="iconField" style="display:none"><span>Logo</span>
-      <div class="logo-picker" id="logoPicker">
-        <button type="button" class="logo-opt" data-i="vsc"><span class="app-ico i-vsc"></span>VS Code</button>
-        <button type="button" class="logo-opt" data-i="zcd"><span class="app-ico i-zcd"></span>ZCode</button>
-        <button type="button" class="logo-opt" data-i="linux"><span class="app-ico i-linux"></span>Linux</button>
-        <button type="button" class="logo-opt active" data-i="other"><span class="app-ico i-other"></span>其他</button>
-      </div>
-    </label>
-    <label class="field"><span>名称</span>
-      <input id="inpName" placeholder="如 ws02" maxlength="40" autocomplete="off">
-    </label>
-    <label class="field"><span>访问地址</span>
-      <input id="inpURL" placeholder="https://ws02-7080-wsc.example.com" autocomplete="off">
-    </label>
-    <label class="field" id="foldersField"><span>工作区快捷方式 <span class="opt">可选 · 每行一个「名称=工作区路径」，也可只填路径</span></span>
-      <textarea id="inpFolders" rows="3" placeholder="proj1=/wsc/go/proj1
+    <!-- 内置：kvs 托管服务（svc:// 嗅探） -->
+    <div id="svcPane">
+      <label class="field"><span>托管服务</span>
+        <div class="logo-picker" id="svcPicker"></div>
+        <p class="opt" id="svcEmpty" style="display:none;margin:6px 0 0">当前代理表没有可用的托管服务（svc://）</p>
+      </label>
+      <label class="field"><span>名称</span>
+        <input id="inpSvcName" placeholder="缺省为服务名" maxlength="40" autocomplete="off">
+      </label>
+      <label class="field" id="svcVerField"><span>版本 <span class="opt">留空升级到最新版本</span></span>
+        <input id="inpSvcVer" autocomplete="off">
+      </label>
+      <label class="field" id="svcFoldersField"><span>附加文件夹 <span class="opt">可选 · 每行一个「名称=工作区路径」，也可只填路径</span></span>
+        <textarea id="inpSvcFolders" rows="3" placeholder="proj1=/wsc/go/proj1
 /wsc/api"></textarea>
-    </label>
+      </label>
+      <label class="field" id="svcDataField"><span>数据文件夹 <span class="opt">ZCODE_DATA_BASE_DIR / ZCODE_DESKTOP_HOME_DIR · 留空使用配置默认</span></span>
+        <input id="inpSvcData" autocomplete="off">
+      </label>
+      <label class="field" id="svcWscField"><span>工作目录 <span class="opt">KVS_SVC_ZCODE_WSC（--workspace）· 留空使用配置默认</span></span>
+        <input id="inpSvcWsc" autocomplete="off">
+      </label>
+      <p class="modal-sub" id="svcUrlInfo"></p>
+    </div>
+    <!-- 远程：任意设备 / 地址，选 Logo；VS Code Logo 带扩展文件夹 -->
+    <div id="remotePane" style="display:none">
+      <label class="field"><span>Logo</span>
+        <div class="logo-picker" id="logoPicker">
+          <button type="button" class="logo-opt" data-i="vsc"><span class="app-ico i-vsc"></span>VS Code</button>
+          <button type="button" class="logo-opt" data-i="zcd"><span class="app-ico i-zcd"></span>ZCode</button>
+          <button type="button" class="logo-opt" data-i="linux"><span class="app-ico i-linux"></span>Linux</button>
+          <button type="button" class="logo-opt active" data-i="other"><span class="app-ico i-other"></span>其他</button>
+        </div>
+      </label>
+      <label class="field"><span>名称</span>
+        <input id="inpName" placeholder="如 ws02" maxlength="40" autocomplete="off">
+      </label>
+      <label class="field"><span>访问地址</span>
+        <input id="inpURL" placeholder="https://ws02-7080-wsc.example.com" autocomplete="off">
+      </label>
+      <label class="field" id="foldersField"><span>扩展文件夹 <span class="opt">仅 VS Code Logo · 每行一个「名称=工作区路径」，也可只填路径</span></span>
+        <textarea id="inpFolders" rows="3" placeholder="proj1=/wsc/go/proj1
+/wsc/api"></textarea>
+      </label>
+    </div>
     <div class="modal-acts">
       <button class="btn" id="addCancel" type="button">取消</button>
       <button class="btn primary" id="addOk" type="button">添加</button>
@@ -998,7 +1025,7 @@ function buildCard(a) {
   var tags = el('div', 'tag-row');
   var tagInfo = TAGS[icoKey];
   tags.appendChild(el('span', 'tag ' + icoKey, tagInfo[0]));
-  if (a.local) tags.appendChild(el('span', 'tag mini', '本地'));
+  if (a.svc) tags.appendChild(el('span', 'tag mini', '内置'));
   /* 在线状态：不可删除的自动标签，不单独占行 */
   var stTag = el('span', 'tag st ' + st.cls);
   stTag.appendChild(el('span', 'dot ' + st.cls));
@@ -1046,12 +1073,17 @@ function buildCard(a) {
   }
   card.appendChild(head);
 
-  /* 版本 · 操作系统 */
+  /* 版本 · 操作系统（a.ver = 内置卡固定/覆盖版本） */
   var verRow = el('span');
-  if (a.version) verRow.appendChild(monoNode(a.version));
-  if (a.version && a.os) verRow.appendChild(textNode(' · '));
-  if (a.os) verRow.appendChild(textNode(a.os));
-  if (!a.version && !a.os) verRow.appendChild(textNode('—'));
+  var verParts = [];
+  if (a.ver) verParts.push(monoNode(a.ver));
+  if (a.version && a.version !== a.ver) verParts.push(monoNode(a.version));
+  if (a.os) verParts.push(textNode(a.os));
+  if (!verParts.length) verParts.push(textNode('—'));
+  verParts.forEach(function (n, i) {
+    if (i) verRow.appendChild(textNode(' · '));
+    verRow.appendChild(n);
+  });
   card.appendChild(metaRow('tag', verRow));
 
   /* 最后访问 */
@@ -1070,6 +1102,15 @@ function buildCard(a) {
     crRow.appendChild(textNode('创建于 '));
     crRow.appendChild(el('span', 'mono', fmtFull(a.created_at)));
     card.appendChild(metaRow('cal', crRow));
+  }
+
+  /* 内置 zcode：数据文件夹 / 工作目录覆盖 */
+  if (a.type === 'zcd' && a.svc && (a.data_dir || a.wsc)) {
+    var cfgRow = el('span');
+    if (a.data_dir) cfgRow.appendChild(monoNode(a.data_dir));
+    if (a.data_dir && a.wsc) cfgRow.appendChild(textNode(' · '));
+    if (a.wsc) cfgRow.appendChild(monoNode(a.wsc));
+    card.appendChild(metaRow('folder', cfgRow));
   }
 
   /* 工作区（VS Code 专属） */
@@ -1155,7 +1196,7 @@ function buildRow(a) {
   var l1 = el('div', 'mrow-l1');
   l1.appendChild(el('span', 'mrow-name', a.name || a.id));
   l1.appendChild(el('span', 'tag ' + icoKey, TAGS[icoKey][0]));
-  if (a.local) l1.appendChild(el('span', 'tag mini', '本地'));
+  if (a.svc) l1.appendChild(el('span', 'tag mini', '内置'));
   (a.tags || []).forEach(function (t) {
     l1.appendChild(el('span', 'tag ct', t));
   });
@@ -1534,19 +1575,30 @@ $('cfOk').addEventListener('click', function () {
   cfResolve(true);
 });
 
-/* ---- 添加应用 ---- */
-var addType = 'vsc';
-var addIcon = 'other';
-$('segType').addEventListener('click', function (e) {
-  var btn = e.target.closest('button[data-t]');
+/* ---- 添加应用（内置 / 远程） ---- */
+var addKind = 'svc';   // svc=内置（托管服务） | remote=远程（任意地址）
+var addIcon = 'other'; // 远程 Logo
+var addSvc = null;     // 内置选中的服务（/__manager/svcs 的一项）
+var svcList = [];
+var editingApp = null; // 编辑模式：正在编辑的应用（null = 新增）
+
+function loadSvcs() {
+  return fetch(MGR_BASE + '/__manager/svcs', { credentials: 'include' })
+    .then(function (r) { return r.ok ? r.json() : { svcs: [] }; })
+    .then(function (j) { svcList = j.svcs || []; return svcList; })
+    .catch(function () { svcList = []; return svcList; });
+}
+
+$('segKind').addEventListener('click', function (e) {
+  var btn = e.target.closest('button[data-k]');
   if (!btn) return;
-  addType = btn.dataset.t;
-  document.querySelectorAll('#segType button').forEach(function (b) {
+  addKind = btn.dataset.k;
+  document.querySelectorAll('#segKind button').forEach(function (b) {
     b.classList.toggle('active', b === btn);
   });
-  $('foldersField').style.display = addType === 'vsc' ? '' : 'none';
-  $('iconField').style.display = addType === 'other' ? '' : 'none';
+  refreshAddPane();
 });
+
 $('logoPicker').addEventListener('click', function (e) {
   var btn = e.target.closest('.logo-opt');
   if (!btn) return;
@@ -1554,41 +1606,118 @@ $('logoPicker').addEventListener('click', function (e) {
   document.querySelectorAll('#logoPicker .logo-opt').forEach(function (b) {
     b.classList.toggle('active', b === btn);
   });
+  /* VS Code Logo 才有扩展文件夹 */
+  $('foldersField').style.display = addIcon === 'vsc' ? '' : 'none';
 });
 
-var editingApp = null;   // 编辑模式：正在编辑的应用（null = 新增）
+function refreshAddPane() {
+  $('svcPane').style.display = addKind === 'svc' ? '' : 'none';
+  $('remotePane').style.display = addKind === 'remote' ? '' : 'none';
+  $('foldersField').style.display = (addKind === 'remote' && addIcon === 'vsc') ? '' : 'none';
+  if (addKind === 'svc') {
+    var ready = function () { renderSvcPicker(); };
+    if (svcList.length) ready(); else loadSvcs().then(ready);
+  }
+}
+
+function renderSvcPicker() {
+  var picker = $('svcPicker');
+  picker.innerHTML = '';
+  /* 编辑模式只显示本卡对应的服务；新建显示全部嗅探到的服务 */
+  var offer = svcList.filter(function (sv) { return !editingApp || !editingApp.svc || sv.svc === editingApp.svc; });
+  $('svcEmpty').style.display = offer.length ? 'none' : '';
+  if (!offer.some(function (sv) { return addSvc && sv.svc === addSvc.svc; })) {
+    addSvc = offer[0] || null;
+  }
+  offer.forEach(function (sv) {
+    var b = el('button', 'logo-opt' + (addSvc && sv.svc === addSvc.svc ? ' active' : ''));
+    b.type = 'button';
+    b.dataset.svc = sv.svc;
+    b.innerHTML = '<span class="app-ico i-' + (sv.type === 'zcd' ? 'zcd' : 'vsc') + '"></span>' +
+      (sv.type === 'zcd' ? 'ZCode' : 'VS Code');
+    b.addEventListener('click', function () { selectSvc(sv); });
+    picker.appendChild(b);
+  });
+  syncSvcFields();
+}
+
+function selectSvc(sv) {
+  addSvc = sv;
+  document.querySelectorAll('#svcPicker .logo-opt').forEach(function (b) {
+    b.classList.toggle('active', b.dataset.svc === sv.svc);
+  });
+  syncSvcFields();
+}
+
+function syncSvcFields() {
+  var isVsc = !!addSvc && addSvc.type === 'vsc';
+  var isZcd = !!addSvc && addSvc.type === 'zcd';
+  $('svcVerField').style.display = (addSvc && addSvc.has_version) ? '' : 'none';
+  $('svcFoldersField').style.display = isVsc ? '' : 'none';
+  $('svcDataField').style.display = isZcd ? '' : 'none';
+  $('svcWscField').style.display = isZcd ? '' : 'none';
+  if (addSvc) {
+    $('inpSvcVer').placeholder = addSvc.version ? '当前 ' + addSvc.version + ' · 留空升级最新' : '留空升级最新版本';
+    $('inpSvcData').placeholder = addSvc.data_dir || '留空使用配置默认';
+    $('inpSvcWsc').placeholder = addSvc.wsc || '留空使用配置默认';
+    $('svcUrlInfo').textContent = '地址：' + addSvc.url;
+  } else {
+    $('svcUrlInfo').textContent = '';
+  }
+}
+
 function openAddModal(a) {
   editingApp = a || null;
-  if (a) {
+  if (a && a.svc) {
+    /* 内置卡编辑：锁定内置面板 */
+    addKind = 'svc';
+    $('segKind').style.display = 'none';
+    $('addTitle').textContent = '编辑内置应用';
+    $('addSub').textContent = '修改「' + a.name + '」的托管服务配置';
+    $('inpSvcName').value = a.name || '';
+    $('inpSvcFolders').value = (a.folders || []).map(function (f) {
+      return f.name + '=' + f.path;
+    }).join('\n');
+    $('inpSvcData').value = a.data_dir || '';
+    $('inpSvcWsc').value = a.wsc || '';
+    $('inpSvcVer').value = a.ver || '';
+  } else if (a) {
+    /* 远程卡编辑 */
+    addKind = 'remote';
+    $('segKind').style.display = 'none';
     $('addTitle').textContent = '编辑应用';
     $('addSub').textContent = '修改「' + a.name + '」的信息';
     $('inpName').value = a.name || '';
     $('inpURL').value = (a.url || '').indexOf('http') === 0 ? a.url : '';
     $('inpFolders').value = (a.folders || []).map(function (f) {
-      return f.name + '=' + f.path;   // 统一 name=path 格式回填，避免丢失名称
+      return f.name + '=' + f.path;
     }).join('\n');
-    addType = a.type === 'vsc' ? 'vsc' : 'other';
     addIcon = iconOf(a);
   } else {
-    $('addTitle').textContent = '添加应用';
-    $('addSub').textContent = '接入一台 VS Code 或其他任意设备（如 Linux 桌面）';
-    $('inpName').value = '';
-    $('inpURL').value = '';
-    $('inpFolders').value = '';
-    addType = 'vsc';
+    /* 新建：默认内置 */
+    addKind = 'svc';
     addIcon = 'other';
+    addSvc = null;
+    $('segKind').style.display = '';
+    $('addTitle').textContent = '添加应用';
+    $('addSub').textContent = '内置为 kvs 托管服务，远程接入一台设备或地址';
+    $('inpSvcName').value = ''; $('inpSvcFolders').value = '';
+    $('inpSvcData').value = ''; $('inpSvcWsc').value = '';
+    $('inpSvcVer').value = '';
+    $('inpName').value = ''; $('inpURL').value = ''; $('inpFolders').value = '';
   }
-  document.querySelectorAll('#segType button').forEach(function (b) {
-    b.classList.toggle('active', b.dataset.t === addType);
+  document.querySelectorAll('#segKind button').forEach(function (b) {
+    b.classList.toggle('active', b.dataset.k === addKind);
   });
   document.querySelectorAll('#logoPicker .logo-opt').forEach(function (b) {
     b.classList.toggle('active', b.dataset.i === addIcon);
   });
-  $('foldersField').style.display = addType === 'vsc' ? '' : 'none';
-  $('iconField').style.display = addType === 'other' ? '' : 'none';
+  refreshAddPane();
   $('addOk').textContent = a ? '保存' : '添加';
   openModal('addModal');
-  setTimeout(function () { $('inpName').focus(); }, 60);
+  setTimeout(function () {
+    $(addKind === 'svc' ? 'inpSvcName' : 'inpName').focus();
+  }, 60);
 }
 $('btnAdd').addEventListener('click', openAddModal);
 $('addCancel').addEventListener('click', function () { closeModal('addModal'); });
@@ -1618,18 +1747,36 @@ function parseFolders(text) {
 }
 
 $('addOk').addEventListener('click', function () {
+  if (addKind === 'svc') {
+    if (!addSvc) { toast('没有可用的托管服务', true); return; }
+    var sname = $('inpSvcName').value.trim() || addSvc.svc;
+    var sbody = { svc: addSvc.svc, name: sname, ver: $('inpSvcVer').value.trim() };
+    if (addSvc.type === 'vsc') {
+      sbody.folders = parseFolders($('inpSvcFolders').value);
+    } else {
+      sbody.data_dir = $('inpSvcData').value.trim();
+      sbody.wsc = $('inpSvcWsc').value.trim();
+    }
+    if (editingApp) sbody.id = editingApp.id;
+    fetch(MGR_BASE + '/__manager', {
+      method: 'POST', credentials: 'include',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify(sbody)
+    }).then(function (res) {
+      if (!res.ok) return res.text().then(function (t) { throw new Error(t || ('HTTP ' + res.status)); });
+      closeModal('addModal');
+      toast(editingApp ? '已保存「' + sname + '」' : '已添加「' + sname + '」');
+      loadApps(false);
+    }).catch(function (err) { toast(editingApp ? '保存失败：' : '添加失败：' + err.message, true); });
+    return;
+  }
   var name = $('inpName').value.trim();
   var url = $('inpURL').value.trim();
   if (!name) { toast('请填写名称', true); return; }
   if (!url) { toast('请填写访问地址', true); return; }
-  var body = { type: addType, name: name, url: url };
-  if (addType === 'vsc') {
-    body.folders = parseFolders($('inpFolders').value);
-  } else {
-    body.icon = addIcon;             // 其他类型自选 Logo
-  }
+  var body = { type: addIcon === 'vsc' ? 'vsc' : 'other', name: name, url: url, icon: addIcon };
+  if (addIcon === 'vsc') body.folders = parseFolders($('inpFolders').value);
   if (editingApp) body.id = editingApp.id;   // 编辑模式
-
   fetch(MGR_BASE + '/__manager', {
     method: 'POST', credentials: 'include',
     headers: { 'Content-Type': 'application/json' },

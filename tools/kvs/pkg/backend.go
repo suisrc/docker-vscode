@@ -65,6 +65,37 @@ func MustAsset(name string) []byte {
 //
 // There is no implicit single-backend-to-service promotion: hosted services
 // are addressed explicitly via svc://<name>.
+// hasVerTemplate reports whether a route prefix carries the
+// <verhash>/<version> placeholders.
+func hasVerTemplate(s string) bool {
+	return strings.Contains(s, "<verhash>") || strings.Contains(s, "<version>")
+}
+
+// ExpandVerTemplate expands the <verhash>/<version> placeholders of a route
+// prefix from the service's resolved config (<verhash> → VersionHash,
+// <version> → Version). ok=false when the service is unknown or a needed
+// value has not been resolved yet — the route is then skipped until the
+// service has been prepared ("没有启动就跳过，启动后再参与匹配").
+func ExpandVerTemplate(tpl string, sc *ServiceConfig) (string, bool) {
+	if sc == nil {
+		return "", false
+	}
+	p := tpl
+	if strings.Contains(p, "<verhash>") {
+		if sc.VersionHash == "" {
+			return "", false
+		}
+		p = strings.ReplaceAll(p, "<verhash>", sc.VersionHash)
+	}
+	if strings.Contains(p, "<version>") {
+		if sc.Version == "" {
+			return "", false
+		}
+		p = strings.ReplaceAll(p, "<version>", sc.Version)
+	}
+	return p, true
+}
+
 func parseBackends(entries [][2]string) []Backend {
 	var backends []Backend
 	for _, e := range entries {
@@ -118,6 +149,12 @@ func parseBackends(entries [][2]string) []Backend {
 				b.IsService = b.Scheme == "svc"
 				b.IsCache = isCache
 				b.IsWSock = isWSock
+				// <verhash>/<version> route template: the prefix is matched
+				// against the target service's resolved VersionHash/Version
+				// per request (svc:// resolves its own service; other schemes
+				// use the table's primary service). api:// template mounts
+				// keep the raw request path — the handler self-locates.
+				b.VerTemplate = hasVerTemplate(p)
 				backends = append(backends, *b)
 			}
 		}
@@ -168,6 +205,11 @@ var apiHandleMap = map[string]http.Handler{}
 func registerAPI(name string, h http.Handler) {
 	apiHandleMap[name] = h
 }
+
+// RegisterAPI exposes the api:// registry to main, where handlers that need
+// the route-table context (e.g. the primary service) can be registered after
+// the config is loaded but before the routes are built.
+func RegisterAPI(name string, h http.Handler) { registerAPI(name, h) }
 
 // CreateBackendHandler builds an http.Handler for the given backend.
 // Supported schemes: http, https, ws, wss (reverse proxy), unix (reverse proxy),
@@ -296,8 +338,10 @@ func CreateBackendHandler(b Backend, cacheHeaders map[string]string, loginAuthz 
 			// same semantics as file:// backends. This lets an api:// service
 			// live at any path (e.g. /admin=api://manager serves the page at
 			// /admin and its API at /admin/__manager*); root mounts ("/") are
-			// passed through untouched.
-			if b.Source != "" && b.Source != "/" {
+			// passed through untouched. Template mounts (<verhash>/<version>)
+			// skip the strip: the expanded prefix is only known per request,
+			// and such handlers locate themselves in the raw path.
+			if !b.VerTemplate && b.Source != "" && b.Source != "/" {
 				h = http.StripPrefix(b.Source, h)
 			}
 			log.Printf("backend api handler: %s (mounted at %s)", b.Target, b.Source)

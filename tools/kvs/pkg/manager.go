@@ -3,20 +3,30 @@ package pkg
 // manager — the generic app management hub (api://manager). It aggregates
 // every access segment kvs knows about into one UI:
 //
-//	[ZCD]local — the zcode web app this kvs serves under /zcode (built-in)
+//	[内置]svc  — hosted services sniffed from the active proxy table's svc://
+//	             routes (zcode / vscode), created by the user via the dialog;
+//	             they pin a version ("" = latest), zcode cards carry data-dir /
+//	             workspace env overrides, vscode cards folder quick-links
 //	[ZCD]name  — zcode remote desktops registered through the pairing relay
-//	[VSC]name  — user-added VS Code apps, optionally carrying workspace
-//	             folder quick-links (one device, several folders)
+//	[远程]name  — user-added remote apps (any URL + logo; VS Code logo cards
+//	             carry workspace folder quick-links)
 //
-// Persistent state (custom apps, first-seen / last-visit stamps, folder
-// quick-links) lives in {home}/zcodex.json together with the relay device
-// registry (one file, one flush loop). The page itself (manager.html) is a
-// static client-rendered document fed by the JSON API served here:
+// There is NO synthesized default card: the list only shows what the user
+// created plus live relay devices. Existing records in zcodex.json are never
+// reset by upgrades. Persistent state (apps, first-seen / last-visit stamps,
+// folder quick-links) lives in {home}/zcodex.json together with the relay
+// device registry (one file, one flush loop). The page itself (manager.html)
+// is a static client-rendered document fed by the JSON API served here:
 //
 //	GET    /__manager                        list all entries (merged view)
-//	POST   /__manager                        add a custom app {type,icon?,name,url,folders?}
-//	                                           type: vsc (VS Code, folders ok) | other (any
-//                                           device, logo picked from vsc/zcd/linux/other)
+//	GET    /__manager/svcs                   hosted services offered by the
+//	                                           内置 dialog (sniffed svc:// mounts
+//	                                           + current data/workspace defaults)
+//	POST   /__manager                        add an app. Built-in: {svc,name,
+//	                                           folders?|data_dir?,wsc?} (one card
+//	                                           per service). Remote: {type,icon?,
+//	                                           name,url,folders?} — type vsc
+//	                                           (VS Code, folders ok) | other
 //	DELETE /__manager?id=…                   remove a custom app
 //	POST   /__manager/visit                  record an access {id}
 //	POST   /__manager/order                  save the dragged card order {ids}
@@ -28,8 +38,9 @@ package pkg
 //	GET    /__manager/note?id=…              fetch one entry's remark note (own endpoint —
 //	                                           notes never travel with the list payload)
 //	POST   /__manager/note                   save / clear a note {id,note} ("" clears)
-//	(workspace folders open on the card's own host: {base}/?folder=<path>)
-
+//	(workspace folders open on the card's own host: {base}/?folder=<path>,
+// absolute or mount-relative bases both work)
+//
 import (
 	"crypto/tls"
 	"encoding/json"
@@ -38,7 +49,7 @@ import (
 	"log"
 	"net/http"
 	"net/url"
-	"runtime"
+	"os"
 	"sort"
 	"strings"
 	"sync"
@@ -56,6 +67,195 @@ const (
 )
 
 // ---------------------------------------------------------------------------
+// hosted-service sniffing (内置 cards) + env apply hook
+// ---------------------------------------------------------------------------
+
+// mgrSvcMounts records the svc:// mounts of the ACTIVE proxy table:
+// service name → route prefix. Fed from main's route-build loop
+// (ManagerSvcMount); the 内置 dialog offers exactly these services.
+var (
+	mgrSvcMu     sync.Mutex
+	mgrSvcMounts = map[string]string{}
+)
+
+// ManagerSvcMount records (or replaces) the mount path of a hosted service
+// from the active proxy table. Non-svc backends pass an empty name and are
+// ignored.
+func ManagerSvcMount(name, path string) {
+	if name == "" {
+		return
+	}
+	mgrSvcMu.Lock()
+	mgrSvcMounts[name] = path
+	mgrSvcMu.Unlock()
+}
+
+// mgrSvcType classifies a hosted service by name: "vsc" | "zcd" | "" (not
+// offered by the 内置 dialog).
+func mgrSvcType(name string) string {
+	n := strings.ToLower(name)
+	switch {
+	case strings.Contains(n, "vscode") || strings.Contains(n, "vsc"):
+		return "vsc"
+	case strings.Contains(n, "zcode") || strings.Contains(n, "zcd"):
+		return "zcd"
+	}
+	return ""
+}
+
+// mgrSvcInfo is one 内置 dialog offering: the service, its type and mount,
+// plus the current effective data-dir / workspace defaults for zcode cards.
+type mgrSvcInfo struct {
+	Svc        string `json:"svc"`
+	Type       string `json:"type"` // vsc | zcd
+	URL        string `json:"url"`  // mount path of the svc:// route
+	Version    string `json:"version,omitempty"`
+	HasVersion bool   `json:"has_version"` // version chain configured → 版本输入框可用
+	DataDir    string `json:"data_dir,omitempty"`
+	WSC        string `json:"wsc,omitempty"`
+}
+
+// ManagerResetSvcMounts clears the sniffed mount table (the route rebuild
+// re-registers the mounts of the ACTIVE table; entries of services that
+// disappeared from it must not linger).
+func ManagerResetSvcMounts() {
+	mgrSvcMu.Lock()
+	mgrSvcMounts = map[string]string{}
+	mgrSvcMu.Unlock()
+}
+
+// mgrSvcList returns the offered hosted services (mount order sorted by name).
+func mgrSvcList() []mgrSvcInfo {
+	mgrSvcMu.Lock()
+	defer mgrSvcMu.Unlock()
+	names := make([]string, 0, len(mgrSvcMounts))
+	for n := range mgrSvcMounts {
+		names = append(names, n)
+	}
+	sort.Strings(names)
+	out := make([]mgrSvcInfo, 0, len(names))
+	for _, n := range names {
+		typ := mgrSvcType(n)
+		if typ == "" {
+			continue // only zcode / vscode are offered
+		}
+		info := mgrSvcInfo{Svc: n, Type: typ, URL: mgrSvcMounts[n]}
+		if sc := Services().Get(n); sc != nil {
+			info.Version = sc.Version
+			info.HasVersion = sc.VersionLatestURL != "" || sc.Download != "" || sc.Version != ""
+		}
+		if typ == "zcd" {
+			// Current effective values: manager overrides first, then the
+			// config defaults (envs_default fills data dir with
+			// KVS_SVC_ZCODE_HOME; the command's --workspace default is /home).
+			info.DataDir = firstNonEmptyEnv("ZCODE_DATA_BASE_DIR", "KVS_SVC_ZCODE_HOME")
+			info.WSC = firstNonEmptyEnv("KVS_SVC_ZCODE_WSC", "/home")
+		}
+		out = append(out, info)
+	}
+	return out
+}
+
+// firstNonEmptyEnv returns the first non-empty env value among names ("" when
+// all unset/empty).
+func firstNonEmptyEnv(names ...string) string {
+	for _, n := range names {
+		if v := os.Getenv(n); v != "" {
+			return v
+		}
+	}
+	return ""
+}
+
+// mgrApplyHook is registered by main: it reloads the service config (re-
+// expanding command/download with the env the manager just set) and resets
+// the service state so the next request re-prepares. nil → env-only apply.
+var mgrApplyHook func(svc string)
+
+// SetManagerApplyHook wires the manager's apply step to main's reload+reset
+// flow (the same machinery /__restart uses).
+func SetManagerApplyHook(f func(svc string)) { mgrApplyHook = f }
+
+// mgrApplyBuiltIn applies the delta between the stored and the new built-in
+// card: data-dir / workspace go into the process env (zcode only, empty →
+// back to config defaults), the pinned version goes into the per-service
+// override map ("" = clear → version_latest_url decides). The apply hook
+// (config reload + service reset) fires only when something actually changed,
+// so a rename or an all-defaults create never disturbs a running service.
+func mgrApplyBuiltIn(old, app managerApp) {
+	if app.Svc == "" {
+		return
+	}
+	changed := false
+	if app.Type == "zcd" && app.DataDir != old.DataDir {
+		if app.DataDir != "" {
+			os.Setenv("ZCODE_DATA_BASE_DIR", app.DataDir)
+			os.Setenv("ZCODE_DESKTOP_HOME_DIR", app.DataDir)
+		} else {
+			os.Unsetenv("ZCODE_DATA_BASE_DIR")
+			os.Unsetenv("ZCODE_DESKTOP_HOME_DIR")
+		}
+		changed = true
+	}
+	if app.Type == "zcd" && app.WSC != old.WSC {
+		if app.WSC != "" {
+			os.Setenv("KVS_SVC_ZCODE_WSC", app.WSC)
+		} else {
+			os.Unsetenv("KVS_SVC_ZCODE_WSC")
+		}
+		changed = true
+	}
+	if app.Ver != old.Ver {
+		if app.Ver != "" {
+			SetOverrideVersion(app.Svc, app.Ver)
+		} else {
+			ClearOverrideVersion(app.Svc)
+			// 撤销自反推的版本 env，否则 version = {KVS_SVC_<NAME>_VERSION}
+			// 占位符会在下次 reload 时把旧值读回来（外部 pin 的值不受影响）。
+			ClearServiceVersionEnv(app.Svc)
+		}
+		changed = true
+	}
+	if !changed {
+		return
+	}
+	log.Printf("[manager] built-in %s: data_dir=%q wsc=%q ver=%q applied", app.Svc, app.DataDir, app.WSC, app.Ver)
+	if mgrApplyHook != nil {
+		mgrApplyHook(app.Svc)
+	}
+}
+
+// ManagerReapplyOverrides re-applies the built-in cards' persisted overrides
+// (zcode data-dir / workspace env, per-service version pin) at startup.
+// Called AFTER the state file is loadable but BEFORE the service config is
+// finalized; reports whether anything was applied so the caller can reload
+// the config once more.
+func ManagerReapplyOverrides() bool {
+	applied := false
+	for _, app := range zcodeState().appsList() {
+		if app.Svc == "" {
+			continue
+		}
+		if app.Type == "zcd" {
+			if app.DataDir != "" {
+				os.Setenv("ZCODE_DATA_BASE_DIR", app.DataDir)
+				os.Setenv("ZCODE_DESKTOP_HOME_DIR", app.DataDir)
+				applied = true
+			}
+			if app.WSC != "" {
+				os.Setenv("KVS_SVC_ZCODE_WSC", app.WSC)
+				applied = true
+			}
+		}
+		if app.Ver != "" {
+			SetOverrideVersion(app.Svc, app.Ver)
+			applied = true
+		}
+	}
+	return applied
+}
+
+// ---------------------------------------------------------------------------
 // persisted model (the "apps" section of zcodex.json)
 // ---------------------------------------------------------------------------
 
@@ -66,16 +266,22 @@ type managerFolder struct {
 	Path string `json:"path"`
 }
 
-// managerApp is one persisted app record. Default entries (zcd-local /
-// vsc-local) and relay devices are synthesized at render time; their records
-// exist only to carry first-seen / last-visit stamps and folder lists.
-// Custom marks user-added entries, which are the only deletable ones.
+// managerApp is one persisted app record. Relay devices are synthesized at
+// render time; their records exist only to carry first-seen / last-visit
+// stamps and folder lists. Svc non-empty marks a 内置 (built-in) card bound to
+// a hosted service: it carries the mount URL and, for zcode, the data-dir /
+// workspace overrides. Custom marks user-added entries, the only editable /
+// deletable ones.
 type managerApp struct {
 	ID        string          `json:"id"`
-	Type      string          `json:"type"`           // "vsc" | "other" (custom); "zcd" legacy stamps
+	Type      string          `json:"type"`           // "vsc" | "other" | "zcd" (built-in / legacy stamps)
 	Icon      string          `json:"icon,omitempty"` // logo key: vsc | zcd | linux | other
 	Name      string          `json:"name"`
 	URL       string          `json:"url,omitempty"`
+	Svc       string          `json:"svc,omitempty"`      // built-in: hosted service name
+	DataDir   string          `json:"data_dir,omitempty"` // built-in zcode: ZCODE_DATA_BASE_DIR / ZCODE_DESKTOP_HOME_DIR
+	WSC       string          `json:"wsc,omitempty"`      // built-in zcode: KVS_SVC_ZCODE_WSC (--workspace)
+	Ver       string          `json:"ver,omitempty"`      // built-in: pinned version ("" = latest)
 	Folders   []managerFolder `json:"folders,omitempty"`
 	Tags      []string        `json:"tags,omitempty"` // user-defined label chips (editable in page)
 	Version   string          `json:"version,omitempty"`
@@ -363,6 +569,10 @@ type mgrEntry struct {
 	Name      string          `json:"name"`
 	URL       string          `json:"url,omitempty"`  // empty → not openable
 	Host      string          `json:"host,omitempty"` // VS Code domain form
+	Svc       string          `json:"svc,omitempty"`  // built-in: hosted service name
+	DataDir   string          `json:"data_dir,omitempty"`
+	WSC       string          `json:"wsc,omitempty"`
+	Ver       string          `json:"ver,omitempty"`
 	Folders   []managerFolder `json:"folders,omitempty"`
 	Tags      []string        `json:"tags,omitempty"`
 	Version   string          `json:"version,omitempty"`
@@ -441,12 +651,24 @@ func (r *zcodeRelay) deviceList() []zcodeDeviceInfo {
 
 // mgrFolderURL builds a workspace quick-link: {base}/?folder=<path> — the
 // folder opens on the SAME host as the card, selected by the ?folder query
-// parameter (VS Code web's workspace selector). Returns "" when either side
-// is empty or base is not an absolute http(s) URL.
+// parameter (VS Code web's workspace selector). The base may be an absolute
+// http(s) URL (remote cards) or a mount-relative path like /zcode or / (the
+// built-in cards, opened on the page's own origin). Returns "" when either
+// side is empty or the base is unusable.
 func mgrFolderURL(base, path string) string {
 	path = strings.TrimSpace(path)
-	b := strings.TrimSuffix(strings.TrimSpace(base), "/")
-	if path == "" || !strings.Contains(b, "://") {
+	base = strings.TrimSpace(base)
+	b := strings.TrimSuffix(base, "/")
+	if path == "" {
+		return ""
+	}
+	if b == "" {
+		if base == "/" { // site-root mount
+			return "/?folder=" + url.QueryEscape(path)
+		}
+		return ""
+	}
+	if !strings.Contains(b, "://") && !strings.HasPrefix(b, "/") {
 		return ""
 	}
 	return b + "/?folder=" + url.QueryEscape(path)
@@ -468,22 +690,13 @@ func mgrApplyProbe(e *mgrEntry, target string) {
 	}
 }
 
-// mgrBuildEntries merges every app source into the client-facing list.
+// mgrBuildEntries merges every app source into the client-facing list. There
+// is no synthesized default: the list shows the user's persisted apps
+// (remote + 内置) plus the live relay devices.
 func mgrBuildEntries() []mgrEntry {
 	store := zcodeState()
 	now := time.Now().UnixMilli()
 	out := make([]mgrEntry, 0, 8)
-
-	// [ZCD]local — the zcode web app under /zcode (this kvs serves it; kvs
-	// prepares the backend lazily on first access, so it is always openable).
-	zcdRec, _ := store.appFind(mgrIDZcdLocal)
-	e := mgrEntry{
-		ID: mgrIDZcdLocal, Type: "zcd", Icon: "zcd", Name: "local",
-		URL: "/zcode", OS: runtime.GOOS, Local: true, Tags: zcdRec.Tags,
-		CreatedAt: zcdRec.CreatedAt, LastSeen: zcdRec.LastSeen,
-	}
-	mgrApplyProbe(&e, mgrZcodeCheckURL())
-	out = append(out, e)
 
 	// [ZCD]<name> — relay devices (remote zcode desktops). Online devices get
 	// the remote-control terminal URL (official QR-URL query shape); the
@@ -523,8 +736,9 @@ func mgrBuildEntries() []mgrEntry {
 		out = append(out, e)
 	}
 
-	// Custom apps (and orphan-free defaults): records whose id is not one of
-	// the merged defaults and not a live relay device stamp.
+	// Persisted apps: remote cards and 内置 (built-in hosted-service) cards.
+	// Legacy default-stamp records (zcd-local / vsc-local) and live relay
+	// device stamps are skipped — the former are not rendered at all anymore.
 	for _, app := range store.appsList() {
 		if app.ID == mgrIDZcdLocal || app.ID == mgrIDVscLocal {
 			continue
@@ -534,9 +748,15 @@ func mgrBuildEntries() []mgrEntry {
 		}
 		e := mgrEntry{
 			ID: app.ID, Type: app.Type, Icon: mgrIconFor(app.Type, app.Icon), Name: app.Name,
-			URL: app.URL, Folders: app.Folders, Tags: app.Tags,
+			URL: app.URL, Svc: app.Svc, DataDir: app.DataDir, WSC: app.WSC, Ver: app.Ver,
+			Folders: app.Folders, Tags: app.Tags,
 			Version: app.Version, OS: app.OS,
 			Custom: app.Custom, CreatedAt: app.CreatedAt, LastSeen: app.LastSeen,
+		}
+		if app.Svc != "" && app.Type == "zcd" {
+			// Built-in zcode: probe the hosted service's own healthz for the
+			// online badge; version comes from the service, not the probe.
+			mgrApplyProbe(&e, mgrZcodeCheckURL())
 		}
 		if u, err := url.Parse(app.URL); err == nil && (u.Scheme == "http" || u.Scheme == "https") {
 			e.Host = u.Hostname()
@@ -588,6 +808,13 @@ func managerHandler(w http.ResponseWriter, r *http.Request) {
 		default:
 			http.Error(w, "method not allowed", http.StatusMethodNotAllowed)
 		}
+
+	case "/__manager/svcs":
+		if r.Method != http.MethodGet {
+			http.Error(w, "GET required", http.StatusMethodNotAllowed)
+			return
+		}
+		mgrWriteJSON(w, http.StatusOK, map[string]any{"svcs": mgrSvcList()})
 
 	case "/__manager/visit":
 		if r.Method != http.MethodPost {
@@ -684,6 +911,10 @@ type mgrAppReq struct {
 	Icon    string          `json:"icon"` // logo key for "other": vsc | zcd | linux | other
 	Name    string          `json:"name"`
 	URL     string          `json:"url"`
+	Svc     string          `json:"svc"`      // 内置: hosted service name (sniffed svc:// mount)
+	DataDir string          `json:"data_dir"` // 内置 zcode: data folder ("" = config default)
+	WSC     string          `json:"wsc"`      // 内置 zcode: workspace ("" = config default)
+	Ver     string          `json:"ver"`      // 内置: pinned version ("" = latest)
 	Folders []managerFolder `json:"folders"`
 }
 
@@ -699,9 +930,23 @@ func managerAddApp(w http.ResponseWriter, r *http.Request) {
 	req.Icon = strings.ToLower(strings.TrimSpace(req.Icon))
 	req.Name = strings.TrimSpace(req.Name)
 	req.URL = strings.TrimSpace(req.URL)
+	req.Svc = strings.TrimSpace(req.Svc)
+	req.DataDir = strings.TrimSpace(req.DataDir)
+	req.WSC = strings.TrimSpace(req.WSC)
+
+	store := zcodeState()
+
+	// 内置卡片：绑定一个嗅探到的托管服务（svc://）。每个服务仅一张卡；zcode 卡
+	// 携带数据文件夹/工作目录覆盖（应用到进程 env 并触发服务重新准备），vscode
+	// 卡携带工作区快捷方式。
+	if req.Svc != "" {
+		mgrAddBuiltIn(w, req, store)
+		return
+	}
+
 	if req.ID != "" && req.Type == "" {
 		// edit mode may omit type: keep the stored one
-		if app, ok := zcodeState().appFind(req.ID); ok {
+		if app, ok := store.appFind(req.ID); ok {
 			req.Type = app.Type
 		}
 	}
@@ -726,8 +971,6 @@ func managerAddApp(w http.ResponseWriter, r *http.Request) {
 		http.Error(w, "icon must be one of vsc, zcd, linux, other", http.StatusBadRequest)
 		return
 	}
-
-	store := zcodeState()
 
 	// 编辑模式：仅自定义应用可改，保留 id/创建时间/访问记录/标记
 	if req.ID != "" {
@@ -766,6 +1009,85 @@ func managerAddApp(w http.ResponseWriter, r *http.Request) {
 	}
 	store.appSave(app)
 	log.Printf("[manager] app added: %s [%s/%s] %s", app.Name, app.Type, app.Icon, app.URL)
+	mgrWriteJSON(w, http.StatusOK, app)
+}
+
+// mgrAddBuiltIn handles the 内置 (built-in hosted service) branch of add/edit:
+// one card per sniffed svc:// service; the type (vsc/zcd) and mount URL come
+// from the sniff registry, the name/data-dir/workspace from the request.
+func mgrAddBuiltIn(w http.ResponseWriter, req mgrAppReq, store *zcodeStore) {
+	typ := ""
+	mount := ""
+	mgrSvcMu.Lock()
+	mount = mgrSvcMounts[req.Svc]
+	mgrSvcMu.Unlock()
+	typ = mgrSvcType(req.Svc)
+	if mount == "" || typ == "" {
+		http.Error(w, "unknown or unsupported hosted service: "+req.Svc, http.StatusBadRequest)
+		return
+	}
+	if len(req.Name) > 40 {
+		http.Error(w, "name too long (max 40 chars)", http.StatusBadRequest)
+		return
+	}
+
+	// 编辑模式：仅允许改已有内置卡（svc 必须匹配）
+	if req.ID != "" {
+		app, ok := store.appFind(req.ID)
+		if !ok {
+			http.Error(w, "unknown app id", http.StatusNotFound)
+			return
+		}
+		if !app.Custom || app.Svc == "" {
+			http.Error(w, "only built-in apps can be edited here", http.StatusForbidden)
+			return
+		}
+		if app.Svc != req.Svc {
+			http.Error(w, "service mismatch", http.StatusBadRequest)
+			return
+		}
+		old := app // 赋值前快照，供变化检测
+		if req.Name != "" {
+			app.Name = req.Name
+		}
+		app.URL = mount // 跟随当前路由表
+		app.Ver = req.Ver
+		if typ == "vsc" {
+			app.Folders = mgrParseFolders(req.Folders, mount)
+		} else {
+			app.DataDir, app.WSC = req.DataDir, req.WSC
+		}
+		store.appSave(app)
+		log.Printf("[manager] built-in app updated: %s [%s] %s", app.Name, app.Svc, app.URL)
+		mgrApplyBuiltIn(old, app)
+		mgrWriteJSON(w, http.StatusOK, app)
+		return
+	}
+
+	// 新建：每个服务仅一张卡
+	for _, a := range store.appsList() {
+		if a.Svc == req.Svc {
+			http.Error(w, "built-in app for service "+req.Svc+" already exists", http.StatusConflict)
+			return
+		}
+	}
+	name := req.Name
+	if name == "" {
+		name = req.Svc
+	}
+	app := managerApp{
+		ID: "svc-" + req.Svc, Type: typ, Icon: typ, Name: name, URL: mount, Svc: req.Svc,
+		CreatedAt: time.Now().UnixMilli(), Custom: true,
+	}
+	if typ == "vsc" {
+		app.Folders = mgrParseFolders(req.Folders, mount)
+	} else {
+		app.DataDir, app.WSC = req.DataDir, req.WSC
+	}
+	app.Ver = req.Ver
+	store.appSave(app)
+	log.Printf("[manager] built-in app added: %s [%s] %s", app.Name, app.Svc, app.URL)
+	mgrApplyBuiltIn(managerApp{Type: app.Type}, app)
 	mgrWriteJSON(w, http.StatusOK, app)
 }
 
@@ -822,6 +1144,10 @@ func managerDeleteApp(w http.ResponseWriter, r *http.Request) {
 	store.appDelete(id)
 	store.noteSet(id, "") // 同步清理该应用的备注，避免 notes 段残留孤儿数据
 	log.Printf("[manager] app removed: %s (%s)", app.Name, id)
+	if app.Svc != "" {
+		// 内置卡删除：撤销其 env/版本覆盖并让服务回到配置默认值
+		mgrApplyBuiltIn(app, managerApp{Svc: app.Svc, Type: app.Type})
+	}
 	mgrWriteJSON(w, http.StatusOK, map[string]bool{"success": true})
 }
 

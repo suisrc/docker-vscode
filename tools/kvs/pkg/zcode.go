@@ -316,6 +316,11 @@ func (s *zcodeStore) flush() {
 	s.dirty = false
 }
 
+// FlushNow persists pending manager/relay state synchronously. Called on the
+// shutdown path so changes made less than a debounce interval ago (manager app
+// edits, order, notes) are not lost when kvs exits.
+func FlushNow() { zcodeState().flush() }
+
 // flushLoop debounces state-file writes (at most one per second).
 func (s *zcodeStore) flushLoop() {
 	for range s.notify {

@@ -47,7 +47,7 @@ Route formats ([proxies.<name>] section / -n argument):
   /=svc://<name>                    kvs-hosted service ([service.<name>] section):
                                     probe → download → extract → start, then proxy
   /=relay://<name>                  in-process WebSocket relay (zcode pairing)
-  /=api://<name>                    in-process handler registry (api://manager)
+  /=api://<name>                    in-process handler registry (api://manager, api://vscode-ext)
   ^/api/\d+=http://localhost:8080   ^ prefix: regex matching
   cc~/path=https://up.stream        cc prefix: cache proxied responses on disk
   ws~/path=ws://up:8080             ws prefix: WebSocket-aware route (upgrade fast path)

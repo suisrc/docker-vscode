@@ -13,6 +13,7 @@ import (
 	"path/filepath"
 	"regexp"
 	"strings"
+	"sync/atomic"
 	"syscall"
 	"time"
 
@@ -62,6 +63,14 @@ func main() {
 	pkg.Services().Register(cfg.Services)
 	// zcode relay state file lives under the gateway home ({home}/zcodex.json).
 	pkg.SetZcodeHome(cfg.Home)
+	// 应用中心内置卡（zcode 数据文件夹/工作目录、版本固定）持久化在 zcodex.json：
+	// 先回填进程 env 和版本覆盖，再重载一次配置，让命令行展开和 envs_default
+	// 按覆盖值生效。
+	if pkg.ManagerReapplyOverrides() {
+		newCfg := pkg.LoadInitConfig()
+		pkg.Services().Register(newCfg.Services)
+		cfg = newCfg
+	}
 	// cache_sed: rewrite cc~ cached bodies (file|old|new||... rules).
 	pkg.SetCacheSed(cfg.CacheSed)
 	// 反向代理调优 + WebSocket 升级快路径（见 pkg/transport.go / pkg/wsproxy.go）。
@@ -72,34 +81,70 @@ func main() {
 	// 可选 pprof（KVS_PPROF=1 | <port> | <addr>），默认关闭。
 	pkg.StartPProfIfEnabled()
 
+	// api://vscode-ext — VS Code web-extension-resource 资源（原 root 拦截，
+	// 现由路由表达，如 /stable-<verhash>/web-extension-resource/=api://vscode-ext）。
+	// 服务按请求解析（版本 hash 随 restart 变化），handler 自定位原始路径。
+	pkg.RegisterAPI("vscode-ext", http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		sc := svcDefault(cfg)
+		if sc == nil || sc.VersionHash == "" {
+			http.NotFound(w, r)
+			return
+		}
+		prePath := "/stable-" + sc.VersionHash + "/web-extension-resource/"
+		if !strings.HasPrefix(r.URL.Path, prePath) {
+			http.NotFound(w, r)
+			return
+		}
+		pkg.VscodeExtHandle(w, r, prePath, sc.Home)
+	}))
+
 	// Build (prefix → handler) routes for each backend. Hosted svc:// services
 	// get their own lazy preparation flow through the service manager (loading
 	// page while download/extract/start is in progress).
+	//
+	// The table is REBUILT after every config reload (/__restart, manager
+	// apply): handlers pin reload-dependent state (svc:// addresses, file://
+	// dirs expanded from bin_home, headers), so a version change must rebuild
+	// them. The dispatch loop reads the latest table per request; templated
+	// (<verhash>/<version>) matching is expanded per request regardless.
 	type route struct {
-		prefix  string
-		re      *regexp.Regexp // compiled regex for ^-prefixed backends, nil otherwise
-		handler http.Handler
-		svc     string // svc:// service name ("" = not a hosted service)
-		exact   bool   // ws~ backends: request path must equal prefix exactly (no prefix match)
+		prefix    string
+		re        *regexp.Regexp // compiled regex for ^-prefixed backends, nil otherwise
+		handler   http.Handler
+		svc       string // svc:// service name ("" = not a hosted service)
+		exact     bool   // ws~ backends: request path must equal prefix exactly (no prefix match)
+		templated bool   // prefix carries <verhash>/<version>, expanded per request
 	}
-	routes := make([]route, len(cfg.Proxies))
-	for i, b := range cfg.Proxies {
-		var re *regexp.Regexp
-		if b.IsRegex {
-			compiled, err := regexp.Compile(b.Source)
-			if err != nil {
-				log.Fatalf("invalid regex %q: %v", b.Source, err)
+	buildRoutes := func(c pkg.Config) []route {
+		pkg.ManagerResetSvcMounts() // 嗅探表跟随当前路由表整体重建
+		rts := make([]route, len(c.Proxies))
+		for i, b := range c.Proxies {
+			var re *regexp.Regexp
+			if b.IsRegex {
+				compiled, err := regexp.Compile(b.Source)
+				if err != nil {
+					log.Fatalf("invalid regex %q: %v", b.Source, err)
+				}
+				re = compiled
 			}
-			re = compiled
+			rts[i] = route{prefix: b.Source, re: re, handler: pkg.CreateBackendHandler(b, c.Headers, c.LoginAuthz), svc: svcBackendName(b), exact: pkg.ExactPathMatch(b), templated: b.VerTemplate}
+			// 应用中心（api://manager）嗅探：登记 svc:// 托管服务的挂载路径，
+			// 新建内置应用对话框据此列出当前可用的 zcode/vscode 服务。
+			// <verhash>/<version> 模板路由不参与嗅探（挂载点应是真实路径）。
+			if name := svcBackendName(b); name != "" && !b.VerTemplate {
+				pkg.ManagerSvcMount(name, b.Source)
+			}
+			// ws~ + 隧道类目标（http/https/ws/wss/unix）现在按前缀匹配；前缀为 "/" 时
+			// 会匹配所有路径，把其后声明的路由全部遮蔽。旧版这类路由是精确匹配（基本
+			// 不可用），行为有变，显式告警以免静默踩坑。
+			if b.IsWSock && !pkg.ExactPathMatch(b) && b.Source == "/" {
+				log.Printf("WARNING: ws~ route %q (%s) 前缀为 /，按前缀匹配会遮蔽其后声明的所有路由", b.Source, b.RawURL)
+			}
 		}
-		routes[i] = route{prefix: b.Source, re: re, handler: pkg.CreateBackendHandler(b, cfg.Headers, cfg.LoginAuthz), svc: svcBackendName(b), exact: pkg.ExactPathMatch(b)}
-		// ws~ + 隧道类目标（http/https/ws/wss/unix）现在按前缀匹配；前缀为 "/" 时
-		// 会匹配所有路径，把其后声明的路由全部遮蔽。旧版这类路由是精确匹配（基本
-		// 不可用），行为有变，显式告警以免静默踩坑。
-		if b.IsWSock && !pkg.ExactPathMatch(b) && b.Source == "/" {
-			log.Printf("WARNING: ws~ route %q (%s) 前缀为 /，按前缀匹配会遮蔽其后声明的所有路由", b.Source, b.RawURL)
-		}
+		return rts
 	}
+	var routesPtr atomic.Value // []route — swapped after every config reload
+	routesPtr.Store(buildRoutes(cfg))
 
 	// setCookie writes a cookie with the given value and MaxAge.
 	setCookie := func(w http.ResponseWriter, value string, maxAge int) {
@@ -216,11 +261,14 @@ func main() {
 			pkg.SetOverrideVersion(svcName, overrideVersion)
 		} else {
 			// No version specified → clear any previous override so
-			// resolveVersion falls back to version_latest_url.
+			// resolveVersion falls back to version_latest_url. Also drop the
+			// self-assigned KVS_SVC_<NAME>_VERSION env (it would otherwise be
+			// read back by the version placeholder and re-pin the old value).
 			if old := pkg.GetOverrideVersion(svcName); old != "" {
 				log.Printf("[restart:%s] clearing version override (was %s)", svcName, old)
 				pkg.ClearOverrideVersion(svcName)
 			}
+			pkg.ClearServiceVersionEnv(svcName)
 		}
 
 		// Reload config so download/bin_home are re-expanded with the new (or
@@ -247,7 +295,8 @@ func main() {
 			sc.VscAgentArgs = args
 		}
 
-		cfg = newCfg // always update cfg so route changes (if any) take effect
+		cfg = newCfg                         // always update cfg so route changes (if any) take effect
+		routesPtr.Store(buildRoutes(newCfg)) // handlers pin reload-dependent state — rebuild
 
 		// Kill the running service backend (if any) and reset state.
 		pkg.Services().StopOne(svcName, true)
@@ -275,6 +324,27 @@ func main() {
 		http.Redirect(w, r, "/", http.StatusSeeOther)
 	}
 	mux.HandleFunc("/__restart", restartHandler)
+
+	// 应用中心内置卡保存（zcode 数据文件夹/工作目录）后的应用动作：env 已由
+	// manager 写入进程，这里重载配置（命令行按新 env 重新展开）并复位服务状态，
+	// 下次访问按新值重新准备 —— 与 /__restart 同一套机制。
+	pkg.SetManagerApplyHook(func(svcName string) {
+		if pkg.Services().Get(svcName) == nil {
+			return
+		}
+		newCfg := pkg.LoadInitConfig()
+		pkg.Services().Register(newCfg.Services)
+		cfg = newCfg
+		routesPtr.Store(buildRoutes(newCfg)) // 版本/地址变更后路由跟随
+		pkg.Services().StopOne(svcName, true)
+		pkg.Services().State(svcName).Reset()
+		if sc := pkg.Services().Get(svcName); sc != nil && sc.InitError != "" {
+			if st := pkg.Services().State(svcName); st != nil {
+				st.Finish(fmt.Errorf("%s", sc.InitError))
+			}
+		}
+		log.Printf("[manager:%s] env applied, service will re-prepare on next request", svcName)
+	})
 
 	//======================================================================================
 
@@ -517,22 +587,25 @@ func main() {
 	// loading page; once done (success), it proxies normally; on error, 500.
 	// Non-service backends are always reachable.
 	mux.HandleFunc("/", func(w http.ResponseWriter, r *http.Request) {
-		// Intercept VS Code web-extension-resource requests, served from the
-		// default service's extensions dir. The version hash changes on
-		// restart, so resolve the service on every request.
-		if sc := svcDefault(cfg); sc != nil && sc.VersionHash != "" {
-			prePath := "/stable-" + sc.VersionHash + "/web-extension-resource/"
-			if strings.HasPrefix(r.URL.Path, prePath) {
-				pkg.VscodeExtHandle(w, r, prePath, sc.Home)
-				return
-			}
-		}
-		// Dispatch to the first matching route.
-		for _, rt := range routes {
+		// Dispatch to the first matching route (latest table — rebuilt after
+		// every config reload so version changes are followed immediately).
+		for _, rt := range routesPtr.Load().([]route) {
 			// Match: regex backends use regexp.Match; ws~ backends require
 			// the path to equal the prefix exactly; others use prefix match.
 			if rt.re != nil {
 				if !rt.re.MatchString(r.URL.Path) {
+					continue
+				}
+			} else if rt.templated {
+				// <verhash>/<version> 前缀按目标服务当前配置展开后做前缀匹配
+				// （仅前缀匹配，不支持正则）；服务未准备（版本未解析）时跳过。
+				// svc:// 用自己的服务；其他 scheme（如 api://）用表的首个服务。
+				target := pkg.Services().Get(rt.svc)
+				if rt.svc == "" {
+					target = svcDefault(cfg)
+				}
+				p, ok := pkg.ExpandVerTemplate(rt.prefix, target)
+				if !ok || !strings.HasPrefix(r.URL.Path, p) {
 					continue
 				}
 			} else if rt.exact {
@@ -676,6 +749,8 @@ func main() {
 	// External services (alive when probed, never started by kvs) are never
 	// killed or touched by kvs on shutdown.
 	pkg.Services().StopAll()
+	// 应用中心/中继状态文件：退出前同步落盘，避免防抖窗口内的修改丢失。
+	pkg.FlushNow()
 }
 
 // svcBackendName returns the service name behind a svc:// backend ("" otherwise).
