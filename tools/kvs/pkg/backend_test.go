@@ -257,8 +257,9 @@ func TestParseBackendsVerTemplate(t *testing.T) {
 	}
 }
 
-// TestParseBackendsPathMode checks the -/+ path mode markers: kept for every
-// scheme except text:// (one literal body, no paths — ignored with a warning).
+// TestParseBackendsPathMode checks the -/+ path mode markers: kept for the
+// proxy-family schemes and file; text/relay/api ignore them with a warning
+// (paths are meaningless to those targets).
 func TestParseBackendsPathMode(t *testing.T) {
 	backends := parseBackends([][2]string{
 		{"/api/", "-http://127.0.0.1:1/x"},
@@ -267,17 +268,22 @@ func TestParseBackendsPathMode(t *testing.T) {
 		{"/sock/", "-unix:///run/app.sock"},
 		{"/f/", "+file:///var/www"},
 		{"/t/", "-text://hello"},
+		{"/r/", "-relay://zcode"},
+		{"/m/", "+api://manager"},
 	})
-	if len(backends) != 6 {
+	if len(backends) != 8 {
 		t.Fatalf("got %d backends: %+v", len(backends), backends)
 	}
-	for i, want := range []string{"-", "+", "-", "-", "+", ""} {
+	for i, want := range []string{"-", "+", "-", "-", "+", "", "", ""} {
 		if backends[i].PathMode != want {
 			t.Fatalf("backends[%d].PathMode = %q, want %q: %+v", i, backends[i].PathMode, want, backends[i])
 		}
 	}
 	if backends[2].Target != "vscode" || !backends[2].IsService {
 		t.Fatalf("svc target mangled by mode strip: %+v", backends[2])
+	}
+	if backends[7].Target != "manager" {
+		t.Fatalf("api target mangled by mode strip: %+v", backends[7])
 	}
 }
 

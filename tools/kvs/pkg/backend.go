@@ -174,7 +174,8 @@ func parseBackends(entries [][2]string) []Backend {
 //     after the target's own path
 //   - none: the request path is forwarded unchanged
 //
-// Only text:// ignores the marker (with a warning).
+// Only http(s)/ws(s)/unix/svc/file honor the marker; text/relay/api ignore
+// it with a warning.
 func newBackend(prefix, rawURL string) *Backend {
 	var mode string
 	if strings.HasPrefix(rawURL, "-") || strings.HasPrefix(rawURL, "+") {
@@ -186,10 +187,11 @@ func newBackend(prefix, rawURL string) *Backend {
 		return nil
 	}
 	scheme = strings.ToLower(scheme)
-	if mode != "" && scheme == "text" {
-		// text:// serves one literal body regardless of path — the -/+ path
-		// rewrite has no meaning there. Every other scheme honors the marker.
-		log.Printf("WARNING: backend %q: text:// targets do not support -/+ path modes, ignoring %q", rawURL, mode)
+	if mode != "" && (scheme == "text" || scheme == "relay" || scheme == "api") {
+		// These targets never rewrite request paths: text:// serves one
+		// literal body, relay:// is path-agnostic once dispatched, and api://
+		// handlers are written against the strip-prefix mount contract.
+		log.Printf("WARNING: backend %q: %s:// targets do not support -/+ path modes, ignoring %q", rawURL, scheme, mode)
 		mode = ""
 	}
 	return &Backend{
@@ -407,8 +409,9 @@ func CreateBackendHandler(b Backend, cacheHeaders map[string]string, loginAuthz 
 		// zcodeGetRelay (optionally "/state-file"), not a host:port. The
 		// relay is role-agnostic — the routing prefix (any prefix) is where
 		// both desktop and web clients connect. Upgrade requests are handed
-		// to the relay state machine; anything else is a 426. -/+ path modes
-		// are accepted but no-op: the relay never sees path distinctions.
+		// to the relay state machine; anything else is a 426. Path modes do
+		// not apply: the relay never sees path distinctions (rejected at
+		// parse time).
 		log.Printf("backend %s → relay://%s", mount, b.Target)
 		relay := zcodeGetRelay(b.Target)
 		return http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
@@ -426,17 +429,16 @@ func CreateBackendHandler(b Backend, cacheHeaders map[string]string, loginAuthz 
 		// (no subprocess). Handlers are registered via registerAPI from
 		// their owning modules (e.g. manager.go registers "manager").
 		if h, ok := apiHandleMap[b.Target]; ok {
-			// Handlers are written against the root ("/"), so by default they
-			// are mounted at the route prefix by stripping it from the request
-			// path — the same semantics as file:// backends. This lets an
-			// api:// service live at any path (e.g. /admin=api://manager serves
-			// the page at /admin and its API at /admin/__manager*); root mounts
-			// ("/") are passed through untouched. "-" means the same strip
-			// explicitly; "+" opts out — the handler then sees the full request
-			// path. Template mounts (<verhash>/<version>) always do: the
-			// expanded prefix is only known per request, and such handlers
-			// locate themselves in the raw path.
-			if !b.VerTemplate && b.PathMode != "+" && b.Source != "" && b.Source != "/" {
+			// Handlers are written against the root ("/"), so they are mounted
+			// at the route prefix by stripping it from the request path — the
+			// same semantics as file:// backends. This lets an api:// service
+			// live at any path (e.g. /admin=api://manager serves the page at
+			// /admin and its API at /admin/__manager*); root mounts ("/") are
+			// passed through untouched. Template mounts (<verhash>/<version>)
+			// skip the strip: the expanded prefix is only known per request,
+			// and such handlers locate themselves in the raw path. -/+ path
+			// modes do not apply (rejected at parse time).
+			if !b.VerTemplate && b.Source != "" && b.Source != "/" {
 				h = http.StripPrefix(b.Source, h)
 			}
 			log.Printf("backend %s → api://%s", mount, b.Target)
