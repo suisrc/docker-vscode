@@ -17,7 +17,9 @@
 | `pkg/config.go` | ini 解析 + 值模板展开（含多行 JSON 修复）、多路由表 `[proxies.<name>]`（`-n :name` 选表）、多服务段 `[service.<name>]` + `KVS_SVC_<NAME>_*` 环境变量反推、版本覆盖（`SetOverrideVersion` 按服务）、`-c` 可选（缺省=内嵌 kvs.ini，仅接受文件路径） |
 | `pkg/backend.go` | `Backend` 抽象；`CreateBackendHandler` 按 scheme 分发；`registerAPI`（api:// 进程内注册表）；ws 代理；`precompressedFileServer`（br/gz/zst 预压缩静态） |
 | `pkg/service.go` | service 生命周期：检测→版本解析→下载→解压→脚本→启停；`ServiceManager`（每 svc:// 服务独立 ServiceState+Process）；healthz `#@code` 探活 |
-| `pkg/cache.go` | `/__cache/` 外部资源代理；`cc~` 缓存（命中按 sed 计划直出 sendfile/内存重写，元数据内存缓存 size+mtime+inode 判失效）；cache_sed once/each/none 与 `_.json` 元数据 |
+| `pkg/cache.go` | cc~ 缓存核心：`/__cache/` 外部资源代理（命中按 sed 计划直出 sendfile/内存重写，元数据内存缓存 size+mtime+inode 判失效）、两条入口、透传；规则匹配小工具（hostMatch/globMatch/targetHost/splitList） |
+| `pkg/cachesed.go` | cache_sed（`KVS_CC_SED_<名称>`）：正文改写 once/each/none 计划与 `_.json` 元数据、brotli/gzip 解压编码 |
+| `pkg/cacherec.go` | cache_rec（`KVS_CC_REC_<名称>`）：命中即短路的响应规则（`file://` 正文可由文件提供） |
 | `pkg/server.go` | 服务器构建（HTTP + HTTPS=port+1 自签 ECDSA P-256）、静态资产/登录页服务、`isBrowserRequest` |
 | `pkg/vscode.go` | VS Code 专有：web-extension-resource 本地化（上游乱码 issue microsoft/vscode#299425）、语言包/汉化链路 |
 | `pkg/vagent.go` | agent 端点：`vsc_agent_cmds` 预设表（JSON）、端点目录扫描（*.json） |
@@ -111,14 +113,21 @@ ws~ 路由前缀匹配与退避：`ExactPathMatch` = `ws~` 且目标非隧道类
 ### 3.4 `/__cache/`（cache.go）
 
 - URL：`/__cache/[cc~]{scheme}:{host}[/path][?query]`；`cc~` 前缀=缓存（仅 GET 2xx）
-- cache_sed 规则：`文件名(一个*)|old|new||...`，new 中 `>host<` 展开为当前请求 Host
+- `[cache_headers]`：给缓存响应附加固定头（CORS 等），**只在 `cache_path` 前缀下生效**——
+  普通路由与路由级 cc~ 不受影响（上游自己的同名头也照原样透出）。设置点在任何写入之前，
+  所以 HIT/MISS/透传/短路/错误响应都带；上游响应里同名的头会被丢弃（不会变成两个值）。
+  `cache_path` 下的 `OPTIONS` 预检直接回 204（带同一组头），不读缓存也不发上游。
+  遗留：非 GET 请求不剥 `cc~` 标记，透传只认 `/__cache/{scheme}:{host}/…`（GET 才认 `cc~`）。
+- cache_sed 规则：每个 `KVS_CC_SED_<名称>` 环境变量一条（名称为分组标签，按名排序生效；无 ini 配置项），格式 `old|new|file[,files…][|host[,hosts…]]`：files 内任一命中即套用，`__index`=无扩展名的请求（目录首页与 `…/0.42.0/extension` 这类无后缀端点统一存为 `__index`），每个模式一个 `*` 通配；host 列表可选（空=任意，比对**代理后端的主机**即内容来源如 vscode.dev/main.vscode-cdn.net，与访问域名无关；端口/大小写无关、支持一个 `*`），host 过滤与模式一样在**写入时**判定；new 中 `>host<` 展开为当前请求 Host（浏览器可见地址，与 host 过滤不是一回事）
 - 模式在**首次写入缓存时**判定并持久化到元数据，之后命中只按元数据处理（不反查运行时规则）：
   - `once`：new 与请求无关 → 替换烤入存储体，原文备份 `<file>_.bak1`（仅一次），命中直接返回
   - `each`：某条替换含 `>host<` 且原文存在 old → once 规则先烤入，原始内容明文存储，each 数组存 `_.json` 的 `sed.each`；命中按当前 Host 重替换，gzip 跟随原始响应（`src_gzip`）
   - `none`：匹配文件名但内容未变 → 原样存取
   - 同一文件可同时有 once+each：once 先替换保存，文件标记 each，每请求补 each 部分
-- 布局：`{cache_dir}/cache/ccproxy/{scheme}:{host}/path`（存储体）、`path_.json`（status/headers + sed）、`path_.bak1`
-- 命中发码：`each` 读内存按 Host 重写（唯一还读整份正文的情况）；none/once/旧条目**文件直出**
+- 布局：`{cache_dir}/cache/ccproxy/{scheme}:{host}/path`（存储体）、`path_.json`（status/headers + sed）、`path_.bak1`；**缓存键整体小写**（`{scheme}:{host}` 与全路径），域名/路径大小写差异不会拆成两条目或造成未命中（仅磁盘键折叠，上游请求仍按原大小写发出）
+- 无扩展名的请求统一归一到 `__index`（目录首页 `/`、`/0.42.0/`（尾斜杠）与 `…/0.42.0/extension` 这类无后缀端点），规则只需匹配 `__index`
+- cache_rec 规则：每个 `KVS_CC_REC_<名称>` 环境变量一条（全局生效，两条缓存入口都查，先于缓存查找），格式 `upHost|path[,paths…]|status[|content-text[|content-type]]`；host 与 cache_sed 同一套匹配（空=任意），path 是**子串**匹配且多个**全部满足**（AND，与 files 的任一命中相反），正文类型默认 text/plain，正文以 `file://` 开头则每次命中读取该文件内容（读不到回 500）；命中即短路：不发上游、不读写缓存，响应带 `X-Cache: REC`
+- 命中发码：`each` 读内存按 Host 重写（唯一还读整份正文的情况）；无计划/none/once **文件直出**
   （`http.ServeContent` → 内核 sendfile，附 Content-Length/Accept-Ranges/Range/If-Modified-Since，
   Last-Modified 用缓存文件 mtime——条件请求针对"缓存条目是否变化"作答）；非 200 状态（404 也
   入缓存）退回内存路径保状态码。元数据读入有内存缓存（`ccMetaCache`，上限 4096 条，整表丢弃
@@ -140,7 +149,7 @@ ws~ 路由前缀匹配与退避：`ExactPathMatch` = `ws~` 且目标非隧道类
 
 ### 3.5 zcodex 模式与 manager（zcode.go / manager.go）
 
-`-c` 可选且只接受文件路径（缺省=内嵌 `kvs.ini`）；路由表只有 `-n :name` 一种选法，无预设别名。代码不再注入任何 zcodex 环境默认值：`KVS_PATH_PUBLIC`（桌面客户端无法走 Cookie 认证）、`KVS_CC_SED`（wss 地址重写）由部署环境/Makefile zcodex 目标提供（值见 `[service.zcode]` 注释）。
+`-c` 可选且只接受文件路径（缺省=内嵌 `kvs.ini`）；路由表只有 `-n :name` 一种选法，无预设别名。代码不再注入任何 zcodex 环境默认值：`KVS_PATH_PUBLIC`（桌面客户端无法走 Cookie 认证）、`KVS_CC_SED_*`（cache_sed 规则，wss 地址与 CDN 地址重写）由部署环境/Makefile zcodex 目标或 `[service.zcode] envs_default` 提供（值见 `[service.zcode]` 注释）。
 
 管理页 `manager.html` 挂载于 `/=api://manager`（客户端渲染，支持深浅色主题）。条目四类：`[ZCD]local` 本机 zcode（`/zcode`，kvs 懒启动，始终可点）；`[ZCD]xxx` 通过 relay 中继注册的远程 zcode 桌面端（在线时点击打开远程控制终端）；`[VSC]zzz` 手动添加的 VS Code 应用（同一设备的不同工作区以快捷方式挂同一卡片，访问地址 `{卡片同host}/?folder=<工作区路径>`，可编辑/删除）；`[APP]`/`[LNX]` 「其他」类型设备（Logo 四选一 vsc/zcd/linux/other）。卡片顺序固定（不按访问时间排序），拖拽调整后持久化到 `order` 段，新条目追加末尾。
 

@@ -327,14 +327,14 @@ func computeTokenHash(ts int64, salt, token string) string {
 
 // isPublicAuthPath reports whether path is reachable without a valid token
 // (login/logout flow, favicon, logout script, proxy cache).
-// When proxyPathPrefix is empty (caching disabled), the cache check is skipped
+// When cachePathPrefix is empty (caching disabled), the cache check is skipped
 // so no path is accidentally treated as public.
 func isPublicAuthPath(path string) bool {
 	switch path {
 	case "/__login", "/__logout", "/favicon.ico":
 		return true
 	}
-	if proxyPathPrefix != "" && strings.HasPrefix(path, proxyPathPrefix) {
+	if cachePathPrefix != "" && strings.HasPrefix(path, cachePathPrefix) {
 		return true
 	}
 	return strings.HasPrefix(path, "/__logout.")

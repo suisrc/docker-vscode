@@ -112,8 +112,15 @@ Environment variables:
                                     above and the [service.<name>] comments in kvs.ini
                                     (e.g. KVS_SVC_VSCODE_DOWNLOAD_BASE / _DOWNLOAD_PATH)
   KVS_PATH_PUBLIC                   |-separated paths reachable without auth
-  KVS_CC_SED                        cache_sed value (cc~ body rewrite rules)
-  KVS_PROXY_PATH                    proxy_path value (cache-proxy prefix)
+  KVS_CC_SED_<NAME>                 cc~ body rewrite rule, one variable per rule:
+                                    old|new|file[,files…][|host[,hosts…]]
+                                    (file __index = requests without a file extension)
+  KVS_CC_REC_<NAME>                 cc~ short-circuit rule (no upstream call),
+                                    one variable per rule:
+                                    upHost|path[,paths…]|status[|body[|content-type]]
+                                    (paths are ALL required / AND; body type text/plain;
+                                    body starting with file:// = read that file per hit)
+  KVS_CACHE_PATH                    cache_path value (cache-proxy prefix)
   KVS_WS_PROXY                      ws_proxy value (auto|stdlib), see above
   KVS_WS_IDLE                       ws_idle_timeout value (seconds)
   KVS_PROXY_IDLE_CONNS              proxy_idle_conns_per_host value

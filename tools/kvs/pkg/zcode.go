@@ -8,7 +8,7 @@ package pkg
 //	ws~/ws = relay://zcode-clients
 //
 // Desktop: ZCODE_WEB_REMOTE_CONTROL_RELAY_WS_URL=ws://host:port/ws[?mid=<uuid>]
-// Web page: endpoint injected via KVS_CC_SED (overrideUrl:`wss://>host</ws`).
+// Web page: endpoint injected via KVS_CC_SED_<名称> rules (overrideUrl:`wss://>host</ws`).
 //
 // Protocol: JSON text frames; device registers once then authenticates via
 // HMAC-SHA256 challenge/response; terminal authenticates with the device_sid

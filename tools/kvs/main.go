@@ -50,10 +50,12 @@ func main() {
 
 	// Apply cache_dir as the proxy cache root (disk storage).
 	// The cache route is registered only when cache_dir is configured AND
-	// proxy_path is non-empty; otherwise the prefix stays "" so the cache
+	// cache_path is non-empty; otherwise the prefix stays "" so the cache
 	// route is not registered and auth checks don't treat every path as public.
+	// cache_headers ([cache_headers]) ride along: they are attached to every
+	// response served under the cache_path prefix (CORS allow, CORP …).
 	if cfg.CacheDir != "" {
-		pkg.SetCacheConfig(cfg.CacheDir, cfg.ProxyPath)
+		pkg.SetCacheConfig(cfg.CacheDir, cfg.CachePath, cfg.CacheHeaders)
 	}
 	// cc~ marked backends always have disk caching available, defaulting to
 	// /cache when cache_dir is not configured.
@@ -72,8 +74,13 @@ func main() {
 		pkg.Services().Register(newCfg.Services)
 		cfg = newCfg
 	}
-	// cache_sed: rewrite cc~ cached bodies (file|old|new||... rules).
-	pkg.SetCacheSed(cfg.CacheSed)
+	// cache_sed: cc~ 缓存正文改写规则，每个 KVS_CC_SED_<名称> 环境变量一条
+	// （old|new|file[,files…][|host[,hosts…]]）。放在配置加载之后：此时
+	// [service.*] envs_default 已把默认值写进进程 env。
+	pkg.SetCacheSedEnv()
+	// cache_rec: 命中即短路的响应规则，每个 KVS_CC_REC_<名称> 环境变量一条
+	// （upHost|path[,paths…]|status[|content-text[|content-type]]）。
+	pkg.SetCacheRecEnv()
 	// 反向代理调优 + WebSocket 升级快路径（见 pkg/transport.go / pkg/wsproxy.go）。
 	pkg.SetProxyTuning(cfg.ProxyIdleConnsPerHost, cfg.ProxyMaxIdleConns, cfg.ProxyDisableCompression, cfg.ProxyFlushInterval)
 	pkg.SetWSTunnelOptions(cfg.WSProxy, cfg.WSIdleTimeout)
@@ -273,6 +280,8 @@ func main() {
 		// will surface it on the loading page as a download failure.
 		newCfg := pkg.LoadInitConfig()
 		pkg.Services().Register(newCfg.Services)
+		pkg.SetCacheSedEnv() // envs_default 可能新增规则变量，重扫一次
+		pkg.SetCacheRecEnv()
 
 		// Agent branch: /__restart?agent=<file> — restart the SERVICE backend
 		// (command) with bridge args appended to it, derived from the agent entry file.
@@ -334,6 +343,8 @@ func main() {
 		}
 		newCfg := pkg.LoadInitConfig()
 		pkg.Services().Register(newCfg.Services)
+		pkg.SetCacheSedEnv() // envs_default 可能新增规则变量，重扫一次
+		pkg.SetCacheRecEnv()
 		cfg = newCfg
 		routesPtr.Store(buildRoutes(newCfg)) // 版本/地址变更后路由跟随
 		stopped := pkg.Services().StopOne(svcName, true)
@@ -564,8 +575,8 @@ func main() {
 		pkg.ServeStaticAsset(w, "favicon.ico")
 	})
 
-	// cache proxy – {proxy_path}/{scheme}:{host}/path → {scheme}://{host}/path
-	// Only registered when both cache_dir (disk storage) and proxy_path (route
+	// cache proxy – {cache_path}/{scheme}:{host}/path → {scheme}://{host}/path
+	// Only registered when both cache_dir (disk storage) and cache_path (route
 	// prefix) are configured. Either one empty disables the cache proxy route.
 	if pkg.CachePathPrefix() != "" {
 		mux.HandleFunc(pkg.CachePathPrefix(), pkg.HandleCache)

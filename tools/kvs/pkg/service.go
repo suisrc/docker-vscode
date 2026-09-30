@@ -714,8 +714,8 @@ func RunServiceStartup(cmd string) error {
 	return c.Run()
 }
 
-// NormalizeProxyPath ensures p starts and ends with '/'.
-func NormalizeProxyPath(p string) string {
+// NormalizeCachePath ensures p starts and ends with '/'.
+func NormalizeCachePath(p string) string {
 	p = strings.TrimSpace(p)
 	if p == "" {
 		return "" // empty = cache proxy disabled

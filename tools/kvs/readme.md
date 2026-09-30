@@ -126,17 +126,26 @@ VS Code 专有键（`vsc_language`、`vsc_agents_*`、`vsc_open_url`、`actions`
 
 ## 外部资源代理 (`/__cache/`)
 
-需同时设置 `cache_dir`（磁盘目录）和 `proxy_path`（路由前缀，默认空=禁用，设为 `/__cache/` 启用）。
+需同时设置 `cache_dir`（磁盘目录）和 `cache_path`（路由前缀，默认空=禁用，设为 `/__cache/` 启用）。
 
 ```
 /__cache/[cc~]{scheme}:{host}[/path][?query]
 ```
 
-`cc~` 前缀 = 缓存（仅 GET 2xx 与 404），布局 `{cache_dir}/cache/ccproxy/{scheme}:{host}/path`。`cache_sed`
-缓存内容替换（规则格式、once/each 动态 Host 模式）见 demo 模板注释与 [agents.md](agents.md)。
+`cc~` 前缀 = 缓存（仅 GET 2xx 与 404），布局 `{cache_dir}/cache/ccproxy/{scheme}:{host}/path`。
+缓存键（`{scheme}:{host}` 与全路径）**统一小写**，`/GitHub/x` 与 `/github/x` 是同一条目；
+只折叠**磁盘键**，回源请求（Host 与 path）**保持原大小写**，大小写敏感的上游不受影响。
+无扩展名的请求归一到 `__index`（目录首页与 `…/0.42.0/extension` 这类无后缀端点）。`cache_sed`
+缓存内容替换（每个 `KVS_CC_SED_<名称>` 变量一条规则，格式 `old|new|file[,files…][|host[,hosts…]]`，
+含 once/each 动态 Host 模式）见 demo 模板注释与 [agents.md](agents.md)。
+
+`[cache_headers]` 段给缓存响应附加固定头（只在 `cache_path` 前缀下生效，普通路由不受影响），
+用于跨域加载静态资源：如 `Access-Control-Allow-Origin = *`、`Cross-Origin-Resource-Policy = cross-origin`。
+`cache_path` 前缀下的 `OPTIONS` 预检直接回 204（带同一组头），不会触达缓存或上游；
+上游响应里同名的头会被丢弃，以配置为准（不会重复）。
 
 缓存**命中**按持久化的 sed 计划选择发码方式：`each`（需按请求重写）读内存重写；其余模式
-（none/once/旧条目）**文件直出**——`http.ServeContent` 走内核 sendfile（零拷贝、零堆分配），
+（无计划/none/once）**文件直出**——`http.ServeContent` 走内核 sendfile（零拷贝、零堆分配），
 附带 `Content-Length`、`Accept-Ranges`、Range/If-Modified-Since 支持。元数据（`_.json`）有
 内存缓存，按 size+mtime+inode 判失效（同秒重写也不会漏）。
 

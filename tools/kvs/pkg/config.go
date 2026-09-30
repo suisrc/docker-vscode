@@ -80,9 +80,9 @@ type Config struct {
 	Proxies  []Backend
 	Services map[string]*ServiceConfig // [service.<name>] sections, keyed by name
 
-	CacheDir  string // cache_dir — download + cc~ cache directory (top-level key)
-	CacheSed  string // cache_sed — cc~ cache rewrite rules: file|old|new||... (via KVS_CC_SED)
-	ProxyPath string // proxy_path — /__cache/ external cache-proxy path prefix
+	CacheDir     string            // cache_dir — download + cc~ cache directory (top-level key)
+	CachePath    string            // cache_path — /__cache/ external cache-proxy path prefix
+	CacheHeaders map[string]string // [cache_headers] section: headers added to every cache response (CORS etc.)
 
 	Home          string            // top-level home — gateway working directory (KVS_HOME)
 	Port          string            // (KVS_PORT)
@@ -332,14 +332,8 @@ func resolveConfigPath(flagPath string) string {
 //
 //	{KVS_PORT:-8080}   → env KVS_PORT, or "8080" if unset/empty
 //	{KVS_SVC_VSCODE_HOME} → any reverse-assigned service variable
+//	{publisher}        → literal (all-lowercase braces are not placeholders)
 //	${VAR} / $VAR      → standard os.ExpandEnv
-//
-// A brace expression is only treated as a placeholder when the name is a
-// valid identifier (letters/digits/underscores). Anything else (e.g. JSON
-// like `{ "commit": "{KVS_SVC_VSCODE_VERHASH}" }`) is emitted verbatim, though
-// inner valid placeholders are still expanded. Names listed in excludes are
-// left as-is so a later substitution pass (e.g. VERSION → VERHASH ordering)
-// can handle them.
 func expandValue(v string, excludes ...string) string {
 	// validPlaceholderName reports whether s is a bare identifier
 	// (letters, digits, underscores), required before/inside {VAR} and
@@ -384,7 +378,8 @@ func expandValue(v string, excludes ...string) string {
 			}
 			i += end + 1
 			// pass: exclude strings is pass
-			if slices.Contains(excludes, name) {
+			// 全小写名字不是 kvs 变量（约定变量名含大写）—— 花括号属于下游
+			if slices.Contains(excludes, name) || name == strings.ToLower(name) {
 				sb.WriteByte('{')
 				sb.WriteString(name)
 				sb.WriteByte('}')
@@ -1013,10 +1008,9 @@ func LoadInitConfig() Config {
 		cfg.Services[name].Extensions = svcExtensions(name) // svc://<name>.<ext> 扩展
 	}
 
-	// --- cache_dir / cache_sed / proxy_path (top-level keys) ---------------
+	// --- cache_dir / cache_path (top-level keys) ---------------------------
 	cfg.CacheDir = expandValue(strProp(ini, "cache_dir", ""))
-	cfg.CacheSed = expandValue(strProp(ini, "cache_sed", ""))
-	cfg.ProxyPath = expandValue(strProp(ini, "proxy_path", ""))
+	cfg.CachePath = expandValue(strProp(ini, "cache_path", ""))
 
 	// --- Expand [headers] and proxy routes (after all KVS_SVC_* vars) ----
 	headerEntries := ini.hasPrefix("headers.")
@@ -1040,6 +1034,16 @@ func LoadInitConfig() Config {
 	cfg.Headers = make(map[string]string, len(headerEntries))
 	for _, kv := range headerEntries {
 		cfg.Headers[strings.TrimPrefix(kv[0], "headers.")] = kv[1]
+	}
+
+	// [cache_headers]: 附加到缓存响应的头（CORS 等）。空值等于「不设置」。
+	// 键在 ini 里被折叠为小写，写回响应时由 net/http 规范化为标准大小写。
+	cacheHeaderEntries := ini.hasPrefix("cache_headers.")
+	cfg.CacheHeaders = make(map[string]string, len(cacheHeaderEntries))
+	for _, kv := range cacheHeaderEntries {
+		if v := expandValue(kv[1]); v != "" {
+			cfg.CacheHeaders[strings.TrimPrefix(kv[0], "cache_headers.")] = v
+		}
 	}
 
 	// Top-level fields (always resolved, even in -n mode).
