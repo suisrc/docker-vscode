@@ -414,37 +414,15 @@ func CreateBackendHandler(b Backend, cacheHeaders map[string]string, loginAuthz 
 		return CreateBackendHandler(nb, cacheHeaders, loginAuthz)
 
 	case "relay":
-		if b.Target == "vscode" {
-			// relay://vscode — Remote-Server tunnel 中继（relay.js v2 复用帧通道
-			// 模型的进程内移植）：worker（vscode-server 受控端）与 client 访问
-			// 同一路径，query 区分角色。worker 以 kind=worker&tkn=<token>.<deviceId>
-			// [.<tunnelId>] 发 WebSocket 升级，101 之后同一连接变复用帧通道；client
-			// 带 ?tkn= 接入，按第一段 token 路由，升级请求由中继代答 101，两条腿
-			// 都是原始字节管道。/status 看在线隧道与会话数。该协议没有 cookie 概
-			// 念，tkn 就是凭证 —— login_authz 开启时把挂载前缀加进 path_public，或
-			// 让各方 tkn 等于网关 login token（配置 query_token_key=tkn 时同一参
-			// 数顺带过网关）。-/+ 路径模式不适用（解析期已拒绝）。
-			log.Printf("backend %s → relay://vscode", mount)
-			return vscGetRelay().RouteHandler(b.Source)
+		// relay://<target> 进程内中继：按 target 到公共注册表分流（RelayHandler
+		// —— 预置 "vscode" 与 "zcode"）。未注册 target 是配置错误，启动即报错。
+		// -/+ 路径模式不适用（解析期已拒绝）。
+		h, ok := RelayHandler(b.Target, b.Source)
+		if !ok {
+			log.Fatalf("unknown relay %q in %q", b.Target, b.RawURL)
 		}
-		// In-process WebSocket relay backend (ws-to-ws, e.g. the zcode
-		// pairing relay): the target is a logical relay name resolved by
-		// zcodeGetRelay (optionally "/state-file"), not a host:port. The
-		// relay is role-agnostic — the routing prefix (any prefix) is where
-		// both desktop and web clients connect. Upgrade requests are handed
-		// to the relay state machine; anything else is a 426. Path modes do
-		// not apply: the relay never sees path distinctions (rejected at
-		// parse time).
 		log.Printf("backend %s → relay://%s", mount, b.Target)
-		relay := zcodeGetRelay(b.Target)
-		return http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
-			if !isWebSocketUpgrade(r) {
-				w.Header().Set("Upgrade", "websocket")
-				http.Error(w, "websocket upgrade required", http.StatusUpgradeRequired)
-				return
-			}
-			relay.Handle(w, r)
-		})
+		return h
 
 	case "api":
 		// In-process API backend: the target names a handler registered in
@@ -709,23 +687,6 @@ func generateSelfSignedCert() (tls.Certificate, error) {
 // =============================================================================
 // WebSocket-aware proxying (ws~ marked routes)
 // =============================================================================
-
-// isWebSocketUpgrade reports whether the client requests a WebSocket
-// connection: Upgrade: websocket plus a Connection header containing the
-// "upgrade" token (Connection may list multiple tokens).
-func isWebSocketUpgrade(r *http.Request) bool {
-	if !strings.EqualFold(r.Header.Get("Upgrade"), "websocket") {
-		return false
-	}
-	for _, v := range r.Header.Values("Connection") {
-		for _, tok := range strings.Split(v, ",") {
-			if strings.EqualFold(strings.TrimSpace(tok), "upgrade") {
-				return true
-			}
-		}
-	}
-	return false
-}
 
 // rewriteProxyRequest applies the backend's routing rules to req. It is shared
 // by the ReverseProxy Director and the raw-conn WS upgrade path

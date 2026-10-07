@@ -1,6 +1,6 @@
 package pkg
 
-// relay://vscode（tunnel 模型）的端到端测试：用裸 TCP 连接扮演 relay.js 协议的
+// relay://vscode（tunnel 模型）的端到端测试：用裸 TCP 连接扮演协议里的
 // 三方（worker 复用帧通道 / client 原始字节管道），覆盖注册、鉴权、配对、
 // 背压、探测与生命周期。
 
@@ -743,4 +743,218 @@ func TestVscRelayTunnelCap(t *testing.T) {
 		t.Fatalf("tunnel overflow got %d, want 503", code)
 	}
 	conn.Close()
+}
+
+// TestVscRelayHijackSurvivesReadTimeout 长命连接契约：http.Server 在读升级请求前
+// 挂上的是**绝对**读 deadline（read_timeout），hijack 之后它绝不能继续生效——
+// 否则每条被劫持的连接（worker 通道与 client 腿）都会在升级请求到达 read_timeout
+// 后被杀，与健康与否无关（新版 stdlib 在 Hijack 里清 deadline，hijackRawConn 是
+// 自备的一道保险，并顺带开 TCP keepalive）。这里把 read_timeout 压到 1s，要求
+// worker 通道与 client 腿都活着跨过它，且双向数据照常流动。
+func TestVscRelayHijackSurvivesReadTimeout(t *testing.T) {
+	oldDL := serverReadTimeout
+	serverReadTimeout = time.Second
+	defer func() { serverReadTimeout = oldDL }()
+
+	rel := newVscRelay()
+	l, err := net.Listen("tcp", "127.0.0.1:0")
+	if err != nil {
+		t.Fatalf("listen: %v", err)
+	}
+	srv := newCacheServer(l.Addr().String(), rel.RouteHandler(""), nil)
+	serveDone := make(chan struct{})
+	go func() {
+		_ = srv.Serve(l)
+		close(serveDone)
+	}()
+	t.Cleanup(func() {
+		_ = srv.Close()
+		<-serveDone
+	})
+	addr := l.Addr().String()
+
+	workerConn, workerBr, _ := vscRegisterWorker(t, addr, "/", "h1", "secret.dev1")
+	defer workerConn.Close()
+
+	// client 腿在 deadline 之前建立。
+	clientConn, clientBr := vscConnectClient(t, addr, "/", "secret.dev2.x", "")
+	defer clientConn.Close()
+
+	// worker 收 open（记下会话 id）+ 转发的原始请求头。
+	open := vscWsRecvText(t, workerConn, workerBr)
+	if open["type"] != "open" {
+		t.Fatalf("worker frame = %v, want open", open)
+	}
+	id := open["id"].(string)
+	if data := vscWsRecvData(t, workerConn, workerBr); !strings.Contains(data, "tkn=secret.dev2.x") {
+		t.Fatalf("forwarded head = %q", data)
+	}
+
+	// 跨过 read_timeout：修复前两条腿在这里都已被 i/o timeout 杀死。
+	time.Sleep(1500 * time.Millisecond)
+
+	st := vscStatus(t, addr)
+	tunnels := st["tunnels"].([]any)
+	if len(tunnels) != 1 {
+		t.Fatalf("tunnels = %d, want 1", len(tunnels))
+	}
+	if online := tunnels[0].(map[string]any)["online"]; online != true {
+		t.Fatalf("tunnel offline after %s — hijacked conn still carries the server read deadline", serverReadTimeout)
+	}
+
+	// 通道双向都还活着：worker 发的数据越过 deadline 后到达 client……
+	vscWsSendData(t, workerConn, id, "late-payload")
+	if got := vscReadRaw(t, clientConn, clientBr, "late-payload"); !strings.Contains(got, "late-payload") {
+		t.Fatalf("client got %q", got)
+	}
+	// ……client 发的数据也越过 deadline 后到达 worker。
+	if _, err := clientConn.Write([]byte("late-reply")); err != nil {
+		t.Fatalf("client write: %v", err)
+	}
+	if data := vscWsRecvData(t, workerConn, workerBr); data != "late-reply" {
+		t.Fatalf("worker got %q, want late-reply", data)
+	}
+}
+
+// TestVscRelayChannelCongestion 验证通道写积压门（writeSession）：中继→worker
+// 方向积压超高水位时，会话写停在门上（积压不再增长、来源读取停住），排水后
+// 全部放行（无死锁）；通道死亡时等待者立即带错返回，不会永远等一个不会来的
+// 高水位回落。
+func TestVscRelayChannelCongestion(t *testing.T) {
+	rel := newVscRelay()
+	rel.chanHighWater = 16 << 10 // 16KB，帧 8KB：最多两块在途
+
+	innerR, innerW := net.Pipe()
+	defer innerW.Close()
+	ch := &vscChannel{relay: rel, done: make(chan struct{})}
+	ch.cond = sync.NewCond(&ch.mu)
+	ch.ws = &wsConn{conn: innerW, br: bufio.NewReader(innerR)}
+
+	const frame = 8 << 10
+	const writes = 16 // 4 写循环 × 16 × 8KB = 512KB
+
+	storm := func() <-chan error {
+		errs := make(chan error, 4)
+		for g := 0; g < 4; g++ {
+			go func() {
+				var err error
+				for i := 0; i < writes && err == nil; i++ {
+					err = ch.writeSession(make([]byte, frame))
+				}
+				errs <- err
+			}()
+		}
+		return errs
+	}
+
+	// 阶段一：不读对端 → 写全部堵住；采样 pend，封顶不得超过高水位+单帧。
+	maxPend := make(chan int64, 1)
+	stop := make(chan struct{})
+	go func() {
+		var best int64
+		for {
+			select {
+			case <-stop:
+				maxPend <- best
+				return
+			case <-time.After(5 * time.Millisecond):
+				ch.mu.Lock()
+				if ch.pend > best {
+					best = ch.pend
+				}
+				ch.mu.Unlock()
+			}
+		}
+	}()
+	errs := storm()
+	time.Sleep(300 * time.Millisecond)
+	select {
+	case err := <-errs:
+		t.Fatalf("write finished during full congestion: %v", err)
+	default:
+	}
+	// 排水：读完对端全部积压，写循环应逐一放行直至完成（无死锁）。
+	drained := 0
+	buf := make([]byte, 64<<10)
+	_ = innerR.SetReadDeadline(time.Now().Add(10 * time.Second))
+	for drained < 4*writes*frame {
+		n, err := innerR.Read(buf)
+		drained += n
+		if err != nil {
+			t.Fatalf("drain: %v (got %d/%d)", err, drained, 4*writes*frame)
+		}
+	}
+	for g := 0; g < 4; g++ {
+		if err := <-errs; err != nil {
+			t.Fatalf("write loop: %v", err)
+		}
+	}
+	close(stop)
+	if best := <-maxPend; best > int64(rel.chanHighWater)+frame {
+		t.Fatalf("channel backlog peaked at %d, cap is %d (+1 frame)", best, rel.chanHighWater)
+	}
+
+	// 阶段二：再次堵住后判死通道 → 等待者立刻带错返回。
+	errs = storm()
+	time.Sleep(100 * time.Millisecond)
+	_ = innerW.Close()
+	ch.mu.Lock()
+	ch.dead = true
+	ch.cond.Broadcast()
+	ch.mu.Unlock()
+	for g := 0; g < 4; g++ {
+		select {
+		case err := <-errs:
+			if err == nil {
+				t.Fatal("write loop survived channel death")
+			}
+		case <-time.After(3 * time.Second):
+			t.Fatal("write loop still blocked after channel death")
+		}
+	}
+}
+
+// TestVscRelayTunnelIDGate 验证 relay 身份门禁（tunnel_id 配置）：worker 注册带
+// 了第三段就必须与配置一致（否则 403——连错 relay 了），缺段放行；两种情况都经
+// ready 帧回告；client 只按第一段路由，第三段不作门禁。
+func TestVscRelayTunnelIDGate(t *testing.T) {
+	rel := newVscRelay()
+	rel.tunnelID = "chan1"
+	ts := httptest.NewServer(rel.RouteHandler(""))
+	defer ts.Close()
+	addr := ts.Listener.Addr().String()
+
+	// 第三段不一致 → 403。
+	conn, br := vscGet(t, addr, "GET /?kind=worker&tkn=tok1.dev1.other HTTP/1.1\r\nHost: r\r\nUpgrade: websocket\r\nConnection: Upgrade\r\nSec-WebSocket-Key: dGhlIHNhbXBsZSBub25jZQ==\r\n\r\n")
+	if code := vscStatusCode(t, vscReadHead(t, conn, br)); code != 403 {
+		t.Fatalf("mismatched tunnel id got %d, want 403", code)
+	}
+	conn.Close()
+
+	// 带上同一段 → 注册成功，ready 帧回告 tunnelId。
+	workerConn, _, ready := vscRegisterWorker(t, addr, "/", "h1", "tok1.dev1.chan1")
+	defer workerConn.Close()
+	if ready["tunnelId"] != "chan1" {
+		t.Fatalf("ready tunnelId = %v, want chan1", ready["tunnelId"])
+	}
+
+	// 缺段放行 → ready 帧同样回告（worker 采纳后写回配置）。
+	workerConn2, workerBr2, ready2 := vscRegisterWorker(t, addr, "/", "h2", "tok2.dev2")
+	defer workerConn2.Close()
+	if ready2["tunnelId"] != "chan1" {
+		t.Fatalf("ready tunnelId = %v, want chan1", ready2["tunnelId"])
+	}
+
+	// client 的 tkn 第三段不作门禁：任意第三段都按第一段路由。
+	clientConn, _ := vscConnectClient(t, addr, "/", "tok2.mixed.seg", "")
+	defer clientConn.Close()
+	if open := vscWsRecvText(t, workerConn2, workerBr2); open["type"] != "open" {
+		t.Fatalf("worker2 frame = %v, want open", open)
+	}
+
+	// /status 顶层回告 tunnelId。
+	st := vscStatus(t, addr)
+	if st["tunnelId"] != "chan1" {
+		t.Fatalf("status tunnelId = %v, want chan1", st["tunnelId"])
+	}
 }

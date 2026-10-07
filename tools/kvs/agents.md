@@ -22,13 +22,14 @@
 | `pkg/cacherec.go` | cache_rec（`KVS_CC_REC_<名称>`）：命中即短路的响应规则（`file://` 正文可由文件提供） |
 | `pkg/server.go` | 服务器构建（HTTP + HTTPS=port+1 自签 ECDSA P-256）、静态资产/登录页服务、`isBrowserRequest` |
 | `pkg/vscode.go` | VS Code 专有：web-extension-resource 本地化（上游乱码 issue microsoft/vscode#299425）、语言包/汉化链路 |
-| `pkg/vscrelay.go` | `relay://vscode`：Remote-Server tunnel 中继（relay.js v2 复用帧通道模型的进程内移植）。worker（kind=worker 升级）与 client（?tkn= 路由）共用单端点；文本帧=控制 JSON（ready/open/version 探测/pause/resume/close），二进制帧=[1B idLen][id][payload] 会话数据；client 腿全原始字节；背压端到端（staging 高水位+pause/resume）；探测判死、设备独占、掉线保留期 |
+| `pkg/relay.go` | `relay://` 后端公共层：target→handler 注册表（各实现 init() 自注册，backend.go 查表分流；未注册 target 构建期报错）+ 渠道 ID 承接（`SetTunnelID`，tunnel_id/KVS_TUNNEL_ID，目前仅 vscode 实现消费）+ 共享小工具（`hijackRawConn`：hijack 后清绝对 deadline+开 15s TCP keepalive；`clientRemoteAddr`：XFF 首值优先、`::ffff:` 还原） |
+| `pkg/vscrelay.go` | `relay://vscode`：Remote-Server tunnel 中继。worker（kind=worker 升级）与 client（?tkn= 路由）共用单端点；文本帧=控制 JSON（ready/open/version 探测/pause/resume/close），二进制帧=[1B idLen][id][payload] 会话数据；client 腿全原始字节；背压端到端（client 侧 staging 高水位+pause/resume、通道写积压高水位+TCP 背压）；探测判死、设备独占、掉线保留期；无空闲超时（空闲是隧道常态）；tunnel_id 配置非空时校验 worker tkn 第三段并经 ready 回告 |
 | `pkg/vagent.go` | agent 端点：`vsc_agent_cmds` 预设表（JSON）、端点目录扫描（*.json） |
-| `pkg/zcode.go` | `relay://` 进程内中继（设备注册/心跳/远程控制）；`zcodeStore`（zcodex.json 持久化 + 旧版迁移 + 防抖原子落盘）；`KVS_ZCODEX_NODE` 懒启动 |
+| `pkg/zcorelay.go` | `relay://zcode` 进程内配对中继（设备注册/心跳/远程控制，标识符统一 zco 前缀）；`zcoStore`（zcodex.json 持久化 + 旧版迁移 + 防抖原子落盘）；`KVS_ZCODEX_NODE` 懒启动 |
 | `pkg/manager.go` | 应用中心：合并视图组装、REST API、在线探测（45s 缓存）、`registerAPI("manager")` |
 | `pkg/manager.html` | 管理页单文件前端（客户端渲染，PC 卡片/移动行双布局） |
-| `pkg/wsconn.go` | 最小 RFC 6455 WebSocket 服务端（stdlib 实现）；帧写单次 writev、写超时粗粒度刷新、读缓冲复用、unmask 字长化 |
-| `pkg/wsproxy.go` | WebSocket 升级快路径：自研裸连接隧道（splice、补齐握手期缓冲字节、可选空闲超时、失败回退 stdlib） |
+| `pkg/wsconn.go` | 最小 RFC 6455 WebSocket 服务端（stdlib 实现）；帧写单次 writev、写超时粗粒度刷新、读缓冲复用、unmask 字长化；升级即接 `hijackRawConn`（长命连接卫生） |
+| `pkg/wsproxy.go` | WebSocket 升级快路径：自研裸连接隧道（splice、补齐握手期缓冲字节、可选空闲超时、失败回退 stdlib）；客户端侧 hijack 后同样清 deadline+保活 |
 | `pkg/transport.go` | 反代 Transport 调优（空闲连接/透传 Accept-Encoding/FlushInterval）+ 响应体拷贝缓冲池（`BufferPool`，省掉每个响应的 32KB 分配），按后端类型缓存 |
 | `pkg/jsonhead.go` | 只读 JSON 顶层头部的零分配扫描器（中继 data 帧快路径判定） |
 | `pkg/stats.go` | 运行计数（`/__stats`）与可选 pprof（`KVS_PPROF`） |
@@ -58,7 +59,7 @@
 | `file` | 静态文件（含 br/gz/zst 预压缩优选） |
 | `text` | 直接返回文本，支持 `@now` |
 | `svc://<name>` | kvs 托管服务：`[service.<name>]` 段，按地址反代；scheme 即显式服务标记 |
-| `relay://<name>` | 进程内中继：`relay://vscode` 为 Remote-Server tunnel 中继（vscrelay.go），其余为 zcode 配对中继（zcode.go），如 `relay://zcode` |
+| `relay://<target>` | 进程内中继，target 只认注册表预置的两个：`vscode`（Remote-Server tunnel 中继，vscrelay.go）与 `zcode`（配对中继，zcorelay.go）；其他 target 构建期报错 |
 | `api://<name>` | 进程内 handler 注册表（`registerAPI`），目前仅 `api://manager` |
 
 多托管服务（svc://）：LoadInitConfig 先扫选中表的 `svc://<name>` 引用（主服务=第一个引用），**只解析被引用的服务段**（未引用的 `[service.<name>]` 段保持休眠：不反推环境变量、不解析版本、不注册），被引用段按依赖序解析并**反向赋值** `KVS_SVC_<NAME>_*` 环境变量（HOME 默认 `{KVS_HOME}/<name>`；ADDR 回填；HOST/PORT 由 http 地址、SOCK 由 unix 地址反推；VERSION/VERHASH 解析后回填；BIN_HOME 回填；段末处理 envs_default——系统环境变量为空时用默认值填充，默认值可引用全部已反推变量），然后才展开路由值——路由里 `{KVS_SVC_ZCODE_BIN_HOME}` 这类引用由此生效。每个 svc:// 服务有独立的 ServiceState（loading 页）与 Process（Setsid 子进程组），启动命令在配置加载期已完成 `{KVS_SVC_<NAME>_*}` 展开，子进程继承完整进程环境；`/__restart?svc=<name>`（缺省=主服务）停进程+stop_shell+清 unix socket 并重置该服务状态；kvs 退出时 `StopAll()` 只杀 kvs 托管的进程。版本覆盖 `SetOverrideVersion(svc, v)` 按服务记录。
@@ -136,7 +137,7 @@ ws~ 路由前缀匹配与退避：`ExactPathMatch` = `ws~` 且目标非隧道类
 - MISS 会先 `WriteHeader(resp.StatusCode)` 再流式转发（上游 404 入缓存时状态码不能被隐式
   200 吞掉）。`/__stats` 的 cache.hits/misses 在这两处推进。
 
-### 3.4.1 中继帧路径（wsconn.go / zcode.go）
+### 3.4.1 中继帧路径（wsconn.go / zcorelay.go）
 
 - 每帧 syscall 5→2：header 用栈上数组 + `net.Buffers.WriteTo`（TCP/Unix 一次 writev），
   小帧合并进 `wsConn.wbuf` 一次写出；`writeMu` 由 channel 换成 `sync.Mutex`。
@@ -148,7 +149,7 @@ ws~ 路由前缀匹配与退避：`ExactPathMatch` = `ws~` 且目标非隧道类
   跳过整帧解析（1MiB 帧：**51ns vs 4.9ms**，且零分配）；判不出来一律回退完整 `json.Unmarshal`，
   语义只在"声明为 data 但整体非法 JSON 的帧会被原样转发"这一点上更宽松（符合中继逐字节转发的契约）。
 
-### 3.5 zcodex 模式与 manager（zcode.go / manager.go）
+### 3.5 zcodex 模式与 manager（zcorelay.go / manager.go）
 
 `-c` 可选且只接受文件路径（缺省=内嵌 `kvs.ini`）；路由表只有 `-n :name` 一种选法，无预设别名。代码不再注入任何 zcodex 环境默认值：`KVS_PATH_PUBLIC`（桌面客户端无法走 Cookie 认证）、`KVS_CC_SED_*`（cache_sed 规则，wss 地址与 CDN 地址重写）由部署环境/Makefile zcodex 目标或 `[service.zcode] envs_default` 提供（值见 `[service.zcode]` 注释）。
 

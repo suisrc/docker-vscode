@@ -65,7 +65,7 @@ kvs syncto s3:/vsc/zcode /zcode   # 下载：S3 → 本地（对象或前缀递�
 | `file` | 静态文件服务器（br/gz/zst 预压缩优选） |
 | `text` | 直接返回文本；支持 `@now` 替换当前时间（RFC3339） |
 | `svc://<name>` | kvs 托管服务：按 `[service.<name>]` 段探活→下载→解压→启动，再反代到 `address`（准备期间返回 loading 页） |
-| `relay://` / `api://` | 进程内 zcode 中继 / handler 注册表（zcodex 预设使用，见 [agents.md](agents.md)） |
+| `relay://` / `api://` | 进程内中继（target 只认 `vscode`（VS Code tunnel 中继）与 `zcode`（配对中继））/ handler 注册表（见 [agents.md](agents.md)） |
 
 ### 托管服务 `[service.<name>]` 段
 

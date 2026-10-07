@@ -1,8 +1,8 @@
 package pkg
 
-// vscRelay — relay://vscode 后端：Remote-Server tunnel 中继（relay.js v2 参考实现）
-// 的进程内移植。单端点复用：worker（vscode-server 受控端）与 client（VS Code remote
-// 端）访问同一路径，用 query 区分角色：
+// vscRelay — relay://vscode 后端：Remote-Server tunnel 的进程内中继。单端点复用：
+// worker（vscode-server 受控端）与 client（VS Code remote 端）访问同一路径，用 query
+// 区分角色：
 //
 //	worker  GET <路径>?kind=worker&name=<显示名>&tkn=<token>.<deviceId>[.<tunnelId>]
 //	        WebSocket 升级；101 之后同一连接变复用帧通道，可随时重连顶掉旧通道
@@ -22,23 +22,32 @@ package pkg
 //	二进制帧 = 会话数据：[1B idLen][id ASCII][payload]
 //	另有 WS 层 ping/pong（wsconn 自动回）。
 //
-// 背压端到端：谁积压谁喊停。client 收不动（单会话 staging ≥1MB）→ 请 worker 停发
-// 该会话；worker 侧后端收不动 → 请中继停读 client。通道读方向永远积极（worker 与
-// 中继都不停读通道），控制帧不会被数据堵死；中继侧内存只由 staging 阈值封顶。
+// 连接长命性（隧道的空闲是常态，任何"一段时间没消息就断"的逻辑都是错的）：
+//   - hijack 后清掉 server 预设的绝对 deadline + 显式 15s TCP keepalive
+//     （hijackRawConn；空闲连接靠内核保活维系，不被 read_timeout/NAT 掐死）；
+//   - 在线判定只靠 version 探测（30s 周期、连续缺答判死）与 WS 关闭/EOF，没有
+//     空闲超时；半开连接由 TCP keepalive 兜底。
 //
-// 令牌模型与参考实现一致（URL 即凭证）：tkn 三元组 <token>.<deviceId>[.<tunnelId>]，
-// 只认 query（tkn= 与别名 token=），不读自定义头；token 全局唯一即隧道唯一键；
-// deviceId 一台设备同时只允许一条通道（第二条 409）；tunnelId 第三段是 relay 身份
-// 标识，本实现无此配置，收下即忽略。掉线隧道的占用保留 10 分钟（期间 client 得
-// 503 而非 403，worker 重连顶回即恢复）。本协议没有 cookie 概念，tkn 就是凭证：
-// login_authz 开启时把挂载前缀加进 path_public，或让各方 tkn 等于网关 login token。
+// 背压端到端：谁积压谁喊停。client 收不动（单会话 staging ≥1MB）→ 请 worker 停发
+// 该会话；worker 侧后端收不动 → 请中继停读 client；中继→worker 通道写积压
+// ≥8MB（链路慢/对端读得慢）→ 会话写在中继侧自然停住（TCP 背压回传源头）。
+// 通道读方向永远积极（worker 与中继都不停读通道），控制帧不会被数据堵死；
+// 中继侧内存只由两道高水位封顶。
+//
+// 令牌模型（URL 即凭证）：tkn 三元组 <token>.<deviceId>[.<tunnelId>]，只认 query
+// （tkn= 与别名 token=），不读自定义头；token 全局唯一即隧道唯一键；deviceId 一台
+// 设备同时只允许一条通道（第二条 409）；tunnelId 第三段是 relay 身份标识（配置
+// tunnel_id）：中继配置了它，worker 注册就必须带上同一段（否则 403 拒绝——连错
+// relay 了），缺段则放行、由 ready 帧回告 worker 写回配置；未配置则收下即忽略。
+// client 侧永远只按第一段路由，第三段不作门禁。掉线隧道的占用保留 10 分钟（期间
+// client 得 503 而非 403，worker 重连顶回即恢复）。本协议没有 cookie 概念，tkn
+// 就是凭证：login_authz 开启时把挂载前缀加进 path_public，或让各方 tkn 等于网关
+// login token。
 
 import (
 	"bufio"
 	"bytes"
 	"crypto/rand"
-	"crypto/sha1"
-	"encoding/base64"
 	"encoding/hex"
 	"encoding/json"
 	"fmt"
@@ -54,7 +63,7 @@ import (
 	"time"
 )
 
-// 量级上限与参数（与参考实现同量级：只防把中继当内存池用）。可调项挂在实例
+// 量级上限与参数（只防把中继当内存池用）。可调项挂在实例
 // 字段上（newVscRelay 给默认值）：测试缩短/调小它们验证探测、背压与保留期路径，
 // 且互不干扰。
 const (
@@ -70,6 +79,7 @@ const (
 	vscGrace                = 10 * time.Minute // 掉线隧道占用保留（防抢注，期间 client 得 503）
 	vscSinkHighWater        = 1 << 20          // 单会话 staging 高水位：超过则请 worker 停发
 	vscSinkCap              = 8 << 20          // 单会话 staging 绝对上限：worker 无视 pause 则杀会话
+	vscChanHighWater        = 8 << 20          // 通道写积压高水位：超过则停读所有 client（TCP 背压回传）
 )
 
 // vscRelay is one relay://vscode instance. All state is in-memory: workers
@@ -80,11 +90,14 @@ type vscRelay struct {
 	devices  map[string]*vscChannel
 	sessions int // 全局活跃会话数
 
+	tunnelID string // relay 身份标识（tunnel_id 配置）；空=未配置，不门禁
+
 	probeInterval time.Duration
 	probeMaxMiss  int
 	grace         time.Duration
 	sinkHighWater int
 	sinkCap       int
+	chanHighWater int
 }
 
 // vscTunnel is one registered worker: the token is the route key, the channel
@@ -104,7 +117,9 @@ type vscTunnel struct {
 
 // vscChannel is the worker's multiplexed WS link. One goroutine reads it
 // (control dispatch + demux), a ticker probes service liveness; writes are
-// serialized by wsConn's write mutex.
+// serialized by wsConn's write mutex. Session data writes go through
+// writeSession, which self-throttles on channel congestion (pend/cond):
+// control frames never queue behind that gate.
 type vscChannel struct {
 	relay  *vscRelay
 	tun    *vscTunnel
@@ -113,6 +128,11 @@ type vscChannel struct {
 	missed atomic.Int32 // 连续探测缺答次数
 	done   chan struct{}
 	gone   sync.Once
+
+	mu   sync.Mutex
+	cond *sync.Cond // 与 mu 配对；Wait 唤醒条件：积压回落到高水位以下或通道死亡
+	pend int64      // 已交给 writeFrame 尚未写完的字节量（通道写积压）
+	dead bool
 }
 
 // vscSession is one bridged client. Bytes worker→client stage in queue
@@ -142,6 +162,12 @@ var (
 	vscInst *vscRelay
 )
 
+func init() {
+	registerRelay("vscode", func(target, mount string) http.Handler {
+		return vscGetRelay().RouteHandler(mount)
+	})
+}
+
 // vscGetRelay returns the process-wide relay://vscode instance.
 func vscGetRelay() *vscRelay {
 	vscOnce.Do(func() { vscInst = newVscRelay() })
@@ -153,11 +179,13 @@ func newVscRelay() *vscRelay {
 	return &vscRelay{
 		tunnels:       make(map[string]*vscTunnel),
 		devices:       make(map[string]*vscChannel),
+		tunnelID:      tunnelIDCfg,
 		probeInterval: vscProbeInterval,
 		probeMaxMiss:  vscProbeMaxMiss,
 		grace:         vscGrace,
 		sinkHighWater: vscSinkHighWater,
 		sinkCap:       vscSinkCap,
+		chanHighWater: vscChanHighWater,
 	}
 }
 
@@ -200,7 +228,9 @@ func vscTokenOf(q url.Values) string {
 
 // vscHijack takes the connection over for raw byte use. Reads MUST go through
 // the returned bufio.Reader: it may already hold bytes the peer sent beyond
-// the request headers (early client data would otherwise be lost).
+// the request headers (early client data would otherwise be lost). The conn
+// is a long-lived pipe: server deadlines are cleared and TCP keepalive is
+// turned on (hijackRawConn).
 func vscHijack(w http.ResponseWriter) (net.Conn, *bufio.Reader, error) {
 	hj, ok := w.(http.Hijacker)
 	if !ok {
@@ -211,15 +241,8 @@ func vscHijack(w http.ResponseWriter) (net.Conn, *bufio.Reader, error) {
 	if err != nil {
 		return nil, nil, err
 	}
+	hijackRawConn(conn)
 	return conn, brw.Reader, nil
-}
-
-// vscWsAccept computes the RFC 6455 Sec-WebSocket-Accept value.
-func vscWsAccept(key string) string {
-	h := sha1.New()
-	h.Write([]byte(key))
-	h.Write([]byte(wsMagicGUID))
-	return base64.StdEncoding.EncodeToString(h.Sum(nil))
 }
 
 // vscSessionID mints a 12-hex session id (frame overhead stays small).
@@ -293,13 +316,35 @@ func (ch *vscChannel) sendControl(v any) {
 	_ = ch.ws.wsWriteText(b)
 }
 
-// sendData emits one [1B idLen][id][payload] binary frame.
-func (ch *vscChannel) sendData(id string, payload []byte) error {
-	frame := make([]byte, 0, 1+len(id)+len(payload))
-	frame = append(frame, byte(len(id)))
-	frame = append(frame, id...)
-	frame = append(frame, payload...)
-	return ch.ws.writeFrame(wsOpBinary, frame)
+// writeSession writes one session data frame on the channel (session read
+// loops only). Past the channel high water (peer reading slowly, slow link)
+// it blocks until the backlog drains: client reads stop here, and TCP
+// backpressure propagates to the source — the backlog never piles up in relay
+// memory, and healthy control frames (open/close/probe, which bypass this
+// gate) keep flowing. Contrast with a plain blocking write: without the gate,
+// a congested channel stalls writers into the 30s write deadline, whose
+// errors kill sessions and then starve the liveness probe.
+func (ch *vscChannel) writeSession(frame []byte) error {
+	ch.mu.Lock()
+	for ch.pend >= int64(ch.relay.chanHighWater) {
+		if ch.dead {
+			ch.mu.Unlock()
+			return wsErrClosed
+		}
+		ch.cond.Wait()
+	}
+	ch.pend += int64(len(frame))
+	ch.mu.Unlock()
+
+	err := ch.ws.writeFrame(wsOpBinary, frame)
+
+	ch.mu.Lock()
+	ch.pend -= int64(len(frame))
+	if ch.pend < int64(ch.relay.chanHighWater) {
+		ch.cond.Broadcast()
+	}
+	ch.mu.Unlock()
+	return err
 }
 
 func (ch *vscChannel) session(id string) *vscSession {
@@ -321,6 +366,10 @@ func (r *vscRelay) handleWorker(w http.ResponseWriter, req *http.Request, p stri
 	if len(parts) > 1 {
 		device = parts[1]
 	}
+	tunnelRef := ""
+	if len(parts) > 2 {
+		tunnelRef = parts[2]
+	}
 	name := vscClip(strings.TrimSpace(q.Get("name")), 128)
 	switch {
 	case token == "":
@@ -331,6 +380,12 @@ func (r *vscRelay) handleWorker(w http.ResponseWriter, req *http.Request, p stri
 		return
 	case !vscDeviceRe.MatchString(device):
 		http.Error(w, "vscode relay: deviceId must be 1..64 chars of [A-Za-z0-9_-]", http.StatusBadRequest)
+		return
+	// relay 身份校验：配置了 tunnel_id 时，带了第三段就必须是同一段（连错 relay
+	// 了）；缺段放行，由 ready 帧回告，worker 采纳后写回配置。
+	case r.tunnelID != "" && tunnelRef != "" && tunnelRef != r.tunnelID:
+		log.Printf("[vscrelay] worker registration rejected: tunnel id mismatch (expected %q, got %q)", r.tunnelID, tunnelRef)
+		http.Error(w, "vscode relay: tunnel id mismatch — this relay expects \""+r.tunnelID+"\" in the tkn", http.StatusForbidden)
 		return
 	case !isWebSocketUpgrade(req):
 		http.Error(w, "vscode relay: worker registration expects a WebSocket upgrade request", http.StatusBadRequest)
@@ -393,6 +448,7 @@ func (r *vscRelay) handleWorker(w http.ResponseWriter, req *http.Request, p stri
 		return
 	}
 	ch := &vscChannel{relay: r, tun: tun, ws: ws, device: device, done: make(chan struct{})}
+	ch.cond = sync.NewCond(&ch.mu)
 	tun.device = device
 	tun.name = name
 	tun.path = p
@@ -403,7 +459,12 @@ func (r *vscRelay) handleWorker(w http.ResponseWriter, req *http.Request, p stri
 	r.devices[device] = ch
 	r.mu.Unlock()
 
-	ch.sendControl(vscReadyMsg{Type: "ready", Protocol: vscProtocolVersion, Relay: vscRelayVersion, TunnelID: nil, Name: name, Path: p})
+	// ready 帧回告 relay 身份：未配置 tunnel_id 时恒为 null。
+	var tid *string
+	if r.tunnelID != "" {
+		tid = &r.tunnelID
+	}
+	ch.sendControl(vscReadyMsg{Type: "ready", Protocol: vscProtocolVersion, Relay: vscRelayVersion, TunnelID: tid, Name: name, Path: p})
 	log.Printf("[vscrelay] tunnel %s registered (device=%s name=%s path=%s remote=%s)",
 		vscTunnelLabel(tun), device, nameOrDash(name), pathOrDash(p), tun.addr)
 
@@ -533,6 +594,12 @@ func (r *vscRelay) dropChannel(tun *vscTunnel, ch *vscChannel, why string) {
 		for _, id := range ids {
 			r.endSession(tun, id, "channel down: "+why)
 		}
+		// 唤醒在通道积压门上等待的会话写循环（writeSession）：通道已死，让它们
+		// 立即带错返回，而不是永远等一个不会再来的高水位回落。
+		ch.mu.Lock()
+		ch.dead = true
+		ch.cond.Broadcast()
+		ch.mu.Unlock()
 		log.Printf("[vscrelay] tunnel %s channel down (%s); token reserved for %s", vscTunnelLabel(tun), why, r.grace)
 	})
 }
@@ -586,7 +653,7 @@ func (r *vscRelay) handleClient(w http.ResponseWriter, req *http.Request, p stri
 		// 升级请求由中继代答 101（worker 会吞掉本机 server 自己的 101 头），
 		// 之后这条腿就是原始字节流。
 		fmt.Fprintf(conn, "HTTP/1.1 101 Switching Protocols\r\nUpgrade: websocket\r\nConnection: Upgrade\r\nSec-WebSocket-Accept: %s\r\n\r\n",
-			vscWsAccept(strings.TrimSpace(req.Header.Get("Sec-WebSocket-Key"))))
+			wsAcceptValue(strings.TrimSpace(req.Header.Get("Sec-WebSocket-Key"))))
 	}
 
 	s := &vscSession{
@@ -608,14 +675,19 @@ func (r *vscRelay) handleClient(w http.ResponseWriter, req *http.Request, p stri
 // readLoop forwards the client's bytes to the worker: the original request
 // head first (rebuilt via req.Write — query stays as the client sent it),
 // then raw chunks off the hijacked connection. peerHold gates the read
-// direction (worker asked us to stop because its backend can't keep up).
+// direction (worker asked us to stop because its backend can't keep up);
+// channel congestion gates the writes (writeSession).
 func (s *vscSession) readLoop(req *http.Request) {
 	var head bytes.Buffer
 	if err := req.Write(&head); err != nil || head.Len() == 0 {
 		s.ch.relay.endSession(s.tun, s.id, "client request head")
 		return
 	}
-	if err := s.ch.sendData(s.id, head.Bytes()); err != nil {
+	frame := make([]byte, 0, 1+len(s.id)+head.Len())
+	frame = append(frame, byte(len(s.id)))
+	frame = append(frame, s.id...)
+	frame = append(frame, head.Bytes()...)
+	if err := s.ch.writeSession(frame); err != nil {
 		s.ch.relay.endSession(s.tun, s.id, "channel write: "+err.Error())
 		return
 	}
@@ -635,7 +707,7 @@ func (s *vscSession) readLoop(req *http.Request) {
 		}
 		n, err := s.br.Read(buf[idOff:])
 		if n > 0 {
-			if werr := s.ch.ws.writeFrame(wsOpBinary, buf[:idOff+n]); werr != nil {
+			if werr := s.ch.writeSession(buf[:idOff+n]); werr != nil {
 				s.ch.relay.endSession(s.tun, s.id, "channel write: "+werr.Error())
 				return
 			}
@@ -755,7 +827,7 @@ func (r *vscRelay) sweepLocked() {
 	for token, tun := range r.tunnels {
 		if tun.ch == nil && !tun.deadSince.IsZero() && now.Sub(tun.deadSince) >= r.grace {
 			delete(r.tunnels, token)
-			log.Printf("[vscrelay] tunnel %s released (offline beyond the %s grace)", vscTunnelLabel(tun), vscGrace)
+			log.Printf("[vscrelay] tunnel %s released (offline beyond the %s grace)", vscTunnelLabel(tun), r.grace)
 		}
 	}
 }
@@ -782,10 +854,15 @@ func (r *vscRelay) handleStatus(w http.ResponseWriter) {
 	sort.Slice(tunnels, func(i, j int) bool { return tunnels[i]["name"].(string) < tunnels[j]["name"].(string) })
 
 	w.Header().Set("Content-Type", "application/json")
+	var tunnelID any
+	if r.tunnelID != "" {
+		tunnelID = r.tunnelID
+	}
 	_ = json.NewEncoder(w).Encode(map[string]any{
 		"now":            time.Now().Format(time.RFC3339),
 		"relay":          vscRelayVersion,
 		"protocol":       vscProtocolVersion,
+		"tunnelId":       tunnelID,
 		"tunnels":        tunnels,
 		"tunnelSessions": n,
 	})

@@ -104,6 +104,7 @@ type Config struct {
 	WSProxy                 string // ws_proxy — auto|stdlib|off，WebSocket 升级快路径，默认 auto
 	WSIdleTimeout           int    // ws_idle_timeout — WS 隧道空闲超时(秒)，0=关闭（默认）
 	ReadTimeout             int    // read_timeout — 主 server 读完整请求(含 body)的秒数，0=不限，默认 60
+	TunnelID                string // tunnel_id — relay 渠道 ID（KVS_TUNNEL_ID），目前仅 relay://vscode 消费；空=不门禁
 }
 
 // ServiceConfig holds one named service section ([service.<name>]). A service
@@ -1062,6 +1063,7 @@ func LoadInitConfig() Config {
 	cfg.WSProxy = expandValue(strProp(ini, "ws_proxy", ""))
 	cfg.WSIdleTimeout = parseIntDefault(expandValue(strProp(ini, "ws_idle_timeout", "")), 0)
 	cfg.ReadTimeout = parseIntDefault(expandValue(strProp(ini, "read_timeout", "")), 60)
+	cfg.TunnelID = strings.TrimSpace(expandValue(strProp(ini, "tunnel_id", "")))
 	// path_public — |-separated list of paths reachable without auth
 	// (e.g. /api/v1/public|/remote/v4). Non-empty entries are kept as-is;
 	// prefix matching is applied by the auth middleware.

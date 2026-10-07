@@ -239,6 +239,9 @@ func handleWSUpgrade(w http.ResponseWriter, r *http.Request, up *wsUpstream) boo
 		http.Error(w, "hijack failed: "+err.Error(), http.StatusInternalServerError)
 		return true
 	}
+	// 客户端侧同样是长命连接：清掉 server 预设的绝对 deadline、显式开 TCP 保活
+	//（后端侧拨号时已带默认保活），空闲隧道不被 read_timeout 或 NAT 掐死。
+	hijackRawConn(clientConn)
 	// 101 响应原样回给客户端（Connection/Upgrade/Sec-WebSocket-Accept 都在里面）。
 	if err := writeUpgradeResponse(clientConn, res); err != nil {
 		_ = clientConn.Close()

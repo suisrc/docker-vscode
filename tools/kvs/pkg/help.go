@@ -78,6 +78,9 @@ Proxy tuning (optional, top-level keys):
   proxy_flush_interval            streaming flush interval in ms (default 100; 0=never, -1=every write)
   read_timeout                    seconds to read a whole request incl. body (default 60;
                                   0=unlimited, for big uploads / slow clients)
+  tunnel_id                       relay channel id (KVS_TUNNEL_ID; used by
+                                  relay://vscode): when set, worker tkn must carry
+                                  it as 3rd segment (missing ok)
 
 Service env reverse-assignment (per [service.<name>], <NAME> = upper name):
   KVS_SVC_<NAME>_HOME               working dir (default {KVS_HOME}/<name>)
@@ -129,6 +132,7 @@ Environment variables:
   KVS_PROXY_DISABLE_GZIP            proxy_disable_compression value
   KVS_PROXY_FLUSH_MS                proxy_flush_interval value
   KVS_READ_TIMEOUT                  read_timeout value (seconds)
+  KVS_TUNNEL_ID                     tunnel_id value (relay channel id)
   KVS_PPROF                         1 (127.0.0.1:6060) | <port> | <addr> — enable pprof
   KVS_DEBUG                         1 — load assets from the working directory (live edit)
   KVS_MIRROR_S3_PREFIX              mirror: S3 storage prefix (e.g. https://oss.example.com/vsc)

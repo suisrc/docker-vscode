@@ -1,7 +1,7 @@
 package pkg
 
 // Minimal RFC 6455 WebSocket server endpoint — stdlib only, no third-party
-// dependencies. Implements exactly the subset the zcode relay needs:
+// dependencies. Implements exactly the subset the in-process relays need:
 //
 //   - server-side handshake (101 Switching Protocols, Sec-WebSocket-Accept)
 //   - text frames as whole messages (no fragmentation support: a continuation
@@ -34,8 +34,17 @@ import (
 // wsMagicGUID is the fixed GUID from RFC 6455 §1.3.
 const wsMagicGUID = "258EAFA5-E914-47DA-95CA-C5AB0DC85B11"
 
-// wsMaxFrameBytes caps one inbound message. The zcode clients enforce 8MB
-// physical frames; 4x headroom mirrors the reference relay's maxPayload.
+// wsAcceptValue computes the RFC 6455 Sec-WebSocket-Accept value for a
+// handshake key. Shared by wsUpgrade and the relay's own client-leg 101.
+func wsAcceptValue(key string) string {
+	h := sha1.New()
+	h.Write([]byte(key))
+	h.Write([]byte(wsMagicGUID))
+	return base64.StdEncoding.EncodeToString(h.Sum(nil))
+}
+
+// wsMaxFrameBytes caps one inbound message. The relays' official clients
+// enforce 8MB physical frames; 4x headroom leaves room for sloppy ones.
 const wsMaxFrameBytes = 8 * 1024 * 1024 * 4
 
 // wsErrClosed is returned once the peer initiated (or we sent) a close.
@@ -112,12 +121,11 @@ func wsUpgrade(w http.ResponseWriter, r *http.Request) (*wsConn, error) {
 	if err != nil {
 		return nil, fmt.Errorf("hijack: %w", err)
 	}
+	// WebSocket 是长命连接：清掉 server 预设的绝对 deadline、显式开 TCP 保活
+	//（见 hijackRawConn——空闲连接靠内核保活维系，不被 NAT 静默回收）。
+	hijackRawConn(netConn)
 
-	// Compute Sec-WebSocket-Accept = base64(sha1(key + GUID)).
-	h := sha1.New()
-	h.Write([]byte(key))
-	h.Write([]byte(wsMagicGUID))
-	accept := base64.StdEncoding.EncodeToString(h.Sum(nil))
+	accept := wsAcceptValue(key)
 
 	resp := "HTTP/1.1 101 Switching Protocols\r\n" +
 		"Upgrade: websocket\r\n" +

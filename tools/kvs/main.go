@@ -65,7 +65,7 @@ func main() {
 	pkg.Services().SetCacheDir(cfg.CacheDir)
 	pkg.Services().Register(cfg.Services)
 	// zcode relay state file lives under the gateway home ({home}/zcodex.json).
-	pkg.SetZcodeHome(cfg.Home)
+	pkg.SetZcoHome(cfg.Home)
 	// 应用中心内置卡（zcode 数据文件夹/工作目录、版本固定）持久化在 zcodex.json：
 	// 先回填进程 env 和版本覆盖，再重载一次配置，让命令行展开和 envs_default
 	// 按覆盖值生效。
@@ -86,6 +86,9 @@ func main() {
 	pkg.SetWSTunnelOptions(cfg.WSProxy, cfg.WSIdleTimeout)
 	// 主 HTTP server 的 ReadTimeout（读完整请求含 body 的秒数；0=不限，默认 60）。
 	pkg.SetServerReadTimeout(cfg.ReadTimeout)
+	// relay 渠道 ID（tunnel_id，即 KVS_TUNNEL_ID）：目前仅 relay://vscode 消费
+	// （worker 注册 tkn 第三段门禁）；在 backend 构建前设置。
+	pkg.SetTunnelID(cfg.TunnelID)
 	// 可选 pprof（KVS_PPROF=1 | <port> | <addr>），默认关闭。
 	pkg.StartPProfIfEnabled()
 
