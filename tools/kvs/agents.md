@@ -15,7 +15,7 @@
 |---|---|
 | `main.go` | CLI 分发（`help`/`demo`/`mirror`/`syncto` 子命令；无子命令=代理模式）、mux 装配、登录/内置端点、注入脚本服务 |
 | `pkg/config.go` | ini 解析 + 值模板展开（含多行 JSON 修复）、多路由表 `[proxies.<name>]`（`-n :name` 选表）、多服务段 `[service.<name>]` + `KVS_SVC_<NAME>_*` 环境变量反推、版本覆盖（`SetOverrideVersion` 按服务）、`-c` 可选（缺省=内嵌 kvs.ini，仅接受文件路径） |
-| `pkg/backend.go` | `Backend` 抽象；`CreateBackendHandler` 按 scheme 分发；`registerAPI`（api:// 进程内注册表）；ws 代理；`precompressedFileServer`（br/gz/zst 预压缩静态） |
+| `pkg/backend.go` | `Backend` 抽象；`CreateBackendHandler` 按 scheme 分发；`registerAPI`（api:// 进程内注册表）；ws 代理；`precompressedFileServer`（br/gz/zst 预压缩静态）；单条件 query 门禁（`splitQueryGate`，前缀收尾 `[k=v]` → `QueryKey/QueryVal`） |
 | `pkg/service.go` | service 生命周期：检测→版本解析→下载→解压→脚本→启停；`ServiceManager`（每 svc:// 服务独立 ServiceState+Process）；healthz `#@code` 探活 |
 | `pkg/cache.go` | cc~ 缓存核心：`/__cache/` 外部资源代理（命中按 sed 计划直出 sendfile/内存重写，元数据内存缓存 size+mtime+inode 判失效）、两条入口、透传；规则匹配小工具（hostMatch/globMatch/targetHost/splitList） |
 | `pkg/cachesed.go` | cache_sed（`KVS_CC_SED_<名称>`）：正文改写 once/each/none 计划与 `_.json` 元数据、brotli/gzip 解压编码 |
@@ -47,7 +47,7 @@
 
 ### 3.2 路由与后端协议
 
-路由表：`[proxies.<name>]` 命名多表（`[proxies]` 无名表），`-n :name` 选择，默认取文件中第一张表。每行一个路由，按文件顺序匹配。前缀标记：普通前缀；`^`（正则）；`http(s)://`、`ws(s)://` 开头（全域名）。
+路由表：`[proxies.<name>]` 命名多表（`[proxies]` 无名表），`-n :name` 选择，默认取文件中第一张表。每行一个路由，按文件顺序匹配。前缀标记：普通前缀；`^`（正则）；`http(s)://`、`ws(s)://` 开头（全域名）；前缀收尾 `[k=v]`（单条件 query 门禁：`splitQueryGate` 在标记剥离后、逗号展开前提取为 `Backend.QueryKey/QueryVal` 两个字符串，请求侧由 main 分发循环短路比较——解码值精确相等，不满足跳过该路由；括号内容含逗号或没有 `=` 时整体按字面路径，正则字符类如 `[0-9]` 不受影响）。
 
 后端 scheme 全集（readme 仅列用户常用项）：
 

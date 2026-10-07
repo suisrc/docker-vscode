@@ -108,6 +108,8 @@ func main() {
 		svc       string // svc:// service name ("" = not a hosted service)
 		exact     bool   // ws~ backends: request path must equal prefix exactly (no prefix match)
 		templated bool   // prefix carries <verhash>/<version>, expanded per request
+		gateKey   string // 前缀尾部 [k=v] query 门禁参数名（""=无门禁）
+		gateVal   string // 门禁参数必须等于的解码字面值
 	}
 	buildRoutes := func(c pkg.Config) []route {
 		pkg.ManagerResetSvcMounts() // 嗅探表跟随当前路由表整体重建
@@ -121,7 +123,7 @@ func main() {
 				}
 				re = compiled
 			}
-			rts[i] = route{prefix: b.Source, re: re, handler: pkg.CreateBackendHandler(b, c.Headers, c.LoginAuthz), svc: svcBackendName(b), exact: pkg.ExactPathMatch(b), templated: b.VerTemplate}
+			rts[i] = route{prefix: b.Source, re: re, handler: pkg.CreateBackendHandler(b, c.Headers, c.LoginAuthz), svc: svcBackendName(b), exact: pkg.ExactPathMatch(b), templated: b.VerTemplate, gateKey: b.QueryKey, gateVal: b.QueryVal}
 			// 应用中心（api://manager）嗅探：登记 svc:// 托管服务的挂载路径，
 			// 新建内置应用对话框据此列出当前可用的 zcode/vscode 服务。
 			// <verhash>/<version> 模板路由不参与嗅探（挂载点应是真实路径）。
@@ -625,6 +627,12 @@ func main() {
 				if !strings.HasPrefix(r.URL.Path, rt.prefix) {
 					continue
 				}
+			}
+			// [k=v] query 门禁：路径命中后还要该参数精确相等（解码后比较），不满足
+			// 视为本路由未命中，继续尝试后续路由（同前缀的无门禁路由即兜底）。
+			// gateKey 为空短路在前，无门禁路由不付 Query() 解析开销。
+			if rt.gateKey != "" && r.URL.Query().Get(rt.gateKey) != rt.gateVal {
+				continue
 			}
 			if rt.svc != "" {
 				// Hosted svc:// service: per-service preparation state and

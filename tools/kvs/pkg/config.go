@@ -190,6 +190,8 @@ type Backend struct {
 	VerTemplate bool   // prefix carries <verhash>/<version> (svc:// only; expanded from the service config per request)
 	IsCache     bool   // cc~ prefix: cache proxied responses on disk ({cache_dir:-/cache}/ccproxy/{scheme}:{host}/path)
 	IsWSock     bool   // ws~ prefix (or ws://wss:// url scheme): WebSocket-aware route, upgrade requests detected and handled separately
+	QueryKey    string // 前缀尾部 [k=v] query 门禁的参数名（""=无门禁）
+	QueryVal    string // 门禁参数必须等于的解码字面值；单条件设计：两个字段零分配，dispatch 一次比较
 }
 
 // iniFile holds parsed key-value pairs from kvs.ini.
@@ -472,8 +474,9 @@ func parseIniData(data []byte, source string) (*iniFile, error) {
 			section = strings.TrimSpace(line[1 : len(line)-1])
 			continue
 		}
-		// key = value
-		k, v, ok := strings.Cut(line, "=")
+		// key = value — split at the first "=" outside [brackets] so a
+		// "[k=v,…]" route gate stays on the key side.
+		k, v, ok := cutKVOutsideBrackets(line)
 		if !ok {
 			return nil, fmt.Errorf("%s:%d: missing '=' in %q", source, lineNo+1, raw)
 		}
@@ -851,6 +854,31 @@ func flagValue(name string) string {
 	return ""
 }
 
+// cutKVOutsideBrackets splits "key=value" at the first "=" that is not inside
+// [brackets]. Route prefixes may end in a "[k=v,…]" query gate whose "=" must
+// stay on the key side — both for kvs.ini lines and -n inline entries. When
+// every "=" sits inside an unclosed "[" (a key with an unbalanced bracket and
+// an "=" — the pre-gate parser handled those by splitting at the first "="),
+// fall back to exactly that so the whole config never fails to load.
+func cutKVOutsideBrackets(s string) (string, string, bool) {
+	depth := 0
+	for i := 0; i < len(s); i++ {
+		switch s[i] {
+		case '[':
+			depth++
+		case ']':
+			if depth > 0 {
+				depth--
+			}
+		case '=':
+			if depth == 0 {
+				return s[:i], s[i+1:], true
+			}
+		}
+	}
+	return strings.Cut(s, "=")
+}
+
 // parseProxiesArg parses the -n flag value into [][2]string pairs matching the
 // format returned by ini.tableEntries. The value uses ";" to separate
 // entries, each of the form "prefix=url".
@@ -865,7 +893,7 @@ func parseProxiesArg(s string) [][2]string {
 		if part == "" {
 			continue
 		}
-		k, v, ok := strings.Cut(part, "=")
+		k, v, ok := cutKVOutsideBrackets(part)
 		if !ok || strings.TrimSpace(k) == "" {
 			log.Printf("WARNING: skipping invalid -n entry %q (expected prefix=url)", part)
 			continue

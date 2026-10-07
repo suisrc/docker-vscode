@@ -54,6 +54,9 @@ Route formats ([proxies.<name>] section / -n argument):
   ^/api/\d+=http://localhost:8080   ^ prefix: regex matching
   cc~/path=https://up.stream        cc prefix: cache proxied responses on disk
   ws~/path=ws://up:8080             ws prefix: WebSocket-aware route (upgrade fast path)
+  /path[k=v]=https://up             trailing [k=v]: single-pair query gate — the request
+                                    must carry this exact pair (decoded compare) or the
+                                    route is skipped (falls through to later routes)
   /__healthz=text://OK:@now         health check endpoint
 
 Config file sections:

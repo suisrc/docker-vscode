@@ -59,6 +59,8 @@ func MustAsset(name string) []byte {
 //   - "cc~" prefix: cached proxy backend (disk cache)
 //   - "ws~" prefix: WebSocket-aware backend (upgrade requests detected)
 //   - "http://" or "https://" prefix on the prefix itself: full-domain match
+//   - trailing "[k=v]" on the prefix: query gate — the request must carry this
+//     exact pair or the route is skipped (see splitQueryGate)
 //   - svc://<name> target: kvs-hosted service
 //
 // Markers may combine (e.g. "cc~/path"); they are stripped in any order.
@@ -120,10 +122,15 @@ func parseBackends(entries [][2]string) []Backend {
 			}
 		}
 
+		// Trailing "[k=v]" query gate: extracted before the comma split so the
+		// gate survives expansion. One gate covers every prefix the line
+		// expands to.
+		base, gateKey, gateVal := splitQueryGate(prefix)
+
 		// Detect regex marker ("^" prefix): the pattern (incl. commas) is
 		// used verbatim as one backend, no comma splitting.
-		if isRegex := strings.HasPrefix(prefix, "^"); isRegex {
-			if b := newBackend(prefix[1:], urlStr); b != nil {
+		if isRegex := strings.HasPrefix(base, "^"); isRegex {
+			if b := newBackend(base[1:], urlStr); b != nil {
 				b.IsService = b.Scheme == "svc"
 				if b.IsService {
 					b.ServiceName, _, _ = SplitSvcTarget(b.Target)
@@ -131,6 +138,7 @@ func parseBackends(entries [][2]string) []Backend {
 				b.IsRegex = true
 				b.IsCache = isCache
 				b.IsWSock = isWSock
+				b.QueryKey, b.QueryVal = gateKey, gateVal
 				backends = append(backends, *b)
 			}
 			continue
@@ -138,7 +146,7 @@ func parseBackends(entries [][2]string) []Backend {
 
 		// Comma-separated prefixes expand to one Backend per prefix, sharing
 		// the same URL and markers (e.g. "/assets/,/favicon.ico=file://...").
-		for _, p := range strings.Split(prefix, ",") {
+		for _, p := range strings.Split(base, ",") {
 			if p = strings.TrimSpace(p); p == "" {
 				continue
 			}
@@ -155,6 +163,7 @@ func parseBackends(entries [][2]string) []Backend {
 				}
 				b.IsCache = isCache
 				b.IsWSock = isWSock
+				b.QueryKey, b.QueryVal = gateKey, gateVal
 				// <verhash>/<version> route template: the prefix is matched
 				// against the TARGET service's resolved VersionHash/Version
 				// per request. svc:// only — other schemes have no service to
@@ -170,6 +179,39 @@ func parseBackends(entries [][2]string) []Backend {
 	}
 
 	return backends
+}
+
+// splitQueryGate extracts a trailing "[k=v]" query gate from a route prefix:
+// the request's decoded query must carry this exact pair for the route to
+// participate in dispatch (a miss falls through to later routes). The gate is
+// only recognized when the prefix ends with "]" and the bracket content is
+// exactly one "k=v" (first "=" splits, key non-empty, no comma) — anything
+// else (regex char classes like [0-9], literal paths, several pairs) is left
+// untouched as path text; content that carries "=" or "," but fails the rule
+// gets a WARNING since it is likely a mistaken multi-pair gate. Single pair
+// by design: two plain strings on Backend, dispatch is one comparison.
+// Values are compared decoded: the config holds the literal value, the
+// request side may URL-encode it.
+func splitQueryGate(prefix string) (base, key, val string) {
+	if !strings.HasSuffix(prefix, "]") {
+		return prefix, "", ""
+	}
+	i := strings.LastIndexByte(prefix, '[')
+	if i < 0 {
+		return prefix, "", ""
+	}
+	inner := prefix[i+1 : len(prefix)-1]
+	k, v, ok := strings.Cut(strings.TrimSpace(inner), "=")
+	k = strings.TrimSpace(k)
+	if !ok || k == "" {
+		// 无 = 或空键：正则字符类、字面路径等，安静地按字面处理。
+		return prefix, "", ""
+	}
+	if strings.Contains(inner, ",") {
+		log.Printf("WARNING: route %q: query gate supports a single k=v only, treating prefix as literal path", prefix)
+		return prefix, "", ""
+	}
+	return prefix[:i], k, strings.TrimSpace(v)
 }
 
 // newBackend creates a Backend by parsing scheme:// from rawURL.
@@ -285,6 +327,9 @@ func CreateBackendHandler(b Backend, cacheHeaders map[string]string, loginAuthz 
 	}
 	if b.IsWSock {
 		mount = "ws~" + mount
+	}
+	if len(b.QueryKey) > 0 {
+		mount += "[" + b.QueryKey + "=" + b.QueryVal + "]"
 	}
 	// Hosted-service name for self-attribution (injected logout script's
 	// ?svc= query): set by parseBackends, carried through the svc:// proxy.
