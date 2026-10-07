@@ -1,22 +1,38 @@
 package pkg
 
-// relay://vscode 的端到端测试：用裸 TCP 连接扮演 relay.js 协议的三方
-// （host 控制通道 / host 数据管道 / client），覆盖配对、鉴权与生命周期。
+// relay://vscode（tunnel 模型）的端到端测试：用裸 TCP 连接扮演 relay.js 协议的
+// 三方（worker 复用帧通道 / client 原始字节管道），覆盖注册、鉴权、配对、
+// 背压、探测与生命周期。
 
 import (
 	"bufio"
+	"bytes"
+	"encoding/binary"
 	"encoding/json"
 	"fmt"
 	"io"
 	"net"
 	"net/http/httptest"
 	"strings"
+	"sync"
 	"testing"
 	"time"
 )
 
-// vscReadHead reads the response head (through the blank line) from a
-// hijacked-style raw connection.
+// ---- 裸 TCP 帮手 ----
+
+func vscGet(t *testing.T, addr, req string) (net.Conn, *bufio.Reader) {
+	t.Helper()
+	conn, err := net.Dial("tcp", addr)
+	if err != nil {
+		t.Fatalf("dial %s: %v", addr, err)
+	}
+	if _, err := conn.Write([]byte(req)); err != nil {
+		t.Fatalf("write request: %v", err)
+	}
+	return conn, bufio.NewReader(conn)
+}
+
 func vscReadHead(t *testing.T, conn net.Conn, br *bufio.Reader) string {
 	t.Helper()
 	_ = conn.SetReadDeadline(time.Now().Add(3 * time.Second))
@@ -42,18 +58,7 @@ func vscStatusCode(t *testing.T, head string) int {
 	return code
 }
 
-func vscReadLine(t *testing.T, conn net.Conn, br *bufio.Reader) string {
-	t.Helper()
-	_ = conn.SetReadDeadline(time.Now().Add(3 * time.Second))
-	line, err := br.ReadString('\n')
-	if err != nil {
-		t.Fatalf("read NDJSON line: %v", err)
-	}
-	return line
-}
-
-// vscReadUntil accumulates raw bytes until want shows up (or 3s deadline).
-func vscReadUntil(t *testing.T, conn net.Conn, br *bufio.Reader, want string) string {
+func vscReadRaw(t *testing.T, conn net.Conn, br *bufio.Reader, want string) string {
 	t.Helper()
 	_ = conn.SetReadDeadline(time.Now().Add(3 * time.Second))
 	var got []byte
@@ -68,164 +73,307 @@ func vscReadUntil(t *testing.T, conn net.Conn, br *bufio.Reader, want string) st
 	return string(got)
 }
 
-func vscGet(t *testing.T, addr, req string) (net.Conn, *bufio.Reader) {
-	t.Helper()
-	conn, err := net.Dial("tcp", addr)
+// ---- WS 帧帮手（worker 角色：发掩码帧，收不掩码帧） ----
+
+func vscWsMaskFrame(op byte, payload []byte) []byte {
+	var hdr []byte
+	n := len(payload)
+	switch {
+	case n < 126:
+		hdr = []byte{0x80 | op, 0x80 | byte(n)}
+	case n <= 0xFFFF:
+		hdr = []byte{0x80 | op, 0x80 | 126, byte(n >> 8), byte(n)}
+	default:
+		hdr = []byte{0x80 | op, 0x80 | 127, 0, 0, 0, 0,
+			byte(n >> 24), byte(n >> 16), byte(n >> 8), byte(n)}
+	}
+	mask := []byte{1, 2, 3, 4}
+	masked := make([]byte, len(payload))
+	for i, b := range payload {
+		masked[i] = b ^ mask[i&3]
+	}
+	return append(append(hdr, mask...), masked...)
+}
+
+func vscWsSendJSONE(conn net.Conn, v any) error {
+	b, err := json.Marshal(v)
 	if err != nil {
-		t.Fatalf("dial %s: %v", addr, err)
+		return err
 	}
-	if _, err := conn.Write([]byte(req)); err != nil {
-		t.Fatalf("write request: %v", err)
-	}
-	return conn, bufio.NewReader(conn)
+	_, err = conn.Write(vscWsMaskFrame(0x1, b))
+	return err
 }
 
-// vscRegisterHost registers a host control channel and consumes the 200 head
-// plus the welcome line.
-func vscRegisterHost(t *testing.T, addr, name, token string) (net.Conn, *bufio.Reader) {
+func vscWsSendJSON(t *testing.T, conn net.Conn, v any) {
 	t.Helper()
-	conn, br := vscGet(t, addr, fmt.Sprintf("GET /agent?name=%s&token=%s HTTP/1.1\r\nHost: relay\r\n\r\n", name, token))
-	if code := vscStatusCode(t, vscReadHead(t, conn, br)); code != 200 {
-		t.Fatalf("agent registration got %d, want 200", code)
+	if err := vscWsSendJSONE(conn, v); err != nil {
+		t.Fatalf("send control frame: %v", err)
 	}
-	var welcome vscWelcomeMsg
-	if err := json.Unmarshal([]byte(vscReadLine(t, conn, br)), &welcome); err != nil {
-		t.Fatalf("welcome line: %v", err)
-	}
-	if welcome.Type != "welcome" || welcome.Name != name {
-		t.Fatalf("welcome = %+v, want name %q", welcome, name)
-	}
-	return conn, br
 }
 
-// vscConnectClient opens a client connection (raw mode, with early data) and
-// consumes the 101 head, verifying the WebSocket accept.
-func vscConnectClient(t *testing.T, addr, name, token, early string) (net.Conn, *bufio.Reader) {
+func vscWsSendData(t *testing.T, conn net.Conn, id, payload string) {
+	t.Helper()
+	frame := append([]byte{byte(len(id))}, []byte(id)...)
+	frame = append(frame, []byte(payload)...)
+	if _, err := conn.Write(vscWsMaskFrame(0x2, frame)); err != nil {
+		t.Fatalf("send data frame: %v", err)
+	}
+}
+
+// vscWsRecvE reads one frame, transparently answering WS ping with pong.
+func vscWsRecvE(conn net.Conn, br *bufio.Reader) (byte, []byte, error) {
+	_ = conn.SetReadDeadline(time.Now().Add(3 * time.Second))
+	var hdr [2]byte
+	if _, err := io.ReadFull(br, hdr[:]); err != nil {
+		return 0, nil, err
+	}
+	op := hdr[0] & 0x0f
+	n := uint64(hdr[1] & 0x7f)
+	switch n {
+	case 126:
+		var ext [2]byte
+		if _, err := io.ReadFull(br, ext[:]); err != nil {
+			return 0, nil, err
+		}
+		n = uint64(binary.BigEndian.Uint16(ext[:]))
+	case 127:
+		var ext [8]byte
+		if _, err := io.ReadFull(br, ext[:]); err != nil {
+			return 0, nil, err
+		}
+		n = binary.BigEndian.Uint64(ext[:])
+	}
+	payload := make([]byte, n)
+	if _, err := io.ReadFull(br, payload); err != nil {
+		return 0, nil, err
+	}
+	if op == 0x9 { // ping → pong（回显负载）
+		if _, err := conn.Write(vscWsMaskFrame(0xA, payload)); err != nil {
+			return 0, nil, err
+		}
+		return vscWsRecvE(conn, br)
+	}
+	if op == 0xA {
+		return vscWsRecvE(conn, br)
+	}
+	return op, payload, nil
+}
+
+func vscWsRecv(t *testing.T, conn net.Conn, br *bufio.Reader) (byte, []byte) {
+	t.Helper()
+	op, payload, err := vscWsRecvE(conn, br)
+	if err != nil {
+		t.Fatalf("read ws frame: %v", err)
+	}
+	return op, payload
+}
+
+func vscWsRecvText(t *testing.T, conn net.Conn, br *bufio.Reader) map[string]any {
+	t.Helper()
+	op, payload := vscWsRecv(t, conn, br)
+	if op != 0x1 {
+		t.Fatalf("expected text frame, got opcode 0x%x", op)
+	}
+	var m map[string]any
+	if err := json.Unmarshal(payload, &m); err != nil {
+		t.Fatalf("control json: %v (%q)", err, payload)
+	}
+	return m
+}
+
+func vscWsRecvData(t *testing.T, conn net.Conn, br *bufio.Reader) string {
+	t.Helper()
+	op, payload := vscWsRecv(t, conn, br)
+	if op != 0x2 {
+		t.Fatalf("expected binary frame, got opcode 0x%x (%q)", op, payload)
+	}
+	if len(payload) < 1 {
+		t.Fatal("empty data frame")
+	}
+	return string(payload[1+payload[0]:])
+}
+
+// ---- 角色帮手 ----
+
+// vscRegisterWorker registers a worker channel and consumes the 101 head plus
+// the ready frame (returns it for assertion).
+func vscRegisterWorker(t *testing.T, addr, path, name, triple string) (net.Conn, *bufio.Reader, map[string]any) {
 	t.Helper()
 	conn, br := vscGet(t, addr, fmt.Sprintf(
-		"GET /connect?name=%s&tkn=%s&skipWebSocketFrames=true&foo=bar HTTP/1.1\r\nHost: relay\r\nUpgrade: websocket\r\nConnection: Upgrade\r\nSec-WebSocket-Key: dGhlIHNhbXBsZSBub25jZQ==\r\n\r\n%s",
-		name, token, early))
-	head := vscReadHead(t, conn, br)
-	if code := vscStatusCode(t, head); code != 101 {
+		"GET %s?kind=worker&name=%s&tkn=%s HTTP/1.1\r\nHost: r\r\nUpgrade: websocket\r\nConnection: Upgrade\r\nSec-WebSocket-Key: dGhlIHNhbXBsZSBub25jZQ==\r\n\r\n",
+		path, name, triple))
+	if code := vscStatusCode(t, vscReadHead(t, conn, br)); code != 101 {
+		t.Fatalf("worker registration got %d, want 101", code)
+	}
+	ready := vscWsRecvText(t, conn, br)
+	if ready["type"] != "ready" {
+		t.Fatalf("first control frame = %v, want ready", ready)
+	}
+	return conn, br, ready
+}
+
+// vscConnectClient opens a client leg in upgrade mode (the relay answers 101)
+// with early payload bytes appended after the request head.
+func vscConnectClient(t *testing.T, addr, path, tkn, early string) (net.Conn, *bufio.Reader) {
+	t.Helper()
+	head := fmt.Sprintf("GET %s?tkn=%s&foo=bar HTTP/1.1\r\nHost: r\r\nUpgrade: websocket\r\nConnection: Upgrade\r\nSec-WebSocket-Key: dGhlIHNhbXBsZSBub25jZQ==\r\n\r\n", path, tkn)
+	conn, br := vscGet(t, addr, head+early)
+	resp := vscReadHead(t, conn, br)
+	if code := vscStatusCode(t, resp); code != 101 {
 		t.Fatalf("client connect got %d, want 101", code)
 	}
-	// RFC 6455 sample key → known accept value.
-	if !strings.Contains(head, "Sec-WebSocket-Accept: s3pPLMBiTxaQ9kYGzzhZRbK+xOo=") {
-		t.Fatalf("101 head missing correct accept: %q", head)
+	if !strings.Contains(resp, "Sec-WebSocket-Accept: s3pPLMBiTxaQ9kYGzzhZRbK+xOo=") {
+		t.Fatalf("101 head missing correct accept: %q", resp)
 	}
 	return conn, br
 }
 
-func TestVscRelayPairingEndToEnd(t *testing.T) {
+func vscStatus(t *testing.T, addr string) map[string]any {
+	t.Helper()
+	conn, br := vscGet(t, addr, "GET /status HTTP/1.1\r\nHost: r\r\nConnection: close\r\n\r\n")
+	defer conn.Close()
+	if code := vscStatusCode(t, vscReadHead(t, conn, br)); code != 200 {
+		t.Fatalf("status got %d, want 200", code)
+	}
+	body, _ := io.ReadAll(br)
+	var m map[string]any
+	if err := json.Unmarshal(body, &m); err != nil {
+		t.Fatalf("status body: %v (%q)", err, body)
+	}
+	return m
+}
+
+// ---- 测试 ----
+
+func TestVscRelayTunnelEndToEnd(t *testing.T) {
 	rel := newVscRelay()
 	ts := httptest.NewServer(rel.RouteHandler(""))
 	defer ts.Close()
 	addr := ts.Listener.Addr().String()
 
-	hostCtl, hostBr := vscRegisterHost(t, addr, "h1", "secret")
-	defer hostCtl.Close()
-
-	// 控制通道 ping → pong。
-	fmt.Fprintf(hostCtl, "{\"type\":\"ping\"}\n")
-	pong := vscReadLine(t, hostCtl, hostBr)
-	if !strings.Contains(pong, `"pong"`) {
-		t.Fatalf("ping reply = %q, want pong", pong)
+	workerConn, workerBr, ready := vscRegisterWorker(t, addr, "/tunnels/ws", "h1", "secret.dev1")
+	defer workerConn.Close()
+	if ready["protocol"].(float64) != 2 || ready["tunnelId"] != nil || ready["name"] != "h1" {
+		t.Fatalf("ready frame = %v", ready)
 	}
 
-	// client 接入（携带早到数据，验证 hijack 后 bufio 里的残留不丢）。
-	clientConn, clientBr := vscConnectClient(t, addr, "h1", "secret", "client-early")
+	// client 接入（升级模式，携带早到数据；验证中继代答 101 且 accept 正确）。
+	clientConn, clientBr := vscConnectClient(t, addr, "/tunnels/ws", "secret.dev2.x", "client-early")
 	defer clientConn.Close()
 
-	// host 收到 session 通知，query 剔除 name、保留其余。
-	notify := vscReadLine(t, hostCtl, hostBr)
-	var msg vscSessionMsg
-	if err := json.Unmarshal([]byte(notify), &msg); err != nil {
-		t.Fatalf("session notification %q: %v", notify, err)
+	// worker 收到 open（addr/path），随后是原始请求头（query 原样保留）与早到数据。
+	open := vscWsRecvText(t, workerConn, workerBr)
+	if open["type"] != "open" || open["id"] == "" || !strings.Contains(open["addr"].(string), "127.0.0.1") || open["path"] != "/tunnels/ws" {
+		t.Fatalf("open frame = %v", open)
 	}
-	if msg.Type != "session" || msg.ID == "" || !strings.Contains(msg.Addr, "127.0.0.1") {
-		t.Fatalf("session notification = %+v", msg)
+	sid := open["id"].(string)
+	if head := vscWsRecvData(t, workerConn, workerBr); !strings.HasPrefix(head, "GET /tunnels/ws?tkn=secret.dev2.x&foo=bar HTTP/1.1") {
+		t.Fatalf("forwarded head = %q", head)
 	}
-	if msg.Query != "foo=bar&skipWebSocketFrames=true&tkn=secret" {
-		t.Fatalf("forwarded query = %q", msg.Query)
-	}
-
-	// host 数据管道接走 pending（同样带早到数据）。
-	pipeConn, pipeBr := vscGet(t, addr, fmt.Sprintf("GET /session/%s?tkn=secret HTTP/1.1\r\nHost: relay\r\n\r\nhost-early", msg.ID))
-	defer pipeConn.Close()
-	if code := vscStatusCode(t, vscReadHead(t, pipeConn, pipeBr)); code != 200 {
-		t.Fatalf("session pickup got %d, want 200", code)
+	if got := vscWsRecvData(t, workerConn, workerBr); got != "client-early" {
+		t.Fatalf("worker did not receive client early data: %q", got)
 	}
 
-	// 双向原始字节：client 早到数据 → host；host 早到数据 → client。
-	if got := vscReadUntil(t, pipeConn, pipeBr, "client-early"); !strings.Contains(got, "client-early") {
-		t.Fatalf("host did not receive client early data: %q", got)
+	// 双向原始字节。
+	vscWsSendData(t, workerConn, sid, "host-early")
+	if got := vscReadRaw(t, clientConn, clientBr, "host-early"); !strings.Contains(got, "host-early") {
+		t.Fatalf("client did not receive host data: %q", got)
 	}
-	if got := vscReadUntil(t, clientConn, clientBr, "host-early"); !strings.Contains(got, "host-early") {
-		t.Fatalf("client did not receive host early data: %q", got)
+	if _, err := fmt.Fprint(clientConn, "c2h-live"); err != nil {
+		t.Fatalf("client write: %v", err)
 	}
-
-	// 活跃后的双向转发。
-	fmt.Fprintf(clientConn, "c2h-live")
-	if got := vscReadUntil(t, pipeConn, pipeBr, "c2h-live"); !strings.Contains(got, "c2h-live") {
-		t.Fatalf("client → host forwarding broken: %q", got)
-	}
-	fmt.Fprintf(pipeConn, "h2c-live")
-	if got := vscReadUntil(t, clientConn, clientBr, "h2c-live"); !strings.Contains(got, "h2c-live") {
-		t.Fatalf("host → client forwarding broken: %q", got)
+	if got := vscWsRecvData(t, workerConn, workerBr); got != "c2h-live" {
+		t.Fatalf("worker did not receive client data: %q", got)
 	}
 
-	// /status：1 个 host、1 个活跃会话。（Connection: close 让服务端回完
-	// 就断，下面的 io.ReadAll 才能等到 EOF。）
-	stConn, stBr := vscGet(t, addr, "GET /status HTTP/1.1\r\nHost: relay\r\nConnection: close\r\n\r\n")
-	defer stConn.Close()
-	if code := vscStatusCode(t, vscReadHead(t, stConn, stBr)); code != 200 {
-		t.Fatal("status should be 200")
+	// /status：1 个隧道在线、1 个活跃会话。
+	st := vscStatus(t, addr)
+	if st["tunnelSessions"].(float64) != 1 {
+		t.Fatalf("tunnelSessions = %v", st["tunnelSessions"])
 	}
-	statusBody, _ := io.ReadAll(stBr)
-	var st struct {
-		Hosts []struct {
-			Name     string `json:"name"`
-			Sessions int    `json:"sessions"`
-		} `json:"hosts"`
-		ActiveSessions int `json:"activeSessions"`
+	tunnels := st["tunnels"].([]any)
+	if len(tunnels) != 1 {
+		t.Fatalf("tunnels = %v", tunnels)
 	}
-	if err := json.Unmarshal(statusBody, &st); err != nil {
-		t.Fatalf("status body: %v (%q)", err, statusBody)
-	}
-	if len(st.Hosts) != 1 || st.Hosts[0].Name != "h1" || st.Hosts[0].Sessions != 1 || st.ActiveSessions != 1 {
-		t.Fatalf("status = %+v", st)
+	tun := tunnels[0].(map[string]any)
+	if tun["online"] != true || tun["device"] != "dev1" || tun["name"] != "h1" || tun["path"] != "/tunnels/ws" || tun["sessions"].(float64) != 1 {
+		t.Fatalf("tunnel status = %v", tun)
 	}
 
-	// 一端断开 → 会话关闭、两端 socket 都关（client 读到 EOF/错误）。
-	pipeConn.Close()
+	// worker 关会话 → client 读到 EOF。
+	vscWsSendJSON(t, workerConn, map[string]any{"type": "close", "id": sid, "reason": "done"})
 	_ = clientConn.SetReadDeadline(time.Now().Add(3 * time.Second))
 	if _, err := clientBr.Read(make([]byte, 16)); err == nil {
-		t.Fatal("client connection should be closed after the host pipe went away")
+		t.Fatal("client connection should be closed after the worker closed the session")
 	}
 }
 
-func TestVscRelayAuthAndConflicts(t *testing.T) {
+func TestVscRelayClientRouting(t *testing.T) {
 	rel := newVscRelay()
 	ts := httptest.NewServer(rel.RouteHandler(""))
 	defer ts.Close()
 	addr := ts.Listener.Addr().String()
-
-	hostCtl, hostBr := vscRegisterHost(t, addr, "h1", "secret")
-	defer hostCtl.Close()
 
 	cases := []struct {
 		title string
 		req   string
 		want  int
 	}{
-		{"agent without token", "GET /agent?name=h2 HTTP/1.1\r\nHost: r\r\n\r\n", 401},
-		{"agent name conflict with different token", "GET /agent?name=h1&token=other HTTP/1.1\r\nHost: r\r\n\r\n", 409},
-		{"connect unknown host", "GET /connect?name=ghost&tkn=secret&skipWebSocketFrames=true HTTP/1.1\r\nHost: r\r\nUpgrade: websocket\r\n\r\n", 404},
-		{"connect without upgrade", "GET /connect?name=h1&tkn=secret&skipWebSocketFrames=true HTTP/1.1\r\nHost: r\r\n\r\n", 400},
-		{"connect without raw mode", "GET /connect?name=h1&tkn=secret HTTP/1.1\r\nHost: r\r\nUpgrade: websocket\r\nConnection: Upgrade\r\n\r\n", 400},
-		{"connect without token", "GET /connect?name=h1&skipWebSocketFrames=true HTTP/1.1\r\nHost: r\r\nUpgrade: websocket\r\nConnection: Upgrade\r\n\r\n", 401},
-		{"connect with wrong token", "GET /connect?name=h1&tkn=WRONG&skipWebSocketFrames=true HTTP/1.1\r\nHost: r\r\nUpgrade: websocket\r\nConnection: Upgrade\r\n\r\n", 403},
-		{"session unknown id", "GET /session/nope?tkn=secret HTTP/1.1\r\nHost: r\r\n\r\n", 404},
+		{"no routing intent", "GET /tunnels/ws HTTP/1.1\r\nHost: r\r\n\r\n", 404},
+		{"unknown token", "GET /tunnels/ws?tkn=ghost HTTP/1.1\r\nHost: r\r\n\r\n", 403},
+		{"unknown token (triple)", "GET /tunnels/ws?tkn=ghost.dev1 HTTP/1.1\r\nHost: r\r\n\r\n", 403},
+	}
+	for _, tc := range cases {
+		conn, br := vscGet(t, addr, tc.req)
+		code := vscStatusCode(t, vscReadHead(t, conn, br))
+		conn.Close()
+		if code != tc.want {
+			t.Errorf("%s: got %d, want %d", tc.title, code, tc.want)
+		}
+	}
+
+	// 离线隧道（占用保留期内）→ 503 而非 403。
+	workerConn, _, _ := vscRegisterWorker(t, addr, "/tunnels/ws", "h1", "secret.dev1")
+	workerConn.Close()
+	time.Sleep(50 * time.Millisecond) // 等中继侧通道拆完
+	{
+		conn, br := vscGet(t, addr, "GET /tunnels/ws?tkn=secret HTTP/1.1\r\nHost: r\r\n\r\n")
+		if code := vscStatusCode(t, vscReadHead(t, conn, br)); code != 503 {
+			t.Fatalf("offline tunnel got %d, want 503", code)
+		}
+		conn.Close()
+	}
+
+	// token= 别名 + 三元组按第一段路由：重连后 client 可达。
+	workerConn2, workerBr2, _ := vscRegisterWorker(t, addr, "/tunnels/ws", "h1", "secret.dev1")
+	defer workerConn2.Close()
+	clientConn, clientBr := vscConnectClient(t, addr, "/tunnels/ws", "secret.dev2.x", "")
+	defer clientConn.Close()
+	open := vscWsRecvText(t, workerConn2, workerBr2)
+	if open["type"] != "open" {
+		t.Fatalf("open frame = %v", open)
+	}
+	vscWsSendData(t, workerConn2, open["id"].(string), "pong")
+	if got := vscReadRaw(t, clientConn, clientBr, "pong"); !strings.Contains(got, "pong") {
+		t.Fatalf("alias/triple routing broken: %q", got)
+	}
+}
+
+func TestVscRelayWorkerValidation(t *testing.T) {
+	rel := newVscRelay()
+	ts := httptest.NewServer(rel.RouteHandler(""))
+	defer ts.Close()
+	addr := ts.Listener.Addr().String()
+
+	cases := []struct {
+		title string
+		req   string
+		want  int
+	}{
+		{"worker without token", "GET /tunnels/ws?kind=worker HTTP/1.1\r\nHost: r\r\nUpgrade: websocket\r\nConnection: Upgrade\r\n\r\n", 401},
+		{"worker without deviceId", "GET /tunnels/ws?kind=worker&tkn=secret HTTP/1.1\r\nHost: r\r\nUpgrade: websocket\r\nConnection: Upgrade\r\nSec-WebSocket-Key: dGhlIHNhbXBsZSBub25jZQ==\r\n\r\n", 400},
+		{"worker with bad deviceId", "GET /tunnels/ws?kind=worker&tkn=secret.b%40d HTTP/1.1\r\nHost: r\r\nUpgrade: websocket\r\nConnection: Upgrade\r\nSec-WebSocket-Key: dGhlIHNhbXBsZSBub25jZQ==\r\n\r\n", 400},
+		{"worker without upgrade", "GET /tunnels/ws?kind=worker&tkn=secret.dev1 HTTP/1.1\r\nHost: r\r\n\r\n", 400},
 		{"unknown path", "GET /whatever HTTP/1.1\r\nHost: r\r\n\r\n", 404},
 	}
 	for _, tc := range cases {
@@ -237,104 +385,362 @@ func TestVscRelayAuthAndConflicts(t *testing.T) {
 		}
 	}
 
-	// 409 之后原注册不受影响（token 校验只拒绝不同令牌的顶名）。
-	clientConn, clientBr := vscConnectClient(t, addr, "h1", "secret", "")
-	clientConn.Close()
-	_ = clientBr
-
-	// pending 接管时令牌不符 → 403；原 pending 仍在，正确令牌可以接走。
-	notify := vscReadLine(t, hostCtl, hostBr)
-	var msg vscSessionMsg
-	if err := json.Unmarshal([]byte(notify), &msg); err != nil {
-		t.Fatalf("session notification %q: %v", notify, err)
+	// 设备独占：同设备第二条隧道 409。
+	aConn, _, _ := vscRegisterWorker(t, addr, "/a", "ha", "aaa.dev3")
+	defer aConn.Close()
+	bConn, _, _ := vscRegisterWorker(t, addr, "/b", "hb", "bbb.dev4")
+	defer bConn.Close()
+	{
+		conn, br := vscGet(t, addr, "GET /c?kind=worker&tkn=ccc.dev3 HTTP/1.1\r\nHost: r\r\nUpgrade: websocket\r\nConnection: Upgrade\r\nSec-WebSocket-Key: dGhlIHNhbXBsZSBub25jZQ==\r\n\r\n")
+		if code := vscStatusCode(t, vscReadHead(t, conn, br)); code != 409 {
+			t.Fatalf("device conflict got %d, want 409", code)
+		}
+		conn.Close()
 	}
-	wrongConn, wrongBr := vscGet(t, addr, fmt.Sprintf("GET /session/%s?tkn=WRONG HTTP/1.1\r\nHost: r\r\n\r\n", msg.ID))
-	code := vscStatusCode(t, vscReadHead(t, wrongConn, wrongBr))
-	wrongConn.Close()
-	if code != 403 {
-		t.Fatalf("pickup with wrong token got %d, want 403", code)
+
+	// 同 token 重注册：旧通道被顶掉（EOF），旧会话一起结束，新通道可用。
+	oldConn, oldBr, _ := vscRegisterWorker(t, addr, "/tunnels/ws", "h1", "secret.dev1")
+	clientConn, _ := vscConnectClient(t, addr, "/tunnels/ws", "secret", "")
+	open := vscWsRecvText(t, oldConn, oldBr)
+	if open["type"] != "open" {
+		t.Fatalf("open frame = %v", open)
 	}
-	rightConn, rightBr := vscGet(t, addr, fmt.Sprintf("GET /session/%s?tkn=secret HTTP/1.1\r\nHost: r\r\n\r\n", msg.ID))
-	defer rightConn.Close()
-	if code := vscStatusCode(t, vscReadHead(t, rightConn, rightBr)); code != 200 {
-		t.Fatalf("pickup after rejected attempt got %d, want 200", code)
-	}
-}
-
-func TestVscRelayReregisterSameToken(t *testing.T) {
-	rel := newVscRelay()
-	ts := httptest.NewServer(rel.RouteHandler(""))
-	defer ts.Close()
-	addr := ts.Listener.Addr().String()
-
-	oldConn, _ := vscRegisterHost(t, addr, "h1", "secret")
-	defer oldConn.Close()
-
-	newConn, newBr := vscRegisterHost(t, addr, "h1", "secret")
+	vscWsRecvData(t, oldConn, oldBr) // 请求头帧（排空缓冲，之后才能断言连接关闭）
+	newConn, newBr, _ := vscRegisterWorker(t, addr, "/tunnels/ws", "h1", "secret.dev1")
 	defer newConn.Close()
-
-	// 旧通道被顶掉：读应得到 EOF（连接被中继关闭）。
 	_ = oldConn.SetReadDeadline(time.Now().Add(3 * time.Second))
-	if _, err := oldConn.Read(make([]byte, 16)); err == nil {
-		t.Fatal("old control channel should be closed after re-registration")
+	if _, err := oldBr.ReadByte(); err == nil {
+		t.Fatal("old channel should be closed after re-registration")
+	}
+	_ = clientConn.SetReadDeadline(time.Now().Add(3 * time.Second))
+	if _, err := clientConn.Read(make([]byte, 16)); err == nil {
+		t.Fatal("session on the old channel should be closed after re-registration")
 	}
 
-	// 新通道可用：session 通知能到达新通道。
-	clientConn, _ := vscConnectClient(t, addr, "h1", "secret", "")
-	defer clientConn.Close()
-	notify := vscReadLine(t, newConn, newBr)
-	if !strings.Contains(notify, `"session"`) {
-		t.Fatalf("new channel missed session notification: %q", notify)
+	// 新通道可用：open + 请求头如期到达。
+	clientConn2, _ := vscConnectClient(t, addr, "/tunnels/ws", "secret", "")
+	defer clientConn2.Close()
+	if open2 := vscWsRecvText(t, newConn, newBr); open2["type"] != "open" {
+		t.Fatalf("new channel missed open: %v", open2)
+	}
+	if head := vscWsRecvData(t, newConn, newBr); !strings.HasPrefix(head, "GET /tunnels/ws?tkn=secret&foo=bar") {
+		t.Fatalf("forwarded head = %q", head)
 	}
 }
 
-func TestVscRelayConnectTimeout(t *testing.T) {
-	old := vscHelloTimeout
-	vscHelloTimeout = 150 * time.Millisecond
-	defer func() { vscHelloTimeout = old }()
+func TestVscRelayProbe(t *testing.T) {
+	rel := newVscRelay()
+	rel.probeInterval, rel.probeMaxMiss = 40*time.Millisecond, 2
+	ts := httptest.NewServer(rel.RouteHandler(""))
+	defer ts.Close()
+	addr := ts.Listener.Addr().String()
 
+	liveConn, liveBr, _ := vscRegisterWorker(t, addr, "/live", "hl", "live.dev1")
+	defer liveConn.Close()
+	deadConn, deadBr, _ := vscRegisterWorker(t, addr, "/dead", "hd", "dead.dev2")
+	defer deadConn.Close()
+
+	// live worker 的探测应答协程：连续应答 version 帧（错误延后上报）。
+	liveErr := make(chan error, 1)
+	done := make(chan struct{})
+	defer close(done)
+	go func() {
+		for {
+			op, payload, err := vscWsRecvE(liveConn, liveBr)
+			if err != nil {
+				select {
+				case liveErr <- err:
+				default:
+				}
+				return
+			}
+			if op == 0x1 && strings.Contains(string(payload), `"version"`) {
+				if err := vscWsSendJSONE(liveConn, map[string]any{"type": "version", "device": "dev1", "protocol": 2, "version": "1.2.3"}); err != nil {
+					select {
+					case liveErr <- err:
+					default:
+					}
+					return
+				}
+			}
+			select {
+			case <-done:
+				return
+			default:
+			}
+		}
+	}()
+
+	// dead worker 不应答：读走第一个探测帧后保持沉默。
+	if op, payload := vscWsRecv(t, deadConn, deadBr); op != 0x1 || !strings.Contains(string(payload), `"version"`) {
+		t.Fatalf("expected version probe, got op 0x%x %q", op, payload)
+	}
+	time.Sleep(250 * time.Millisecond) // > 3 个探测周期
+
+	st := vscStatus(t, addr)
+	online := map[string]bool{}
+	version := map[string]string{}
+	for _, tv := range st["tunnels"].([]any) {
+		tun := tv.(map[string]any)
+		online[tun["device"].(string)] = tun["online"].(bool)
+		if v, ok := tun["version"].(string); ok {
+			version[tun["device"].(string)] = v
+		}
+	}
+	if !online["dev1"] || online["dev2"] {
+		t.Fatalf("probe liveness wrong: %v", online)
+	}
+	if version["dev1"] != "1.2.3" {
+		t.Fatalf("live tunnel version = %q, want 1.2.3", version["dev1"])
+	}
+
+	// 超时通道已判死：挂在它上面的 client 会话被拒绝（离线 503）。
+	deadClient, deadClientBr := vscGet(t, addr, "GET /dead?tkn=dead HTTP/1.1\r\nHost: r\r\n\r\n")
+	if code := vscStatusCode(t, vscReadHead(t, deadClient, deadClientBr)); code != 503 {
+		t.Fatalf("dead tunnel client got %d, want 503", code)
+	}
+	deadClient.Close()
+
+	select {
+	case err := <-liveErr:
+		t.Fatalf("live responder failed: %v", err)
+	default:
+	}
+}
+
+func TestVscRelayBackpressure(t *testing.T) {
+	rel := newVscRelay()
+	rel.sinkHighWater = 4 << 10
+	tun := &vscTunnel{token: "secret", device: "dev1", name: "h1", sessions: map[string]*vscSession{}}
+	// 假通道：控制帧落到 net.Pipe，测试直接读帧断言（不依赖真实 socket）。
+	w, r := net.Pipe()
+	defer w.Close()
+	defer r.Close()
+	ch := &vscChannel{relay: rel, tun: tun, device: "dev1",
+		ws: &wsConn{conn: w, br: bufio.NewReader(w)}, done: make(chan struct{})}
+	tun.ch = ch
+
+	// client 是 net.Pipe 的另一端：不读它，写入立即阻塞 → staging 确定性增长。
+	clientPipe, clientEnd := net.Pipe()
+	defer clientPipe.Close()
+	defer clientEnd.Close()
+	s := &vscSession{id: "testses", tun: tun, ch: ch, client: clientPipe, upgrade: true}
+	s.cond = sync.NewCond(&s.mu)
+	rel.mu.Lock()
+	tun.sessions[s.id] = s
+	rel.sessions++
+	rel.mu.Unlock()
+	go s.writeLoop()
+
+	// 控制帧收集协程：模拟真实 worker 边转发边读通道（pause/resume 异步分流）。
+	pauseCh := make(chan map[string]any, 4)
+	resumeCh := make(chan map[string]any, 4)
+	done := make(chan struct{})
+	defer close(done)
+	go func() {
+		br := bufio.NewReader(r)
+		for {
+			op, payload, err := vscWsRecvE(r, br)
+			if err != nil {
+				return
+			}
+			if op != 0x1 {
+				continue
+			}
+			var m map[string]any
+			if json.Unmarshal(payload, &m) != nil {
+				continue
+			}
+			switch m["type"] {
+			case "pause":
+				pauseCh <- m
+			case "resume":
+				resumeCh <- m
+			}
+			select {
+			case <-done:
+				return
+			default:
+			}
+		}
+	}()
+
+	// worker 侧涌入 10KB（client 不读）：超 4KB 高水位 → 请 worker 停发。
+	go func() {
+		for i := 0; i < 10; i++ {
+			s.push(bytes.Repeat([]byte("x"), 1024))
+		}
+	}()
+	select {
+	case m := <-pauseCh:
+		if m["id"] != s.id {
+			t.Fatalf("pause for wrong session: %v", m)
+		}
+	case <-time.After(3 * time.Second):
+		t.Fatal("relay never asked the worker to pause the flooding session")
+	}
+
+	// client 排空 → 中继放行（resume）。
+	drained := 0
+	buf := make([]byte, 4096)
+	for drained < 10<<10 {
+		_ = clientEnd.SetReadDeadline(time.Now().Add(3 * time.Second))
+		n, err := clientEnd.Read(buf)
+		drained += n
+		if err != nil {
+			t.Fatalf("drain: %v (at %d)", err, drained)
+		}
+	}
+	select {
+	case m := <-resumeCh:
+		if m["id"] != s.id {
+			t.Fatalf("resume for wrong session: %v", m)
+		}
+	case <-time.After(3 * time.Second):
+		t.Fatal("relay never resumed the drained session")
+	}
+}
+
+func TestVscRelaySinkOverflowKill(t *testing.T) {
+	rel := newVscRelay()
+	rel.sinkCap = 8 << 10
+	tun := &vscTunnel{token: "secret", device: "dev1", name: "h1", sessions: map[string]*vscSession{}}
+	w, r := net.Pipe()
+	defer w.Close()
+	defer r.Close()
+	ch := &vscChannel{relay: rel, tun: tun, device: "dev1",
+		ws: &wsConn{conn: w, br: bufio.NewReader(w)}, done: make(chan struct{})}
+	tun.ch = ch
+
+	clientPipe, clientEnd := net.Pipe()
+	defer clientPipe.Close()
+	s := &vscSession{id: "testses", tun: tun, ch: ch, client: clientPipe, upgrade: true}
+	s.cond = sync.NewCond(&s.mu)
+	rel.mu.Lock()
+	tun.sessions[s.id] = s
+	rel.sessions++
+	rel.mu.Unlock()
+	go s.writeLoop()
+
+	// worker 无视 pause 持续涌入：staging 破 cap → 会话被杀（client 被关闭）。
+	// writeLoop 里挂起的首块写可能在关闭前送达，读到残余数据属正常，等关闭为止。
+	go func() {
+		for i := 0; i < 20; i++ {
+			s.push(bytes.Repeat([]byte("x"), 1024))
+		}
+	}()
+	buf := make([]byte, 1024)
+	for {
+		_ = clientEnd.SetReadDeadline(time.Now().Add(3 * time.Second))
+		if _, err := clientEnd.Read(buf); err != nil {
+			break
+		}
+	}
+}
+
+func TestVscRelay502Fallback(t *testing.T) {
 	rel := newVscRelay()
 	ts := httptest.NewServer(rel.RouteHandler(""))
 	defer ts.Close()
 	addr := ts.Listener.Addr().String()
 
-	hostCtl, _ := vscRegisterHost(t, addr, "h1", "secret")
-	defer hostCtl.Close()
+	workerConn, workerBr, _ := vscRegisterWorker(t, addr, "/tunnels/ws", "h1", "secret.dev1")
+	defer workerConn.Close()
 
-	clientConn, clientBr := vscConnectClient(t, addr, "h1", "secret", "")
+	// 非升级 client：无 101，请求头照转；后端不可达（worker 立即 close）时
+	// client 收到干净的 502。
+	clientConn, clientBr := vscGet(t, addr, "GET /tunnels/ws?tkn=secret HTTP/1.1\r\nHost: r\r\n\r\n")
 	defer clientConn.Close()
-
-	// host 不接管：超时后 client 在 101 之后收到 503 收尾。
-	head := vscReadHead(t, clientConn, clientBr)
-	if code := vscStatusCode(t, head); code != 503 {
-		t.Fatalf("timed-out client got %d, want 503", code)
+	open := vscWsRecvText(t, workerConn, workerBr)
+	if open["type"] != "open" {
+		t.Fatalf("open frame = %v", open)
+	}
+	vscWsRecvData(t, workerConn, workerBr) // 请求头
+	vscWsSendJSON(t, workerConn, map[string]any{"type": "close", "id": open["id"], "reason": "backend unavailable"})
+	if got := vscReadRaw(t, clientConn, clientBr, "502"); !strings.Contains(got, "HTTP/1.1 502 Bad Gateway") {
+		t.Fatalf("client got %q, want 502", got)
 	}
 }
 
 func TestVscRelayMountedPrefix(t *testing.T) {
 	rel := newVscRelay()
-	ts := httptest.NewServer(rel.RouteHandler("/relayx"))
+	ts := httptest.NewServer(rel.RouteHandler("/vx"))
 	defer ts.Close()
 	addr := ts.Listener.Addr().String()
 
-	// 前缀挂载下的四个子路由。
-	hostCtl, _ := vscRegisterHost(t, addr, "h1", "secret")
-	defer hostCtl.Close()
-	clientConn, clientBr := vscConnectClient(t, addr, "h1", "secret", "")
-	clientConn.Close()
-	_ = clientBr
+	workerConn, workerBr, ready := vscRegisterWorker(t, addr, "/vx/tunnels/ws", "h1", "secret.dev1")
+	defer workerConn.Close()
+	if ready["path"] != "/tunnels/ws" {
+		t.Fatalf("ready path = %v, want /tunnels/ws (mount stripped)", ready["path"])
+	}
+	clientConn, _ := vscConnectClient(t, addr, "/vx/tunnels/ws", "secret", "")
+	defer clientConn.Close()
+	if open := vscWsRecvText(t, workerConn, workerBr); open["type"] != "open" || open["path"] != "/tunnels/ws" {
+		t.Fatalf("open frame = %v", open)
+	}
 
-	stConn, stBr := vscGet(t, addr, "GET /relayx/status HTTP/1.1\r\nHost: r\r\n\r\n")
-	code := vscStatusCode(t, vscReadHead(t, stConn, stBr))
+	stConn, stBr := vscGet(t, addr, "GET /vx/status HTTP/1.1\r\nHost: r\r\nConnection: close\r\n\r\n")
+	if code := vscStatusCode(t, vscReadHead(t, stConn, stBr)); code != 200 {
+		t.Fatal("mounted /vx/status should be 200")
+	}
 	stConn.Close()
-	if code != 200 {
-		t.Fatal("mounted /relayx/status should be 200")
-	}
 
-	conn, br := vscGet(t, addr, "GET /relayx/nope HTTP/1.1\r\nHost: r\r\n\r\n")
-	code = vscStatusCode(t, vscReadHead(t, conn, br))
-	conn.Close()
-	if code != 404 {
-		t.Fatal("unknown mounted path should be 404")
+	for _, p := range []string{"/vx/nope", "/vx"} {
+		conn, br := vscGet(t, addr, "GET "+p+" HTTP/1.1\r\nHost: r\r\n\r\n")
+		if code := vscStatusCode(t, vscReadHead(t, conn, br)); code != 404 {
+			t.Fatalf("%s got %d, want 404", p, code)
+		}
+		conn.Close()
 	}
+}
+
+func TestVscRelayGrace(t *testing.T) {
+	rel := newVscRelay()
+	rel.grace = 200 * time.Millisecond
+	ts := httptest.NewServer(rel.RouteHandler(""))
+	defer ts.Close()
+	addr := ts.Listener.Addr().String()
+
+	workerConn, _, _ := vscRegisterWorker(t, addr, "/tunnels/ws", "h1", "secret.dev1")
+	workerConn.Close()
+	time.Sleep(50 * time.Millisecond)
+
+	// 保留期内：503（离线），隧道条目仍在。
+	conn, br := vscGet(t, addr, "GET /tunnels/ws?tkn=secret HTTP/1.1\r\nHost: r\r\n\r\n")
+	if code := vscStatusCode(t, vscReadHead(t, conn, br)); code != 503 {
+		t.Fatalf("in-grace client got %d, want 503", code)
+	}
+	conn.Close()
+
+	// 超过保留期：下一次注册/状态查询触发惰性清扫 → 403（未知令牌）。
+	time.Sleep(300 * time.Millisecond)
+	vscStatus(t, addr)
+	conn2, br2 := vscGet(t, addr, "GET /tunnels/ws?tkn=secret HTTP/1.1\r\nHost: r\r\n\r\n")
+	if code := vscStatusCode(t, vscReadHead(t, conn2, br2)); code != 403 {
+		t.Fatalf("post-grace client got %d, want 403", code)
+	}
+	conn2.Close()
+}
+
+func TestVscRelayTunnelCap(t *testing.T) {
+	rel := newVscRelay()
+	ts := httptest.NewServer(rel.RouteHandler(""))
+	defer ts.Close()
+	addr := ts.Listener.Addr().String()
+
+	conns := make([]net.Conn, 0, vscMaxTunnels+1)
+	defer func() {
+		for _, c := range conns {
+			c.Close()
+		}
+	}()
+	for i := 0; i < vscMaxTunnels; i++ {
+		conn, _, _ := vscRegisterWorker(t, addr, "/t", "h", fmt.Sprintf("tok%03d.dev%03d", i, i))
+		conns = append(conns, conn)
+	}
+	conn, br := vscGet(t, addr, "GET /t?kind=worker&tkn=overflow.dev999 HTTP/1.1\r\nHost: r\r\nUpgrade: websocket\r\nConnection: Upgrade\r\nSec-WebSocket-Key: dGhlIHNhbXBsZSBub25jZQ==\r\n\r\n")
+	if code := vscStatusCode(t, vscReadHead(t, conn, br)); code != 503 {
+		t.Fatalf("tunnel overflow got %d, want 503", code)
+	}
+	conn.Close()
 }

@@ -5,7 +5,7 @@ package pkg
 // web client share one endpoint; who is who comes from the first auth_init
 // message, not the URL. The routing prefix is pure operator config:
 //
-//	ws~/ws = relay://zcode-clients
+//	ws~/ws = relay://zcode
 //
 // Desktop: ZCODE_WEB_REMOTE_CONTROL_RELAY_WS_URL=ws://host:port/ws[?mid=<uuid>]
 // Web page: endpoint injected via KVS_CC_SED_<名称> rules (overrideUrl:`wss://>host</ws`).
@@ -471,7 +471,7 @@ func zcodeState() *zcodeStore {
 }
 
 // zcodeGetRelay returns (creating on first use) the named relay instance.
-// The name is the relay:// target (e.g. "zcode-clients").
+// The name is the relay:// target (e.g. "zcode").
 func zcodeGetRelay(name string) *zcodeRelay {
 	if name == "" {
 		name = "zcode"

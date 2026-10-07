@@ -735,7 +735,7 @@ func mgrBuildEntries() []mgrEntry {
 	// The link stays RELATIVE so the browser opens it on the page's own
 	// origin (https/http, current host) — no server-side scheme guessing.
 	liveSids := make(map[string]bool)
-	for _, d := range zcodeGetRelay("zcode-clients").deviceList() {
+	for _, d := range zcodeGetRelay("zcode").deviceList() {
 		liveSids[d.Sid] = true
 		id := "zcd-" + d.Sid
 		rec, _ := store.appFind(id)

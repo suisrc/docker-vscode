@@ -415,16 +415,15 @@ func CreateBackendHandler(b Backend, cacheHeaders map[string]string, loginAuthz 
 
 	case "relay":
 		if b.Target == "vscode" {
-			// relay://vscode — Remote-Server 原始字节中继（relay.js 参考实现
-			// 的进程内移植）：host 用 /agent 注册 NDJSON 控制通道，client 用
-			// /connect?...&skipWebSocketFrames=true 建立 WebSocket 升级后的
-			// 原始管道，host 再用 /session/<id> 接走。配对只认 query 里的
-			// tkn：与 host 注册的令牌一致才转发，否则 403/401。子路由挂在
-			// 路由前缀下（/agent、/session/<id>、/connect、/status）。该协
-			// 议没有 cookie 概念，tkn 就是凭证 —— login_authz 开启时把挂载
-			// 前缀加进 path_public，或让各方 tkn 等于网关 login token（配
-			// 置 query_token_key=tkn 时同一参数顺带过网关）。-/+ 路径模式
-			// 不适用（解析期已拒绝）。
+			// relay://vscode — Remote-Server tunnel 中继（relay.js v2 复用帧通道
+			// 模型的进程内移植）：worker（vscode-server 受控端）与 client 访问
+			// 同一路径，query 区分角色。worker 以 kind=worker&tkn=<token>.<deviceId>
+			// [.<tunnelId>] 发 WebSocket 升级，101 之后同一连接变复用帧通道；client
+			// 带 ?tkn= 接入，按第一段 token 路由，升级请求由中继代答 101，两条腿
+			// 都是原始字节管道。/status 看在线隧道与会话数。该协议没有 cookie 概
+			// 念，tkn 就是凭证 —— login_authz 开启时把挂载前缀加进 path_public，或
+			// 让各方 tkn 等于网关 login token（配置 query_token_key=tkn 时同一参
+			// 数顺带过网关）。-/+ 路径模式不适用（解析期已拒绝）。
 			log.Printf("backend %s → relay://vscode", mount)
 			return vscGetRelay().RouteHandler(b.Source)
 		}
