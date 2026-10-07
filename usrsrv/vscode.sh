@@ -1,9 +1,10 @@
 #!/bin/bash
 
-## 这是 ms 官方版本，并且在使用中自动加载最新版本
-## vscode - kvs 反向代理 (端口 KVS_VSCODE_PORT:7080, 目录 ${KVS_VSCODE_HOME:-~/.vscode-server}, PASSWORD:无需密码)
 
 # source /etc/profile
+
+## 这是 ms 官方版本，并且在使用中自动加载最新版本
+## KVS_VSCODE_HOME:7080  KVS_VSCODE_PORT:/wsc/.vsc
 
 # PASSWORD is empty, randomly generate a password
 if [[ -z "${PASSWORD}" ]]; then
@@ -143,6 +144,7 @@ fi
 
 # kvs 是一个用于授权的工具，它会在启动 vscode server 前进行授权验证，确保只有通过验证的用户才能访问 vscode server
 echo 'start vscode server. wss need set env: KVS_SVC_HEADER_X_FORWARDED_PORT=443'
-KVS_HOME="${KVS_VSCODE_HOME}" KVS_LOGIN_AUTHZ=true KVS_SVC_SOCK_FILE="${KVS_VSCODE_HOME}/kvs.sock" \
-KVS_PORT="${KVS_VSCODE_PORT:-7080}" KVS_COOKIE=vscode-tkn KVS_LOGIN_TOKEN="${PASSWORD}" \
-exec kvs -c vscode
+KVS_HOME="${KVS_VSCODE_HOME}" KVS_LOGIN_AUTHZ=true KVS_LOGIN_TOKEN="${PASSWORD}" \
+KVS_PORT="${KVS_VSCODE_PORT:-7080}" KVS_COOKIE_TOKEN_KEY=vscode-tkn KVS_QUERY_TOKEN_KEY=tkn \
+KVS_SVC_VSCODE_HOME="${KVS_VSCODE_HOME}" \
+exec kvs -n :vscode
