@@ -278,16 +278,34 @@ func handleWSUpgrade(w http.ResponseWriter, r *http.Request, up *wsUpstream) boo
 	kvsStats.wsTunnels.Add(1)
 	kvsStats.wsTunnelBytesDown.Add(drainedDown)
 	kvsStats.wsTunnelBytesUp.Add(drainedUp)
+	opened := time.Now()
 	log.Printf("[ws] tunnel open %s → %s (mode=%s, idle=%v, pipelined up/down=%d/%d)",
 		r.RemoteAddr, up.describe(), mode, wsIdleTimeout, drainedUp, drainedDown)
 
-	runWSTunnel(clientConn, backendConn)
+	upBytes, downBytes, first := runWSTunnel(clientConn, backendConn)
 	kvsStats.wsTunnelsClosed.Add(1)
-	log.Printf("[ws] tunnel closed %s → %s", r.RemoteAddr, up.describe())
+	if first.err != nil {
+		log.Printf("[ws] tunnel closed %s → %s (%s errored after %s: %v; copied up/down=%d/%d)",
+			r.RemoteAddr, up.describe(), first.dir, time.Since(opened).Round(time.Second), first.err, upBytes, downBytes)
+	} else {
+		// 对端干净关闭（FIN）：不是 kvs 主动断的。dir 指明哪一侧先收场，
+		// 便于把周期性断开归因到客户端或上游。
+		log.Printf("[ws] tunnel closed %s → %s (%s closed cleanly after %s; copied up/down=%d/%d)",
+			r.RemoteAddr, up.describe(), first.dir, time.Since(opened).Round(time.Second), upBytes, downBytes)
+	}
 	return true
 }
 
-// runWSTunnel 双向搬运数据，直到任一方向结束或出错。
+// tunnelEnd 记录隧道一个方向的收场：方向、搬运字节、结束方式（err=nil = 对端
+// 干净关闭/FIN；非 nil = 空闲超时、对端停滞、连接错误等）。
+type tunnelEnd struct {
+	dir string
+	n   int64
+	err error
+}
+
+// runWSTunnel 双向搬运数据，直到任一方向结束或出错。返回两个方向的拷贝字节数
+// 与先收场方向的 tunnelEnd（诊断日志用：区分"对端干净关闭"与"kvs/网络侧出错"）。
 //
 //   - 无空闲超时时（默认）：直接 io.Copy，裸 conn 之间命中内核 splice（socket↔socket）。
 //   - 有空闲超时时：按 chunk 拷贝，每个方向自己维护读/写超时；本方向超时后若对方向
@@ -296,7 +314,7 @@ func handleWSUpgrade(w http.ResponseWriter, r *http.Request, up *wsUpstream) boo
 //
 // 两种情况都会打开 TCP keepalive，让内核发现黑洞对端（不需要用户态轮询，也不影响
 // splice 快路径）。
-func runWSTunnel(clientConn, backendConn net.Conn) {
+func runWSTunnel(clientConn, backendConn net.Conn) (int64, int64, tunnelEnd) {
 	defer clientConn.Close()
 	defer backendConn.Close()
 
@@ -304,28 +322,36 @@ func runWSTunnel(clientConn, backendConn net.Conn) {
 	enableKeepAlive(backendConn)
 
 	var upProgress, downProgress atomic.Int64 // 各方向的字节数，用于空闲判定
-	errc := make(chan error, 2)
+	endc := make(chan tunnelEnd, 2)
 	go func() {
 		n, err := copyTunnel(backendConn, clientConn, &upProgress, &downProgress)
 		kvsStats.wsTunnelBytesUp.Add(n)
 		closeWrite(backendConn)
-		errc <- err
+		endc <- tunnelEnd{"client→backend", n, err}
 	}()
 	go func() {
 		n, err := copyTunnel(clientConn, backendConn, &downProgress, &upProgress)
 		kvsStats.wsTunnelBytesDown.Add(n)
 		closeWrite(clientConn)
-		errc <- err
+		endc <- tunnelEnd{"backend→client", n, err}
 	}()
 
-	first := <-errc
-	if first != nil {
+	first := <-endc
+	if first.err != nil {
 		// 出错（含空闲超时、对端停滞）：立即断开两端，避免另一半无限等待。
 		_ = clientConn.Close()
 		_ = backendConn.Close()
-		log.Printf("[ws] tunnel teardown: %v", first)
 	}
-	<-errc
+	second := <-endc
+	var up, down int64
+	for _, e := range [2]tunnelEnd{first, second} {
+		if e.dir == "client→backend" {
+			up = e.n
+		} else {
+			down = e.n
+		}
+	}
+	return up, down, first
 }
 
 // 隧道收尾原因（供日志与测试判别）。
