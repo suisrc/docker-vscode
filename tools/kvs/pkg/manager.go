@@ -259,7 +259,7 @@ func mgrApplyBuiltIn(old, app managerApp) string {
 // the config once more.
 func ManagerReapplyOverrides() bool {
 	applied := false
-	for _, app := range zcoState().appsList() {
+	for _, app := range zcdState().appsList() {
 		if app.Svc == "" {
 			continue
 		}
@@ -319,14 +319,14 @@ type managerApp struct {
 }
 
 // appsList returns a copy of all persisted app records.
-func (s *zcoStore) appsList() []managerApp {
+func (s *zcdStore) appsList() []managerApp {
 	s.mu.Lock()
 	defer s.mu.Unlock()
 	return append([]managerApp(nil), s.apps...)
 }
 
 // appFind returns the record for id.
-func (s *zcoStore) appFind(id string) (managerApp, bool) {
+func (s *zcdStore) appFind(id string) (managerApp, bool) {
 	s.mu.Lock()
 	defer s.mu.Unlock()
 	for _, a := range s.apps {
@@ -338,7 +338,7 @@ func (s *zcoStore) appFind(id string) (managerApp, bool) {
 }
 
 // appSave inserts or replaces a record (keyed by ID), preserving order.
-func (s *zcoStore) appSave(app managerApp) {
+func (s *zcdStore) appSave(app managerApp) {
 	s.mu.Lock()
 	defer s.mu.Unlock()
 	for i := range s.apps {
@@ -355,7 +355,7 @@ func (s *zcoStore) appSave(app managerApp) {
 }
 
 // appDelete removes a record by ID; reports whether it existed.
-func (s *zcoStore) appDelete(id string) bool {
+func (s *zcdStore) appDelete(id string) bool {
 	s.mu.Lock()
 	defer s.mu.Unlock()
 	for i := range s.apps {
@@ -370,7 +370,7 @@ func (s *zcoStore) appDelete(id string) bool {
 }
 
 // requestFlushLocked is requestFlush for callers already holding s.mu.
-func (s *zcoStore) requestFlushLocked() {
+func (s *zcdStore) requestFlushLocked() {
 	select {
 	case s.notify <- struct{}{}:
 	default:
@@ -378,14 +378,14 @@ func (s *zcoStore) requestFlushLocked() {
 }
 
 // orderList returns the persisted card order (user-arranged entry ids).
-func (s *zcoStore) orderList() []string {
+func (s *zcdStore) orderList() []string {
 	s.mu.Lock()
 	defer s.mu.Unlock()
 	return append([]string(nil), s.order...)
 }
 
 // orderSave replaces the persisted card order.
-func (s *zcoStore) orderSave(ids []string) {
+func (s *zcdStore) orderSave(ids []string) {
 	s.mu.Lock()
 	defer s.mu.Unlock()
 	s.order = append([]string(nil), ids...)
@@ -401,14 +401,14 @@ type managerTool struct {
 }
 
 // toolsList returns the persisted toolbar quick links.
-func (s *zcoStore) toolsList() []managerTool {
+func (s *zcdStore) toolsList() []managerTool {
 	s.mu.Lock()
 	defer s.mu.Unlock()
 	return append([]managerTool(nil), s.tools...)
 }
 
 // toolSave upserts a quick link by name (old, when set, is renamed away first).
-func (s *zcoStore) toolSave(t managerTool, old string) {
+func (s *zcdStore) toolSave(t managerTool, old string) {
 	s.mu.Lock()
 	defer s.mu.Unlock()
 	if old != "" && old != t.Name {
@@ -434,7 +434,7 @@ func (s *zcoStore) toolSave(t managerTool, old string) {
 }
 
 // toolDelete removes a quick link by name; reports whether it existed.
-func (s *zcoStore) toolDelete(name string) bool {
+func (s *zcdStore) toolDelete(name string) bool {
 	s.mu.Lock()
 	defer s.mu.Unlock()
 	kept := s.tools[:0]
@@ -455,7 +455,7 @@ func (s *zcoStore) toolDelete(name string) bool {
 }
 
 // noteGet returns the stored note for an entry id ("" when none).
-func (s *zcoStore) noteGet(id string) string {
+func (s *zcdStore) noteGet(id string) string {
 	s.mu.Lock()
 	defer s.mu.Unlock()
 	return s.notes[id]
@@ -463,7 +463,7 @@ func (s *zcoStore) noteGet(id string) string {
 
 // noteSet stores (text non-empty) or clears (text empty) an entry's note;
 // reports whether the persisted state changed.
-func (s *zcoStore) noteSet(id, text string) bool {
+func (s *zcdStore) noteSet(id, text string) bool {
 	s.mu.Lock()
 	defer s.mu.Unlock()
 	if text == "" {
@@ -632,9 +632,9 @@ func mgrIconFor(typ, icon string) string {
 	return "other"
 }
 
-// zcoDeviceInfo is one relay device row of the merged view (manager-side
-// projection of a zcoDeviceRecord; never sent to the client verbatim).
-type zcoDeviceInfo struct {
+// zcdDeviceInfo is one relay device row of the merged view (manager-side
+// projection of a zcdDeviceRecord; never sent to the client verbatim).
+type zcdDeviceInfo struct {
 	Sid        string
 	Mid        string
 	Name       string
@@ -649,7 +649,7 @@ type zcoDeviceInfo struct {
 }
 
 // deviceList returns the registered relay devices with live online status.
-func (r *zcoRelay) deviceList() []zcoDeviceInfo {
+func (r *zcdRelay) deviceList() []zcdDeviceInfo {
 	r.mu.Lock()
 	online := make(map[string]bool, len(r.devices))
 	for sid := range r.devices {
@@ -657,7 +657,7 @@ func (r *zcoRelay) deviceList() []zcoDeviceInfo {
 	}
 	r.mu.Unlock()
 
-	var out []zcoDeviceInfo
+	var out []zcdDeviceInfo
 	for _, rec := range r.store.list() {
 		name, _ := rec.Meta["name"].(string)
 		if name == "" {
@@ -665,7 +665,7 @@ func (r *zcoRelay) deviceList() []zcoDeviceInfo {
 		}
 		platform, _ := rec.Meta["platform"].(string)
 		version, _ := rec.Meta["version"].(string)
-		out = append(out, zcoDeviceInfo{
+		out = append(out, zcdDeviceInfo{
 			Sid:        rec.DeviceSid,
 			Mid:        rec.DeviceMid,
 			Name:       name,
@@ -727,7 +727,7 @@ func mgrApplyProbe(e *mgrEntry, target string) {
 // is no synthesized default: the list shows the user's persisted apps
 // (remote + 内置) plus the live relay devices.
 func mgrBuildEntries() []mgrEntry {
-	store := zcoState()
+	store := zcdState()
 	now := time.Now().UnixMilli()
 	out := make([]mgrEntry, 0, 8)
 
@@ -737,7 +737,7 @@ func mgrBuildEntries() []mgrEntry {
 	// The link stays RELATIVE so the browser opens it on the page's own
 	// origin (https/http, current host) — no server-side scheme guessing.
 	liveSids := make(map[string]bool)
-	for _, d := range zcoGetRelay("zcode").deviceList() {
+	for _, d := range zcdGetRelay("zcode").deviceList() {
 		liveSids[d.Sid] = true
 		id := "zcd-" + d.Sid
 		rec, _ := store.appFind(id)
@@ -954,7 +954,7 @@ func managerHandler(w http.ResponseWriter, r *http.Request) {
 		// 本地认证模式（系统配置勾选）不签发 tkn：链接只带扩展 id，由
 		// suisrc.remote-server 按域名查询自己的本地认证信息直接访问。
 		u := "vscode://" + mgrVscOpenExt() + "/open"
-		if !zcoState().vscLocalAuthValue() && mgrLoginInfo != nil {
+		if !zcdState().vscLocalAuthValue() && mgrLoginInfo != nil {
 			if loginToken, queryKey, timeout := mgrLoginInfo(); queryKey != "" && timeout > 0 {
 				u += "?" + queryKey + "=" + GenerateTokenValue(loginToken, timeout)
 			}
@@ -1028,9 +1028,9 @@ func managerListApps(w http.ResponseWriter, r *http.Request) {
 	mgrWriteJSON(w, http.StatusOK, map[string]any{
 		"now":          time.Now().UnixMilli(),
 		"apps":         mgrBuildEntries(),
-		"tools":        zcoState().toolsList(),
+		"tools":        zcdState().toolsList(),
 		"vscExt":       mgrVscOpenExt(),
-		"vscLocalAuth": zcoState().vscLocalAuthValue(),
+		"vscLocalAuth": zcdState().vscLocalAuthValue(),
 	})
 }
 
@@ -1038,7 +1038,7 @@ func managerListApps(w http.ResponseWriter, r *http.Request) {
 // the vscode://<ext>/open… deep links: the manager-stored override first, then
 // KVS_VSCODE_OPEN_EXT, then the suisrc.remote-server default.
 func mgrVscOpenExt() string {
-	if v := strings.TrimSpace(zcoState().vscOpenExtValue()); v != "" {
+	if v := strings.TrimSpace(zcdState().vscOpenExtValue()); v != "" {
 		return v
 	}
 	if v := strings.TrimSpace(os.Getenv("KVS_VSCODE_OPEN_EXT")); v != "" {
@@ -1069,12 +1069,12 @@ func managerSetVscOpenExt(w http.ResponseWriter, r *http.Request) {
 			return
 		}
 	}
-	zcoState().saveVscOpenExt(ext)
+	zcdState().saveVscOpenExt(ext)
 	if req.LocalAuth != nil {
-		zcoState().saveVscLocalAuth(*req.LocalAuth)
+		zcdState().saveVscLocalAuth(*req.LocalAuth)
 	}
-	log.Printf("[manager] vscode open ext: %q, local auth: %v", ext, zcoState().vscLocalAuthValue())
-	mgrWriteJSON(w, http.StatusOK, map[string]any{"success": true, "ext": mgrVscOpenExt(), "localAuth": zcoState().vscLocalAuthValue()})
+	log.Printf("[manager] vscode open ext: %q, local auth: %v", ext, zcdState().vscLocalAuthValue())
+	mgrWriteJSON(w, http.StatusOK, map[string]any{"success": true, "ext": mgrVscOpenExt(), "localAuth": zcdState().vscLocalAuthValue()})
 }
 
 // mgrAppReq is the add/edit-app request body. A non-empty ID switches to edit
@@ -1108,7 +1108,7 @@ func managerAddApp(w http.ResponseWriter, r *http.Request) {
 	req.DataDir = strings.TrimSpace(req.DataDir)
 	req.WSC = strings.TrimSpace(req.WSC)
 
-	store := zcoState()
+	store := zcdState()
 
 	// 内置卡片：绑定一个嗅探到的托管服务（svc://）。每个服务仅一张卡；zcode 卡
 	// 携带数据文件夹/工作目录覆盖（应用到进程 env 并触发服务重新准备），vscode
@@ -1189,7 +1189,7 @@ func managerAddApp(w http.ResponseWriter, r *http.Request) {
 // mgrAddBuiltIn handles the 内置 (built-in hosted service) branch of add/edit:
 // one card per sniffed svc:// service; the type (vsc/zcd) and mount URL come
 // from the sniff registry, the name/data-dir/workspace from the request.
-func mgrAddBuiltIn(w http.ResponseWriter, req mgrAppReq, store *zcoStore) {
+func mgrAddBuiltIn(w http.ResponseWriter, req mgrAppReq, store *zcdStore) {
 	typ := ""
 	mount := ""
 	mgrSvcMu.Lock()
@@ -1308,7 +1308,7 @@ func managerDeleteApp(w http.ResponseWriter, r *http.Request) {
 		http.Error(w, "id required", http.StatusBadRequest)
 		return
 	}
-	store := zcoState()
+	store := zcdState()
 	app, ok := store.appFind(id)
 	if !ok {
 		// Synthesized cards (relay device / legacy local stamp) may never
@@ -1363,7 +1363,7 @@ func managerSaveOrder(w http.ResponseWriter, r *http.Request) {
 		seen[id] = true
 		ids = append(ids, id)
 	}
-	zcoState().orderSave(ids)
+	zcdState().orderSave(ids)
 	mgrWriteJSON(w, http.StatusOK, map[string]bool{"success": true})
 }
 
@@ -1390,7 +1390,7 @@ func managerToolSave(w http.ResponseWriter, r *http.Request) {
 		http.Error(w, "addr required (must start with / or http(s)://)", http.StatusBadRequest)
 		return
 	}
-	zcoState().toolSave(managerTool{Name: req.Name, Addr: req.Addr}, req.Old)
+	zcdState().toolSave(managerTool{Name: req.Name, Addr: req.Addr}, req.Old)
 	log.Printf("[manager] tool saved: %s → %s", req.Name, req.Addr)
 	mgrWriteJSON(w, http.StatusOK, map[string]bool{"success": true})
 }
@@ -1402,7 +1402,7 @@ func managerToolDel(w http.ResponseWriter, r *http.Request) {
 		http.Error(w, "name required", http.StatusBadRequest)
 		return
 	}
-	if !zcoState().toolDelete(name) {
+	if !zcdState().toolDelete(name) {
 		http.Error(w, "tool not found", http.StatusNotFound)
 		return
 	}
@@ -1412,7 +1412,7 @@ func managerToolDel(w http.ResponseWriter, r *http.Request) {
 // mgrStubApp synthesizes an app record for a default entry that has never
 // been persisted (zcd-local or a registered relay device), so tag / visit
 // writes have something to attach to. ok=false when id names no known entry.
-func mgrStubApp(store *zcoStore, id string, now int64) (managerApp, bool) {
+func mgrStubApp(store *zcdStore, id string, now int64) (managerApp, bool) {
 	if id == mgrIDZcdLocal {
 		return managerApp{ID: id, Type: "zcd", Name: "local", CreatedAt: now}, true
 	}
@@ -1456,7 +1456,7 @@ func managerSaveTags(w http.ResponseWriter, r *http.Request) {
 		http.Error(w, "id required", http.StatusBadRequest)
 		return
 	}
-	store := zcoState()
+	store := zcdState()
 	app, ok := store.appFind(id)
 	if !ok {
 		if app, ok = mgrStubApp(store, id, time.Now().UnixMilli()); !ok {
@@ -1486,7 +1486,7 @@ func managerSaveTags(w http.ResponseWriter, r *http.Request) {
 // mgrEntryExists reports whether id names an entry the manager UI can see:
 // the built-in zcd-local, any persisted app record (custom app or relay
 // stamp), a registered zcode relay device, or a live vscode tunnel.
-func mgrEntryExists(store *zcoStore, id string) bool {
+func mgrEntryExists(store *zcdStore, id string) bool {
 	if id == mgrIDZcdLocal {
 		return true
 	}
@@ -1514,7 +1514,7 @@ func managerNoteGet(w http.ResponseWriter, r *http.Request) {
 		http.Error(w, "id required", http.StatusBadRequest)
 		return
 	}
-	store := zcoState()
+	store := zcdState()
 	if !mgrEntryExists(store, id) {
 		http.Error(w, "unknown app id", http.StatusNotFound)
 		return
@@ -1542,7 +1542,7 @@ func managerNoteSet(w http.ResponseWriter, r *http.Request) {
 		http.Error(w, fmt.Sprintf("note too long (max %d chars)", mgrNoteMax), http.StatusBadRequest)
 		return
 	}
-	store := zcoState()
+	store := zcdState()
 	if !mgrEntryExists(store, req.ID) {
 		http.Error(w, "unknown app id", http.StatusNotFound)
 		return
@@ -1570,7 +1570,7 @@ func managerVisit(w http.ResponseWriter, r *http.Request) {
 		http.Error(w, "id required", http.StatusBadRequest)
 		return
 	}
-	store := zcoState()
+	store := zcdState()
 	if !mgrEntryExists(store, id) {
 		http.Error(w, "unknown app id", http.StatusNotFound)
 		return
@@ -1615,7 +1615,7 @@ func managerFolderAdd(w http.ResponseWriter, r *http.Request) {
 		http.Error(w, "id required (name max 24 chars)", http.StatusBadRequest)
 		return
 	}
-	store := zcoState()
+	store := zcdState()
 	app, ok := store.appFind(req.ID)
 	if !ok {
 		http.Error(w, "unknown app id", http.StatusNotFound)
@@ -1669,7 +1669,7 @@ func managerFolderDel(w http.ResponseWriter, r *http.Request) {
 		http.Error(w, "id and name required", http.StatusBadRequest)
 		return
 	}
-	store := zcoState()
+	store := zcdState()
 	app, ok := store.appFind(id)
 	if !ok {
 		http.Error(w, "unknown app id", http.StatusNotFound)

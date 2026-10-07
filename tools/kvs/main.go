@@ -65,7 +65,7 @@ func main() {
 	pkg.Services().SetCacheDir(cfg.CacheDir)
 	pkg.Services().Register(cfg.Services)
 	// zcode relay state file lives under the gateway home ({home}/zcodex.json).
-	pkg.SetZcoHome(cfg.Home)
+	pkg.SetZcdHome(cfg.Home)
 	// 应用中心内置卡（zcode 数据文件夹/工作目录、版本固定）持久化在 zcodex.json：
 	// 先回填进程 env 和版本覆盖，再重载一次配置，让命令行展开和 envs_default
 	// 按覆盖值生效。
