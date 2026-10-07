@@ -1,6 +1,6 @@
 #!/bin/bash
 # ============================================================================
-# selkies.sh - 运行时初始化（kas svc-ainit 一次性任务）
+# selkies.sh - 运行时初始化（kas dsk-ainit 一次性任务）
 #
 # 镜像链: base → bvsc → 本层(Dockerfile)
 #   Dockerfile 已在构建时完成:
@@ -21,7 +21,7 @@ else
     HOME_DIR="/home/${USER}"
 fi
 
-echo "[svc-ainit] 运行时初始化... (USER=${USER}, HOME=${HOME_DIR})"
+echo "[dsk-ainit] 运行时初始化... (USER=${USER}, HOME=${HOME_DIR})"
 
 # 运行时目录（可能在 tmpfs 上, 每次启动需重建）
 mkdir -p /run/dbus
@@ -51,10 +51,10 @@ rm -f /etc/xdg/autostart/xscreensaver.desktop 2>/dev/null || true
 # COPY selkies web（首次运行）
 # ============================================================
 
-bash /usr/srv/web-selkies.sh
+bash /usr/srv/fix-selkies.sh
 if [ "$USER" != "root" ]; then
     chown -R "${USER}:${USER}" /usr/share/selkies/web 2>/dev/null || true
 fi
 
-echo "[svc-ainit] 初始化完成."
+echo "[dsk-ainit] 初始化完成."
 

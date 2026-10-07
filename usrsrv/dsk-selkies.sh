@@ -1,6 +1,6 @@
 #!/bin/bash
 # ============================================================================
-# svc-selkies - Selkies WebRTC/WebSocket 桥接服务
+# dsk-selkies - Selkies WebRTC/WebSocket 桥接服务
 # 监听 localhost:8081 提供 WebSocket 接口（selkies 默认端口）
 # 根据 ${USER:-} 运行时态运行
 # ============================================================================

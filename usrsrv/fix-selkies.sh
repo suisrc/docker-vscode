@@ -10,9 +10,9 @@ HNAME=$(hostname)
 if [ -d "/usr/share/selkies/${DASHBOARD}" ]; then
     rm -rf /usr/share/selkies/web
     cp -a "/usr/share/selkies/${DASHBOARD}" /usr/share/selkies/web
-    echo "[web-selkies] selkies web 从 ${DASHBOARD} 复制完成."
+    echo "[fix-selkies] selkies web 从 ${DASHBOARD} 复制完成."
 else
-    echo "[web-selkies] 警告: /usr/share/selkies/${DASHBOARD} 不存在，跳过 web 目录创建."
+    echo "[fix-selkies] 警告: /usr/share/selkies/${DASHBOARD} 不存在，跳过 web 目录创建."
 fi
 
 # 图标
@@ -38,5 +38,5 @@ cat > /usr/share/selkies/web/manifest.json << MEOF
   "start_url": "/"
 }
 MEOF
-echo "[web-selkies] manifest.json 已生成，标题: ${TITLE}-${HNAME}"
+echo "[fix-selkies] manifest.json 已生成，标题: ${TITLE}-${HNAME}"
 

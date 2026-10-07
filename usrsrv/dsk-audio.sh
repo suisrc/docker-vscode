@@ -1,6 +1,6 @@
 #!/bin/bash
-# svc-audio - PulseAudio 音频守护进程
-# 根据 ${USER:-} 运行时态运行，sink 创建由 svc-selkies 负责
+# dsk-audio - PulseAudio 音频守护进程
+# 根据 ${USER:-} 运行时态运行，sink 创建由 dsk-selkies 负责
 
 # 运行时用户态: 默认 root, 可通过环境变量 USER 覆盖 (root 或自定义用户名)
 USER="${USER:-root}"
@@ -12,7 +12,7 @@ fi
 
 # 确保目标用户存在
 USER_UID=$(id -u "${USER}" 2>/dev/null) || {
-    echo "[svc-audio] 错误: ${USER} 用户不存在" >&2
+    echo "[dsk-audio] 错误: ${USER} 用户不存在" >&2
     exit 1
 }
 
