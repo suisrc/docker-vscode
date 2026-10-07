@@ -151,7 +151,7 @@ type vscSession struct {
 	mu       sync.Mutex
 	cond     *sync.Cond
 	queue    [][]byte
-	bytes    int
+	bytes    int  // 当前积压字节数（push 加、writeLoop 出队减）——高水位/上限都按它判
 	paused   bool // 已请 worker 停发该会话（staging 超高水位）
 	peerHold bool // worker 请中继停读 client
 	dead     bool
@@ -775,6 +775,7 @@ func (s *vscSession) writeLoop() {
 		chunk := s.queue[0]
 		s.queue[0] = nil
 		s.queue = s.queue[1:]
+		s.bytes -= len(chunk) // bytes 记的是当前积压（push 加、这里减），不是累计量
 		var resume bool
 		if s.paused && len(s.queue) == 0 {
 			s.paused = false

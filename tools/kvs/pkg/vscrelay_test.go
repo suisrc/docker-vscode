@@ -958,3 +958,61 @@ func TestVscRelayTunnelIDGate(t *testing.T) {
 		t.Fatalf("status tunnelId = %v, want chan1", st["tunnelId"])
 	}
 }
+
+// TestVscRelaySinkBytesIsLiveDepth 防回归：sink 计数必须是"当前积压"而不是"累计
+// 传输量"。writeLoop 出队不扣减的话，任何累计跨过 sinkCap 的会话（哪怕客户端读
+// 得飞快、队列实际是空的）都会被 client sink overflow 误杀——生产表现就是会话
+// 开 2~3 秒被关、客户端不停重连（一次大传输必然踩中）。
+func TestVscRelaySinkBytesIsLiveDepth(t *testing.T) {
+	rel := newVscRelay()
+	rel.sinkCap = 64 << 10 // 上限 64KB，远小于下面的累计传输量
+	rel.sinkHighWater = 16 << 10
+	ts := httptest.NewServer(rel.RouteHandler(""))
+	defer ts.Close()
+	addr := ts.Listener.Addr().String()
+
+	workerConn, workerBr, _ := vscRegisterWorker(t, addr, "/", "h1", "secret.dev1")
+	defer workerConn.Close()
+	clientConn, clientBr := vscConnectClient(t, addr, "/", "secret.dev2.x", "")
+	defer clientConn.Close()
+
+	open := vscWsRecvText(t, workerConn, workerBr)
+	if open["type"] != "open" {
+		t.Fatalf("worker frame = %v, want open", open)
+	}
+	id := open["id"].(string)
+	vscWsRecvData(t, workerConn, workerBr) // 转发的请求头
+
+	// 客户端并发全速读取，直到收满 total 或连接被关（误杀时 EOF 提前到来）。
+	const total = 4 * (64 << 10) // 256KB = 4× sinkCap 累计量
+	const frame = 16 << 10       // 单帧 16KB < sinkCap：合法推送，不触发逐帧上限
+	got := make(chan int, 1)
+	go func() {
+		n := 0
+		buf := make([]byte, 32<<10)
+		for n < total {
+			c, err := clientBr.Read(buf)
+			n += c
+			if err != nil {
+				break
+			}
+		}
+		got <- n
+	}()
+
+	// worker 连发 4×sinkCap，停一拍让中继排空，再正常关闭会话。
+	for i := 0; i < total/frame; i++ {
+		vscWsSendData(t, workerConn, id, string(make([]byte, frame)))
+	}
+	time.Sleep(300 * time.Millisecond)
+	vscWsSendJSON(t, workerConn, map[string]any{"type": "close", "id": id, "reason": "backend closed"})
+
+	select {
+	case n := <-got:
+		if n != total {
+			t.Fatalf("client received %d/%d bytes — session killed early (sink counter is cumulative, not live?)", n, total)
+		}
+	case <-time.After(5 * time.Second):
+		t.Fatal("client read timed out")
+	}
+}
