@@ -1016,3 +1016,44 @@ func TestVscRelaySinkBytesIsLiveDepth(t *testing.T) {
 		t.Fatal("client read timed out")
 	}
 }
+
+// TestVscRelayTunnelListAndForget 验证 manager 用的隧道快照与删除：tunnelList
+// 回报在线状态与卡片接入地址（挂载前缀 + ?tkn=第一段），forgetTunnel 清占用并
+// 踢掉在线通道。
+func TestVscRelayTunnelListAndForget(t *testing.T) {
+	rel := newVscRelay()
+	rel.mount = "/vx"
+	ts := httptest.NewServer(rel.RouteHandler("/vx"))
+	defer ts.Close()
+	addr := ts.Listener.Addr().String()
+
+	workerConn, workerBr, _ := vscRegisterWorker(t, addr, "/vx", "leo-home-mac", "secret.dev1")
+	defer workerConn.Close()
+
+	list := rel.tunnelList()
+	if len(list) != 1 {
+		t.Fatalf("tunnels = %d, want 1", len(list))
+	}
+	tu := list[0]
+	if tu.Device != "dev1" || tu.Name != "leo-home-mac" || !tu.Online {
+		t.Fatalf("tunnel info = %+v", tu)
+	}
+	if tu.URL != "/vx?tkn=secret" {
+		t.Fatalf("tunnel URL = %q, want /vx?tkn=secret", tu.URL)
+	}
+
+	// 删除：占用清掉、在线通道被踢（worker 连接随之关闭）。
+	if !rel.forgetTunnel("dev1") {
+		t.Fatal("forgetTunnel(dev1) = false, want true")
+	}
+	if got := rel.tunnelList(); len(got) != 0 {
+		t.Fatalf("tunnels after forget = %d, want 0", len(got))
+	}
+	_ = workerConn.SetReadDeadline(time.Now().Add(2 * time.Second))
+	if _, err := workerBr.ReadByte(); err == nil {
+		t.Fatal("worker channel still readable after forget")
+	}
+	if rel.forgetTunnel("dev1") {
+		t.Fatal("second forgetTunnel(dev1) = true, want false")
+	}
+}

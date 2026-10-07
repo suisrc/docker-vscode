@@ -90,6 +90,7 @@ type vscRelay struct {
 	devices  map[string]*vscChannel
 	sessions int // 全局活跃会话数
 
+	mount    string // 挂载前缀（RouteHandler 构建期写入；manager 合成卡片 URL 用）
 	tunnelID string // relay 身份标识（tunnel_id 配置）；空=未配置，不门禁
 
 	probeInterval time.Duration
@@ -195,6 +196,9 @@ func newVscRelay() *vscRelay {
 // lives on any path: kind=worker registers a tunnel, anything carrying
 // ?tkn= is a client, /status reports state.
 func (r *vscRelay) RouteHandler(mount string) http.Handler {
+	r.mu.Lock()
+	r.mount = mount // 构建期调用，供 tunnelList 合成 manager 卡片 URL
+	r.mu.Unlock()
 	return http.HandlerFunc(func(w http.ResponseWriter, req *http.Request) {
 		p := req.URL.Path
 		if mount != "" && mount != "/" {
@@ -820,6 +824,80 @@ func (r *vscRelay) endSession(tun *vscTunnel, id, why string) {
 }
 
 // ---- 状态与保留期 ----
+
+// vscTunnelInfo 是 manager 合成 [VSC] 隧道卡片用的快照（进程内直读；token 是
+// 接入凭证，不进 /status）。
+type vscTunnelInfo struct {
+	Device   string
+	Name     string
+	Version  string
+	Online   bool
+	Since    int64  // 注册时间（unix ms）
+	URL      string // 卡片点击的接入地址；离线为空（与 [ZCD] 离线设备同语义）
+	Sessions int
+}
+
+// tunnelList snapshots the tunnel table for the manager. The sweep runs here
+// too, so expired占位不会出现在卡片列表里。
+func (r *vscRelay) tunnelList() []vscTunnelInfo {
+	r.mu.Lock()
+	r.sweepLocked()
+	out := make([]vscTunnelInfo, 0, len(r.tunnels))
+	for _, tun := range r.tunnels {
+		info := vscTunnelInfo{
+			Device: tun.device, Name: tun.name, Version: tun.version,
+			Online: tun.ch != nil, Since: tun.since.UnixMilli(),
+			Sessions: len(tun.sessions),
+		}
+		if info.Online {
+			info.URL = r.tunnelURL(tun.token)
+		}
+		out = append(out, info)
+	}
+	r.mu.Unlock()
+	sort.Slice(out, func(i, j int) bool { return out[i].Device < out[j].Device })
+	return out
+}
+
+// tunnelURL 卡片接入地址：<挂载前缀>?tkn=<token>（相对路径，浏览器在页面自己的
+// origin 打开）。tkn 只带第一段：网关 query_token_key 的比对、中继的第一段路由、
+// 本机 server 的连接令牌校验用的都是它。非路径形态的挂载（^regex）退回根路径。
+// 调用方须持有 r.mu。
+func (r *vscRelay) tunnelURL(token string) string {
+	p := r.mount
+	if !strings.HasPrefix(p, "/") {
+		p = ""
+	}
+	p = strings.TrimSuffix(p, "/")
+	if p == "" {
+		p = "/"
+	}
+	return p + "?tkn=" + url.QueryEscape(token)
+}
+
+// forgetTunnel 按 device 摘除隧道（manager 删除卡片）：清除占用（含保留期），
+// 在线通道一并踢掉——worker 重连即重新注册（与 zcode 删除设备同语义）。
+func (r *vscRelay) forgetTunnel(device string) bool {
+	r.mu.Lock()
+	var tun *vscTunnel
+	var ch *vscChannel
+	for _, t := range r.tunnels {
+		if t.device == device {
+			tun, ch = t, t.ch
+			delete(r.tunnels, tun.token)
+			break
+		}
+	}
+	r.mu.Unlock()
+	if tun == nil {
+		return false
+	}
+	if ch != nil {
+		r.dropChannel(tun, ch, "removed via manager")
+	}
+	log.Printf("[vscrelay] tunnel %s forgotten via manager", vscTunnelLabel(tun))
+	return true
+}
 
 // sweepLocked releases tunnel entries whose grace has run out. Lazy — runs on
 // registration and status, no background timer.

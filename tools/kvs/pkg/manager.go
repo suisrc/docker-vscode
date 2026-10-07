@@ -8,6 +8,8 @@ package pkg
 //	             they pin a version ("" = latest), zcode cards carry data-dir /
 //	             workspace env overrides, vscode cards folder quick-links
 //	[ZCD]name  — zcode remote desktops registered through the pairing relay
+//	[VSC]name  — VS Code desktops: live tunnel devices from relay://vscode
+//	             (synthesized like [ZCD]) plus user-added remote cards
 //	[远程]name  — user-added remote apps (any URL + logo; VS Code logo cards
 //	             carry workspace folder quick-links)
 //
@@ -767,15 +769,44 @@ func mgrBuildEntries() []mgrEntry {
 		out = append(out, e)
 	}
 
+	// [VSC]<device> — relay://vscode 的隧道设备（远程 VS Code 桌面端）。与
+	// [ZCD] 同构：实时合成、不落库；URL 是中继挂载前缀 + ?tkn=<token>（相对
+	// 路径，浏览器在页面自己的 origin 打开），离线隧道不给 URL（badge 提示）。
+	liveVsc := make(map[string]bool)
+	for _, t := range vscGetRelay().tunnelList() {
+		liveVsc[t.Device] = true
+		id := "vsc-tun-" + t.Device
+		rec, _ := store.appFind(id)
+		name := t.Name
+		if name == "" {
+			name = t.Device
+		}
+		online := t.Online
+		e := mgrEntry{
+			ID: id, Type: "vsc", Icon: "vsc", Name: name,
+			URL: t.URL, Version: t.Version, Tags: rec.Tags,
+			CreatedAt: t.Since, LastSeen: t.Since, Online: &online,
+		}
+		if rec.LastSeen > e.LastSeen {
+			e.LastSeen = rec.LastSeen // manager-side visit may be newer
+		}
+		out = append(out, e)
+	}
+
 	// Persisted apps: remote cards and 内置 (built-in hosted-service) cards.
 	// Legacy default-stamp records (zcd-local / vsc-local) and live relay
 	// device stamps are skipped — the former are not rendered at all anymore.
+	// vsc-tun- stamps (tags/visits for tunnel cards) always skip: tunnels are
+	// live-only state, an expired tunnel must not leave a ghost card behind.
 	for _, app := range store.appsList() {
 		if app.ID == mgrIDZcdLocal || app.ID == mgrIDVscLocal {
 			continue
 		}
 		if sid, ok := strings.CutPrefix(app.ID, "zcd-"); ok && liveSids[sid] {
 			continue // relay-device stamp, merged above
+		}
+		if strings.HasPrefix(app.ID, "vsc-tun-") {
+			continue
 		}
 		e := mgrEntry{
 			ID: app.ID, Type: app.Type, Icon: mgrIconFor(app.Type, app.Icon), Name: app.Name,
@@ -1296,6 +1327,11 @@ func managerDeleteApp(w http.ResponseWriter, r *http.Request) {
 		// A live device re-registers on its next reconnect.
 		store.remove(sid)
 	}
+	if dev, ok := strings.CutPrefix(id, "vsc-tun-"); ok {
+		// vscode 隧道卡：清掉隧道占用（在线通道一并踢掉）。worker 重连即重新
+		// 注册——与 zcode 删除设备同语义。
+		vscGetRelay().forgetTunnel(dev)
+	}
 	log.Printf("[manager] app removed: %s (%s)", app.Name, id)
 	note := ""
 	if app.Svc != "" {
@@ -1389,6 +1425,18 @@ func mgrStubApp(store *zcoStore, id string, now int64) (managerApp, bool) {
 			return app, true
 		}
 	}
+	if dev, ok := strings.CutPrefix(id, "vsc-tun-"); ok {
+		for _, t := range vscGetRelay().tunnelList() {
+			if t.Device != dev {
+				continue
+			}
+			app := managerApp{ID: id, Type: "vsc", CreatedAt: now}
+			if t.Name != "" {
+				app.Name = t.Name
+			}
+			return app, true
+		}
+	}
 	return managerApp{}, false
 }
 
@@ -1437,7 +1485,7 @@ func managerSaveTags(w http.ResponseWriter, r *http.Request) {
 
 // mgrEntryExists reports whether id names an entry the manager UI can see:
 // the built-in zcd-local, any persisted app record (custom app or relay
-// stamp), or a registered relay device.
+// stamp), a registered zcode relay device, or a live vscode tunnel.
 func mgrEntryExists(store *zcoStore, id string) bool {
 	if id == mgrIDZcdLocal {
 		return true
@@ -1447,6 +1495,13 @@ func mgrEntryExists(store *zcoStore, id string) bool {
 	}
 	if sid, ok := strings.CutPrefix(id, "zcd-"); ok && store.get(sid) != nil {
 		return true
+	}
+	if dev, ok := strings.CutPrefix(id, "vsc-tun-"); ok {
+		for _, t := range vscGetRelay().tunnelList() {
+			if t.Device == dev {
+				return true
+			}
+		}
 	}
 	return false
 }

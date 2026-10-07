@@ -23,12 +23,12 @@ demo:
 # KVS_SVC_VSCODE_DOWNLOAD_PATH=stable/VERHASH/vscode-server-linux-x64-web.tar.gz
 vscode:
 	KVS_DEBUG=1 KVS_PORT=7180 KVS_LOGIN_AUTHZ=true KVS_LOGIN_TOKEN=123456 \
-	KVS_HOME=../../temp KVS_COOKIE_TOKEN_KEY=vscode-tkn \
+	KVS_HOME=/wsc/go/github/ws01/docker-vscode/temp KVS_COOKIE_TOKEN_KEY=vscode-tkn \
 	go run main.go -n :vscode
 
 zcodex:
 	KVS_DEBUG=1 KVS_PORT=7188 KVS_LOGIN_AUTHZ=true KVS_LOGIN_TOKEN=123456 \
-	KVS_HOME=../../temp KVS_COOKIE_TOKEN_KEY=vscode-tkn KVS_QUERY_TOKEN_KEY=tkn \
+	KVS_HOME=/wsc/go/github/ws01/docker-vscode/temp KVS_COOKIE_TOKEN_KEY=vscode-tkn KVS_QUERY_TOKEN_KEY=tkn \
 	KVS_SVC_ZCODE_VERSION=zcode KVS_CACHE_PATH=/__cache/ \
 	ZCODE_WEB_REMOTE_CONTROL_RELAY_WS_URL=ws://127.0.0.1:7188/remote/ws \
 	go run main.go -n :zcodex

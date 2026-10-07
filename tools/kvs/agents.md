@@ -153,7 +153,7 @@ ws~ 路由前缀匹配与退避：`ExactPathMatch` = `ws~` 且目标非隧道类
 
 `-c` 可选且只接受文件路径（缺省=内嵌 `kvs.ini`）；路由表只有 `-n :name` 一种选法，无预设别名。代码不再注入任何 zcodex 环境默认值：`KVS_PATH_PUBLIC`（桌面客户端无法走 Cookie 认证）、`KVS_CC_SED_*`（cache_sed 规则，wss 地址与 CDN 地址重写）由部署环境/Makefile zcodex 目标或 `[service.zcode] envs_default` 提供（值见 `[service.zcode]` 注释）。
 
-管理页 `manager.html` 挂载于 `/=api://manager`（客户端渲染，支持深浅色主题）。条目四类：`[ZCD]local` 本机 zcode（`/zcode`，kvs 懒启动，始终可点）；`[ZCD]xxx` 通过 relay 中继注册的远程 zcode 桌面端（在线时点击打开远程控制终端）；`[VSC]zzz` 手动添加的 VS Code 应用（同一设备的不同工作区以快捷方式挂同一卡片，访问地址 `{卡片同host}/?folder=<工作区路径>`，可编辑/删除）；`[APP]`/`[LNX]` 「其他」类型设备（Logo 四选一 vsc/zcd/linux/other）。卡片顺序固定（不按访问时间排序），拖拽调整后持久化到 `order` 段，新条目追加末尾。
+管理页 `manager.html` 挂载于 `/=api://manager`（客户端渲染，支持深浅色主题）。条目四类：`[ZCD]local` 本机 zcode（`/zcode`，kvs 懒启动，始终可点）；`[ZCD]xxx` 通过 relay 中继注册的远程 zcode 桌面端（在线时点击打开远程控制终端）；`[VSC]zzz` VS Code 应用：`relay://vscode` 的隧道设备实时合成（id `vsc-tun-<device>`，在线时点击打开 `<挂载前缀>?tkn=<token>`，掉线只保留徽章；删除卡片会清隧道占用，worker 重连即回来；tags/visit 以 stub 记录存 zcodex.json，隧道过期不留幽灵卡）+ 手动添加的远程卡（同一设备的不同工作区以快捷方式挂同一卡片，访问地址 `{卡片同host}/?folder=<工作区路径>`，可编辑/删除）；`[APP]`/`[LNX]` 「其他」类型设备（Logo 四选一 vsc/zcd/linux/other）。卡片顺序固定（不按访问时间排序），拖拽调整后持久化到 `order` 段，新条目追加末尾。
 
 合并视图条目来源（`mgrBuildEntries`）：
 1. `zcd-local`：本机 zcode，URL=`/zcode`（相对，始终可点）
