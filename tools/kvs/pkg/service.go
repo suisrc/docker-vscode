@@ -371,7 +371,7 @@ func runShellScripts(sc *ServiceConfig, srvState *ServiceState) (bool, error) {
 		} else {
 			srvState.SetPreparing("Running once script: " + sc.OnceShell)
 			log.Printf("[prepare:%s] running once script: %s", sc.Name, sc.OnceShell)
-			if err := RunServiceStartup(sc.OnceShell); err != nil {
+			if err := RunServiceStartup(sc.Home, sc.OnceShell); err != nil {
 				return false, fmt.Errorf("once_shell: %w", err)
 			}
 			log.Printf("[prepare:%s] once script complete", sc.Name)
@@ -390,7 +390,7 @@ func runShellScripts(sc *ServiceConfig, srvState *ServiceState) (bool, error) {
 	if sc.InitShell != "" {
 		srvState.SetPreparing("Running startup script: " + sc.InitShell)
 		log.Printf("[prepare:%s] running startup script: %s", sc.Name, sc.InitShell)
-		if err := RunServiceStartup(sc.InitShell); err != nil {
+		if err := RunServiceStartup(sc.Home, sc.InitShell); err != nil {
 			return false, fmt.Errorf("init_shell: %w", err)
 		}
 		log.Printf("[prepare:%s] startup script complete", sc.Name)
@@ -511,21 +511,33 @@ func resolveExtFromURL(client *http.Client, urlStr string) (string, error) {
 	return extractExt(finalURL), nil
 }
 
-// extractExt returns the extension portion of a basename without the leading
-// dot, e.g. "x.tar.gz" → "tar.gz". The leading dot is intentionally omitted so
-// callers control it in the template (e.g. "${HASH}.{ext}" → "hash.tar.gz").
+// archiveExts lists the package extensions kvs recognises for cache
+// filenames, compound suffixes first so ".tar.gz" wins over its ".gz" tail.
+var archiveExts = []string{"tar.gz", "tar.bz2", "tar.xz", "tgz", "tbz2", "txz", "zip", "gz", "bz2", "xz"}
+
+// extractExt returns the archive extension of a URL basename without the
+// leading dot, e.g. "x.tar.gz" → "tar.gz". The leading dot is intentionally
+// omitted so callers control it in the template (e.g. "${HASH}.{ext}" →
+// "hash.tar.gz").
+//
+// Matched against a known-suffix set instead of "everything after the first
+// dot": a version-dotted basename like "dsh-0.2.0-rc.2.tgz" must yield "tgz"
+// — the first-dot rule returned "2.0-rc.2.tgz" and corrupted the download
+// cache filename into {version}_{hash}.2.0-rc.2.tgz.
 func extractExt(base string) string {
 	base = filepath.Base(base)
-	// Strip query/fragment.
+	// Strip query/fragment; compare lowercased so .TGZ still matches.
 	if i := strings.IndexAny(base, "?#"); i >= 0 {
 		base = base[:i]
 	}
-	dotIdx := strings.Index(base, ".")
-	if dotIdx < 0 || strings.HasSuffix(base[dotIdx+1:], ".tar.gz") {
-		log.Printf("[prepare] no extension found in %q, defaulting to tar.gz", base)
-		return "tar.gz" // sensible default for compressed tarballs
+	lower := strings.ToLower(base)
+	for _, ext := range archiveExts {
+		if strings.HasSuffix(lower, "."+ext) {
+			return ext
+		}
 	}
-	return base[dotIdx+1:]
+	log.Printf("[prepare] no known archive extension in %q, defaulting to tar.gz", base)
+	return "tar.gz" // sensible default for compressed tarballs
 }
 
 // writerFunc adapts a function to the io.Writer interface.
@@ -695,11 +707,12 @@ func isPathWithin(target, destDir string) bool {
 		strings.HasPrefix(cleanTarget, cleanDest+string(os.PathSeparator))
 }
 
-// runServiceStartup executes a shell entry (once_shell/init_shell/stop_shell).
-// If it starts with "file://", the referenced file is made executable and run
-// directly (the kernel reads its #! shebang). Otherwise, the string is run via
-// sh -c.
-func RunServiceStartup(cmd string) error {
+// runServiceStartup executes a shell entry (once_shell/init_shell/stop_shell)
+// in the given working directory (the service home; "" = kvs cwd). If it
+// starts with "file://", the referenced file is made executable and run
+// directly (the kernel reads its #! shebang). Otherwise, the string is run
+// via sh -c.
+func RunServiceStartup(dir, cmd string) error {
 	var c *exec.Cmd
 	if filePath, ok := strings.CutPrefix(cmd, "file://"); ok {
 		if err := os.Chmod(filePath, 0o755); err != nil {
@@ -708,6 +721,9 @@ func RunServiceStartup(cmd string) error {
 		c = exec.Command(filePath)
 	} else {
 		c = exec.Command("sh", "-c", cmd)
+	}
+	if dir != "" {
+		c.Dir = dir
 	}
 	c.Stdout = os.Stdout
 	c.Stderr = os.Stderr
@@ -811,7 +827,10 @@ func (m *ServiceManager) State(name string) *ServiceState {
 	return nil
 }
 
-// StartProc launches the service command in its own process group. The
+// StartProc launches the service command in its own process group, with the
+// working directory set to the service home (sc.Home is always resolved —
+// explicit home or the {KVS_HOME}/<name> default — so relative command paths
+// and data files resolve against it, never against kvs's own cwd). The
 // command (and the optional agent bridge args) were already expanded at
 // config-load time; the subprocess additionally inherits the whole kvs
 // environment, including every reverse-assigned KVS_SVC_<NAME>_* variable.
@@ -829,7 +848,7 @@ func (m *ServiceManager) StartProc(sc *ServiceConfig) error {
 	if ms.proc.Running() {
 		return fmt.Errorf("service %q process is running", sc.Name)
 	}
-	return ms.proc.Start(sc.Name, sc.Command+sc.VscAgentArgs)
+	return ms.proc.Start(sc.Name, sc.Home, sc.Command+sc.VscAgentArgs)
 }
 
 // StopOne terminates a kvs-managed service subprocess, runs stop_shell and
@@ -851,7 +870,7 @@ func (m *ServiceManager) StopOne(name string, runStopShell bool) bool {
 	sc := ms.cfg
 	if stopped && runStopShell && sc != nil && sc.StopShell != "" {
 		log.Printf("[service %s] running stop_shell: %s", name, sc.StopShell)
-		if err := RunServiceStartup(sc.StopShell); err != nil {
+		if err := RunServiceStartup(sc.Home, sc.StopShell); err != nil {
 			log.Printf("[service %s] stop_shell error: %v", name, err)
 		}
 	}

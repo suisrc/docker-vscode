@@ -61,6 +61,9 @@ func MustAsset(name string) []byte {
 //   - "http://" or "https://" prefix on the prefix itself: full-domain match
 //   - trailing "[k=v]" on the prefix: query gate — the request must carry this
 //     exact pair or the route is skipped (see splitQueryGate)
+//   - "*" leading a prefix (per comma element): suffix match — the request path
+//     must end with the rest (b.Suffix carries the literal suffix; a bare "*"
+//     matches every path and is skipped with a warning)
 //   - svc://<name> target: kvs-hosted service
 //
 // Markers may combine (e.g. "cc~/path"); they are stripped in any order.
@@ -150,7 +153,17 @@ func parseBackends(entries [][2]string) []Backend {
 			if p = strings.TrimSpace(p); p == "" {
 				continue
 			}
-			if !strings.HasPrefix(p, "/") &&
+			// "*" 前导的后缀匹配（逐元素标记）：Source 保留含 * 的完整写法用于
+			// 日志与展示，Suffix 存去 * 后的字面后缀。后缀元素不做 "/" 前缀补全
+			// （*.webmanifest 的后缀就是 ".webmanifest"）；裸 "*" 会匹配所有
+			// 路径，告警跳过。
+			suffix := ""
+			if strings.HasPrefix(p, "*") {
+				if suffix = p[1:]; suffix == "" {
+					log.Printf("WARNING: route %q: bare * matches every path, skipping", e[0])
+					continue
+				}
+			} else if !strings.HasPrefix(p, "/") &&
 				!strings.HasPrefix(p, "http://") && !strings.HasPrefix(p, "https://") {
 				p = "/" + p
 			}
@@ -164,6 +177,7 @@ func parseBackends(entries [][2]string) []Backend {
 				b.IsCache = isCache
 				b.IsWSock = isWSock
 				b.QueryKey, b.QueryVal = gateKey, gateVal
+				b.Suffix = suffix
 				// <verhash>/<version> route template: the prefix is matched
 				// against the TARGET service's resolved VersionHash/Version
 				// per request. svc:// only — other schemes have no service to
@@ -751,6 +765,8 @@ func rewriteProxyRequest(req *http.Request, b Backend, targetURL *url.URL, cache
 	basePath := targetURL.EscapedPath()
 	switch b.PathMode {
 	case "-":
+		// 后缀路由没有可剥的前缀（Source 是匹配模式不是路径前缀），
+		// TrimPrefix 自然空转 → 转发完整请求路径。
 		req.URL.Path = joinProxyPaths(basePath, strings.TrimPrefix(req.URL.Path, b.Source))
 	case "+":
 		req.URL.Path = joinProxyPaths(basePath, req.URL.Path)

@@ -62,6 +62,9 @@ type Process struct {
 	// cmds is the command string of the last successful start, so
 	// Restart("") can re-launch it (exec.Cmd is single-use).
 	cmds string
+	// dir is the working directory of the last successful start, kept
+	// alongside cmds for Restart.
+	dir string
 	// proc is the currently tracked child. nil = never started or
 	// cleared by Stop/Restart; NOT cleared when the child exits on its
 	// own - Running() reads proc.done for liveness.
@@ -73,8 +76,10 @@ type Process struct {
 
 // Start launches cmds (optionally prefixed with VAR=value assignments)
 // in its own process group, with a reaper goroutine calling cmd.Wait.
+// dir is the child's working directory ("" = inherit kvs's cwd) — svc
+// callers pass the service home so relative paths resolve against it.
 // Fails if a child is still running; a dead child (crashed) is replaced.
-func (e *Process) Start(name, cmds string) error {
+func (e *Process) Start(name, dir, cmds string) error {
 	e.lock.Lock()
 	defer e.lock.Unlock()
 	// Replacing a still-alive child would orphan it; a dead child is
@@ -82,7 +87,7 @@ func (e *Process) Start(name, cmds string) error {
 	if e.aliveLocked() {
 		return errors.New("process is running")
 	}
-	return e.startLocked(name, cmds)
+	return e.startLocked(name, dir, cmds)
 }
 
 // aliveLocked reports whether the tracked child is still alive
@@ -101,7 +106,7 @@ func (e *Process) aliveLocked() bool {
 
 // startLocked launches cmds and wires up tracking. Callers must hold
 // e.lock and have terminated any previous child first.
-func (e *Process) startLocked(name, cmds string) error {
+func (e *Process) startLocked(name, dir, cmds string) error {
 	parts := strings.Fields(cmds)
 	if len(parts) == 0 {
 		return errors.New("command is empty")
@@ -127,6 +132,9 @@ func (e *Process) startLocked(name, cmds string) error {
 	if i > 0 {
 		cmd.Env = env // nil Env would inherit the parent env untouched
 	}
+	if dir != "" {
+		cmd.Dir = dir
+	}
 	// Inherit stdout/stderr so backend logs interleave with kvs logs.
 	cmd.Stdout = os.Stdout
 	cmd.Stderr = os.Stderr
@@ -144,7 +152,12 @@ func (e *Process) startLocked(name, cmds string) error {
 	if e.Name == "" {
 		e.Name = "unknown-" + strconv.Itoa(cmd.Process.Pid)
 	}
-	log.Printf("[%s] process started (pid %d)", e.Name, cmd.Process.Pid)
+	// 启动日志带上工作目录：相对路径解析错时一眼定位。
+	if dir != "" {
+		log.Printf("[%s] process started (pid %d, dir %s)", e.Name, cmd.Process.Pid, dir)
+	} else {
+		log.Printf("[%s] process started (pid %d)", e.Name, cmd.Process.Pid)
+	}
 
 	proc := &struct {
 		cmd  *exec.Cmd
@@ -165,14 +178,16 @@ func (e *Process) startLocked(name, cmds string) error {
 	}()
 	e.proc = proc
 	e.cmds = cmds
+	e.dir = dir
 	return nil
 }
 
-// Restart replaces the current child. With cmds == "" the command
-// remembered by the last successful Start is re-launched (exec.Cmd is
-// single-use, so the child is rebuilt from the string; this also works
-// after a crash). Returns true when the replacement child is running.
-func (e *Process) Restart(cmds string) bool {
+// Restart replaces the current child. With cmds == "" the command and
+// working directory remembered by the last successful Start are re-launched
+// (exec.Cmd is single-use, so the child is rebuilt from the string; this
+// also works after a crash). Returns true when the replacement child is
+// running.
+func (e *Process) Restart(dir, cmds string) bool {
 	e.lock.Lock()
 	defer e.lock.Unlock()
 	if cmds == "" {
@@ -181,9 +196,12 @@ func (e *Process) Restart(cmds string) bool {
 			log.Printf("[%s] restart process: no previous command", e.Name)
 			return false
 		}
+		if dir == "" {
+			dir = e.dir // "" on the call means "keep the remembered dir"
+		}
 	}
 	e.terminateLocked()
-	if err := e.startLocked("", cmds); err != nil { // "" keeps the label
+	if err := e.startLocked("", dir, cmds); err != nil { // "" keeps the label
 		log.Printf("[%s] restart process: %v", e.Name, err)
 		return false
 	}

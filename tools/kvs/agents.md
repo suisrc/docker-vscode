@@ -15,7 +15,7 @@
 |---|---|
 | `main.go` | CLI 分发（`help`/`demo`/`mirror`/`syncto` 子命令；无子命令=代理模式）、mux 装配、登录/内置端点、注入脚本服务 |
 | `pkg/config.go` | ini 解析 + 值模板展开（含多行 JSON 修复）、多路由表 `[proxies.<name>]`（`-n :name` 选表）、多服务段 `[service.<name>]` + `KVS_SVC_<NAME>_*` 环境变量反推、版本覆盖（`SetOverrideVersion` 按服务）、`-c` 可选（缺省=内嵌 kvs.ini，仅接受文件路径） |
-| `pkg/backend.go` | `Backend` 抽象；`CreateBackendHandler` 按 scheme 分发；`registerAPI`（api:// 进程内注册表）；ws 代理；`precompressedFileServer`（br/gz/zst 预压缩静态）；单条件 query 门禁（`splitQueryGate`，前缀收尾 `[k=v]` → `QueryKey/QueryVal`） |
+| `pkg/backend.go` | `Backend` 抽象；`CreateBackendHandler` 按 scheme 分发；`registerAPI`（api:// 进程内注册表）；ws 代理；`precompressedFileServer`（br/gz/zst 预压缩静态）；单条件 query 门禁（`splitQueryGate`，前缀收尾 `[k=v]` → `QueryKey/QueryVal`）；`*` 后缀匹配路由（`b.Suffix`） |
 | `pkg/service.go` | service 生命周期：检测→版本解析→下载→解压→脚本→启停；`ServiceManager`（每 svc:// 服务独立 ServiceState+Process）；healthz `#@code` 探活 |
 | `pkg/cache.go` | cc~ 缓存核心：`/__cache/` 外部资源代理（命中按 sed 计划直出 sendfile/内存重写，元数据内存缓存 size+mtime+inode 判失效）、两条入口、透传；规则匹配小工具（hostMatch/globMatch/targetHost/splitList） |
 | `pkg/cachesed.go` | cache_sed（`KVS_CC_SED_<名称>`）：正文改写 once/each/none 计划与 `_.json` 元数据、brotli/gzip 解压编码 |
@@ -34,7 +34,7 @@
 | `pkg/jsonhead.go` | 只读 JSON 顶层头部的零分配扫描器（中继 data 帧快路径判定） |
 | `pkg/stats.go` | 运行计数（`/__stats`）与可选 pprof（`KVS_PPROF`） |
 | `pkg/*_test.go` | 单元测试与微基准：帧读写/unmask/JSON 头部扫描；隧道（写停滞致命、慢读者存活、空闲判定、流水线首帧端到端、后端不可达回退）；反代响应路径 benchmark（`transport_test.go`） |
-| `pkg/proc.go` | 子进程 Setsid 脱离、终止时前台进程组恢复 |
+| `pkg/proc.go` | 子进程 Setsid 脱离、终止时前台进程组恢复；`Start/Restart` 携带工作目录（svc 传 `sc.Home`，子进程 cwd=服务 home，启动日志带 dir） |
 | `pkg/s3mirror.go` | `mirror`/`syncto` 的 S3 同步实现（owner 开发中，勿擅自重构） |
 | `pkg/help.go` | help 文本——新增配置项/环境变量必须同步 |
 | `pkg/` 资产 | `manager.html` `login.html` `loading.html` `logout.vsc.js` `kvs.ini` `favicon.ico`，`go:embed` 进二进制 |
@@ -47,7 +47,7 @@
 
 ### 3.2 路由与后端协议
 
-路由表：`[proxies.<name>]` 命名多表（`[proxies]` 无名表），`-n :name` 选择，默认取文件中第一张表。每行一个路由，按文件顺序匹配。前缀标记：普通前缀；`^`（正则）；`http(s)://`、`ws(s)://` 开头（全域名）；前缀收尾 `[k=v]`（单条件 query 门禁：`splitQueryGate` 在标记剥离后、逗号展开前提取为 `Backend.QueryKey/QueryVal` 两个字符串，请求侧由 main 分发循环短路比较——解码值精确相等，不满足跳过该路由；括号内容含逗号或没有 `=` 时整体按字面路径，正则字符类如 `[0-9]` 不受影响）。
+路由表：`[proxies.<name>]` 命名多表（`[proxies]` 无名表），`-n :name` 选择，默认取文件中第一张表。每行一个路由，按文件顺序匹配。前缀标记：普通前缀；`^`（正则）；`*` 开头（后缀匹配：dispatch 按 HasSuffix，`b.Suffix` 存去 `*` 的字面后缀、Source 保留完整写法，裸 `*` 告警跳过；逐元素标记，与逗号展开、`[k=v]` 门禁正交；后缀只是路由过滤、不改写路径——`ccRest` 原样转发完整请求路径，否则头部丢失会让上游落到错误资源）；`http(s)://`、`ws(s)://` 开头（全域名）；前缀收尾 `[k=v]`（单条件 query 门禁：`splitQueryGate` 在标记剥离后、逗号展开前提取为 `Backend.QueryKey/QueryVal` 两个字符串，请求侧由 main 分发循环短路比较——解码值精确相等，不满足跳过该路由；括号内容含逗号或没有 `=` 时整体按字面路径，正则字符类如 `[0-9]` 不受影响）。
 
 后端 scheme 全集（readme 仅列用户常用项）：
 
@@ -64,7 +64,7 @@
 
 多托管服务（svc://）：LoadInitConfig 先扫选中表的 `svc://<name>` 引用（主服务=第一个引用），**只解析被引用的服务段**（未引用的 `[service.<name>]` 段保持休眠：不反推环境变量、不解析版本、不注册），被引用段按依赖序解析并**反向赋值** `KVS_SVC_<NAME>_*` 环境变量（HOME 默认 `{KVS_HOME}/<name>`；ADDR 回填；HOST/PORT 由 http 地址、SOCK 由 unix 地址反推；VERSION/VERHASH 解析后回填；BIN_HOME 回填；段末处理 envs_default——系统环境变量为空时用默认值填充，默认值可引用全部已反推变量），然后才展开路由值——路由里 `{KVS_SVC_ZCODE_BIN_HOME}` 这类引用由此生效。每个 svc:// 服务有独立的 ServiceState（loading 页）与 Process（Setsid 子进程组），启动命令在配置加载期已完成 `{KVS_SVC_<NAME>_*}` 展开，子进程继承完整进程环境；`/__restart?svc=<name>`（缺省=主服务）停进程+stop_shell+清 unix socket 并重置该服务状态；kvs 退出时 `StopAll()` 只杀 kvs 托管的进程。版本覆盖 `SetOverrideVersion(svc, v)` 按服务记录。
 
-service 生命周期（service.go `PrepareService(sc)`）：探活（`healthz` 键=`#@<code>` 后缀要求精确状态码、无后缀只要求可达；unix 探活失败会清理残留 socket 文件）→ 已存活=外部服务（只代理不托管启停）→ `bin_home` 非空跳过下载 → 解析下载地址（`download` 优先，否则 `download_info`+`download_field_url`）→ 跟随重定向取扩展名（缓存文件名后缀）→ 下载到 `{cache_dir}/version/{service}/{version}_{version_hash}.{ext}`（按服务名分目录，避免不同服务同版本冲突） → 解压到 `bin_home` → 执行 `once_shell`（`{bin_home}/__once__` 标记）+`init_shell`；`stop_shell` 仅 kvs 托管的后端退出时执行。
+service 生命周期（service.go `PrepareService(sc)`）：探活（`healthz` 键=`#@<code>` 后缀要求精确状态码、无后缀只要求可达；unix 探活失败会清理残留 socket 文件）→ 已存活=外部服务（只代理不托管启停）→ `bin_home` 非空跳过下载 → 解析下载地址（`download` 优先，否则 `download_info`+`download_field_url`）→ 跟随重定向取扩展名（缓存文件名后缀）→ 下载到 `{cache_dir}/version/{service}/{version}_{version_hash}.{ext}`（按服务名分目录，避免不同服务同版本冲突） → 解压到 `bin_home` → 执行 `once_shell`（`{bin_home}/__once__` 标记）+`init_shell`；`stop_shell` 仅 kvs 托管的后端退出时执行。`command` 与 once/init/stop shell、actions 的工作目录一律是 `sc.Home`（`Process.Start`/`RunServiceStartup` 落实；空 dir 才继承 kvs cwd，agent 宿主如此）。
 
 ### 3.2.1 WebSocket 升级快路径（pkg/wsproxy.go）
 

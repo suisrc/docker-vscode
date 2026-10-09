@@ -82,19 +82,21 @@ func AgentBridgeArgsFromFile(file string) string {
 // It lives here rather than at the call site so any caller gets the guarantee.
 var agentActionMu sync.Mutex
 
-// RunAgentAction executes one action command, with the same dispatch as
-// once_shell/init_shell/stop_shell: a file:// prefix runs the script via its
-// shebang, anything else goes through sh -c. Output is inherited so it
-// interleaves with the kvs log. kvs does not interpret the command.
+// RunAgentAction executes one action command in the given working directory
+// (the service home — actions are defined per [service.<name>] section), with
+// the same dispatch as once_shell/init_shell/stop_shell: a file:// prefix
+// runs the script via its shebang, anything else goes through sh -c. Output
+// is inherited so it interleaves with the kvs log. kvs does not interpret the
+// command.
 //
 // The call blocks until the command exits. Concurrent calls are serialized by
 // agentActionMu, so a slow action delays other actions rather than running
 // alongside them.
-func RunAgentAction(name, cmd string) error {
+func RunAgentAction(name, dir, cmd string) error {
 	log.Printf("[agents] action %s: running %s", name, cmd)
 	agentActionMu.Lock()
 	defer agentActionMu.Unlock()
-	return RunServiceStartup(cmd)
+	return RunServiceStartup(dir, cmd)
 }
 
 // ListAgentEntries scans the vsc_agents_dir directory and returns {file, name}

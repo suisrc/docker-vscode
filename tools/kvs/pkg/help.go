@@ -57,6 +57,9 @@ Route formats ([proxies.<name>] section / -n argument):
   /path[k=v]=https://up             trailing [k=v]: single-pair query gate — the request
                                     must carry this exact pair (decoded compare) or the
                                     route is skipped (falls through to later routes)
+  */code.webmanifest=https://up     leading *: suffix match — the path must end with the
+                                    rest (bare * is rejected); suffix routes never
+                                    rewrite the path, the full request path is forwarded
   /__healthz=text://OK:@now         health check endpoint
 
 Config file sections:

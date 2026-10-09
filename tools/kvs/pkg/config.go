@@ -192,6 +192,7 @@ type Backend struct {
 	IsWSock     bool   // ws~ prefix (or ws://wss:// url scheme): WebSocket-aware route, upgrade requests detected and handled separately
 	QueryKey    string // 前缀尾部 [k=v] query 门禁的参数名（""=无门禁）
 	QueryVal    string // 门禁参数必须等于的解码字面值；单条件设计：两个字段零分配，dispatch 一次比较
+	Suffix      string // "*" 后缀匹配：去 * 后的字面后缀（如 */code.webmanifest → /code.webmanifest；""=非后缀路由）；Source 保留含 * 的完整写法；路由过滤用，请求路径原样转发不改写
 }
 
 // iniFile holds parsed key-value pairs from kvs.ini.
@@ -990,6 +991,13 @@ func LoadInitConfig() Config {
 		os.Setenv("KVS_PORT", cfg.Port)
 	}
 
+	// --- cache_dir / cache_path (top-level keys) ---------------------------
+	cfg.CacheDir = expandValue(strProp(ini, "cache_dir", ""))
+	if cfg.CacheDir != "" {
+		os.Setenv("CACHE_DIR", cfg.CacheDir)
+	}
+	cfg.CachePath = expandValue(strProp(ini, "cache_path", ""))
+
 	// --- Named service sections (raw) --------------------------------------
 	sections := map[string]*ServiceConfig{}
 	serviceOrder := make([]string, 0, 4)
@@ -1036,10 +1044,6 @@ func LoadInitConfig() Config {
 		cfg.resolveService(cfg.Services[name])
 		cfg.Services[name].Extensions = svcExtensions(name) // svc://<name>.<ext> 扩展
 	}
-
-	// --- cache_dir / cache_path (top-level keys) ---------------------------
-	cfg.CacheDir = expandValue(strProp(ini, "cache_dir", ""))
-	cfg.CachePath = expandValue(strProp(ini, "cache_path", ""))
 
 	// --- Expand [headers] and proxy routes (after all KVS_SVC_* vars) ----
 	headerEntries := ini.hasPrefix("headers.")

@@ -577,6 +577,22 @@ func SetCacheDir(cacheDir string) {
 	log.Printf("[cache] cc~ backend cache root: %s", cacheBase)
 }
 
+// ccRest computes the upstream sub-path for a cc~ backend request: suffix
+// routes forward the full request path (the suffix is a routing filter only —
+// rewriting it away would strand heads like /static/stable on the wrong
+// upstream resource), regex backends the full path, and the rest the remainder
+// after the routing prefix.
+func ccRest(b Backend, reqPath string) string {
+	switch {
+	case b.Suffix != "", b.IsRegex:
+		return reqPath
+	}
+	if rest := strings.TrimPrefix(reqPath, b.Source); rest != "" {
+		return rest
+	}
+	return "/"
+}
+
 // HandleCCBackend returns the caching proxy handler for a cc~ marked backend
 // (http/https only). Proxied responses are cached at
 // {cache_dir:-/cache}/ccproxy/{scheme}:{host}/path — same layout and
@@ -613,15 +629,8 @@ func HandleCCBackend(b Backend) http.Handler {
 			return
 		}
 
-		// Sub-path of the backend: strip the routing prefix (full path for
-		// regex backends, where the prefix is the pattern itself).
-		rest := r.URL.Path
-		if !b.IsRegex {
-			rest = strings.TrimPrefix(rest, b.Source)
-		}
-		if rest == "" {
-			rest = "/"
-		}
+		// Sub-path of the backend sent upstream (see ccRest).
+		rest := ccRest(b, r.URL.Path)
 
 		// Cache namespace host: with a [v=key] marker, embed the resolved
 		// version so different versions cache apart. The version segment

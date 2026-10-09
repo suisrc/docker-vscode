@@ -143,6 +143,90 @@ func TestIniAndInlineGatedRoutes(t *testing.T) {
 	}
 }
 
+func TestParseBackendsSuffixMatch(t *testing.T) {
+	bs := parseBackends([][2]string{
+		{"cc~*/code.webmanifest", "https://vscode.dev/[v=vscode-version]"},
+		{"*.webmanifest", "http://u:1"},
+		{"*/code.webmanifest,/plain", "text://X"},
+		{"*/x[akey=v]", "text://X"},
+		{"cc~*", "text://X"}, // 裸 * 匹配所有路径：告警跳过
+	})
+	if len(bs) != 5 {
+		t.Fatalf("backends = %d, want 5", len(bs))
+	}
+	if !bs[0].IsCache || bs[0].Source != "*/code.webmanifest" || bs[0].Suffix != "/code.webmanifest" {
+		t.Errorf("cc~ 后缀路由解析错误: %+v", bs[0])
+	}
+	// 后缀元素不做 "/" 前缀补全。
+	if bs[1].Suffix != ".webmanifest" {
+		t.Errorf("*.webmanifest 解析错误: %+v", bs[1])
+	}
+	// 逗号混合：后缀元素与前缀元素各自成立。
+	if bs[2].Suffix != "/code.webmanifest" || bs[3].Suffix != "" || bs[3].Source != "/plain" {
+		t.Errorf("逗号混合后缀/前缀错误: %+v / %+v", bs[2], bs[3])
+	}
+	// 后缀与 [k=v] 门禁正交组合。
+	if bs[4].Suffix != "/x" || bs[4].QueryKey != "akey" || bs[4].QueryVal != "v" {
+		t.Errorf("后缀+门禁解析错误: %+v", bs[4])
+	}
+}
+
+func TestCCRest(t *testing.T) {
+	prefix := Backend{Source: "/remote/v4"}
+	if got := ccRest(prefix, "/remote/v4/client"); got != "/client" {
+		t.Errorf("ccRest 前缀剥离 = %q", got)
+	}
+	if got := ccRest(prefix, "/remote/v4"); got != "/" {
+		t.Errorf("ccRest 前缀全匹配 = %q", got)
+	}
+	suffix := Backend{Source: "*/code.webmanifest", Suffix: "/code.webmanifest"}
+	// 后缀只是路由过滤：上游收到完整请求路径（头部不能丢，丢了上游就落到错误资源）。
+	if got := ccRest(suffix, "/static/stable/code.webmanifest"); got != "/static/stable/code.webmanifest" {
+		t.Errorf("ccRest 后缀 = %q", got)
+	}
+	re := Backend{IsRegex: true}
+	if got := ccRest(re, "/any/path"); got != "/any/path" {
+		t.Errorf("ccRest 正则 = %q", got)
+	}
+}
+
+// TestSuffixDispatch 复刻 main 分发循环的后缀分支：路径以字面后缀结尾即命中
+// （包括后缀自身的完整路径），否则落空或落回后续路由。
+func TestSuffixDispatch(t *testing.T) {
+	backends := parseBackends([][2]string{
+		{"*/code.webmanifest", "text://SUF"},
+		{"/plain", "text://PRE"},
+	})
+	serve := func(path string) string {
+		req := httptest.NewRequest("GET", path, nil)
+		rec := httptest.NewRecorder()
+		for _, b := range backends {
+			if b.Suffix != "" {
+				if !strings.HasSuffix(req.URL.Path, b.Suffix) {
+					continue
+				}
+			} else if !strings.HasPrefix(req.URL.Path, b.Source) {
+				continue
+			}
+			CreateBackendHandler(b, nil, false).ServeHTTP(rec, req)
+			return rec.Body.String()
+		}
+		return "NOMATCH"
+	}
+	if got := serve("/stable-abc123/code.webmanifest"); got != "SUF" {
+		t.Errorf("/stable-abc123/code.webmanifest = %q, want SUF", got)
+	}
+	if got := serve("/code.webmanifest"); got != "SUF" {
+		t.Errorf("/code.webmanifest = %q, want SUF（后缀覆盖自身完整路径）", got)
+	}
+	if got := serve("/code.webmanifestx"); got != "NOMATCH" {
+		t.Errorf("/code.webmanifestx = %q, want NOMATCH", got)
+	}
+	if got := serve("/plain"); got != "PRE" {
+		t.Errorf("/plain = %q, want PRE", got)
+	}
+}
+
 // TestGatedRouteDispatch 复刻 main 的分发循环（前缀命中 → 门禁校验 → 否则下一条），
 // 验证门禁失败会落回同前缀的无门禁兜底路由。
 func TestGatedRouteDispatch(t *testing.T) {

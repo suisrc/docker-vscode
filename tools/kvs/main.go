@@ -110,6 +110,7 @@ func main() {
 		templated bool   // prefix carries <verhash>/<version>, expanded per request
 		gateKey   string // 前缀尾部 [k=v] query 门禁参数名（""=无门禁）
 		gateVal   string // 门禁参数必须等于的解码字面值
+		suffix    string // "*" 后缀匹配的字面后缀（""=非后缀路由）
 	}
 	buildRoutes := func(c pkg.Config) []route {
 		pkg.ManagerResetSvcMounts() // 嗅探表跟随当前路由表整体重建
@@ -123,7 +124,7 @@ func main() {
 				}
 				re = compiled
 			}
-			rts[i] = route{prefix: b.Source, re: re, handler: pkg.CreateBackendHandler(b, c.Headers, c.LoginAuthz), svc: svcBackendName(b), exact: pkg.ExactPathMatch(b), templated: b.VerTemplate, gateKey: b.QueryKey, gateVal: b.QueryVal}
+			rts[i] = route{prefix: b.Source, re: re, handler: pkg.CreateBackendHandler(b, c.Headers, c.LoginAuthz), svc: svcBackendName(b), exact: pkg.ExactPathMatch(b), templated: b.VerTemplate, gateKey: b.QueryKey, gateVal: b.QueryVal, suffix: b.Suffix}
 			// 应用中心（api://manager）嗅探：登记 svc:// 托管服务的挂载路径，
 			// 新建内置应用对话框据此列出当前可用的 zcode/vscode 服务。
 			// <verhash>/<version> 模板路由不参与嗅探（挂载点应是真实路径）。
@@ -475,7 +476,7 @@ func main() {
 			http.Error(w, "vsc_agents_cmd not configured", http.StatusBadRequest)
 			return
 		}
-		if err := agentvs.Start("", sc.VscAgentsCmd); err != nil {
+		if err := agentvs.Start("", "", sc.VscAgentsCmd); err != nil {
 			http.Error(w, "failed to start agents: "+err.Error(), http.StatusInternalServerError)
 			return
 		}
@@ -523,7 +524,7 @@ func main() {
 			http.Error(w, "vsc_agents_cmd not configured", http.StatusBadRequest)
 			return
 		}
-		if ok := agentvs.Restart(sc.VscAgentsCmd); !ok {
+		if ok := agentvs.Restart("", sc.VscAgentsCmd); !ok {
 			http.Error(w, "failed to start agents", http.StatusInternalServerError)
 			return
 		}
@@ -562,7 +563,7 @@ func main() {
 			http.Error(w, "action "+name+" has no command", http.StatusBadRequest)
 			return
 		}
-		if err := pkg.RunAgentAction(name, cmd); err != nil {
+		if err := pkg.RunAgentAction(name, sc.Home, cmd); err != nil {
 			log.Printf("[agents] action %s failed: %s: %v", name, cmd, err)
 			http.Error(w, "action failed: "+err.Error(), http.StatusInternalServerError)
 			return
@@ -617,6 +618,12 @@ func main() {
 				// 准备（版本未解析）时跳过。
 				p, ok := pkg.ExpandVerTemplate(rt.prefix, pkg.Services().Get(rt.svc))
 				if !ok || !strings.HasPrefix(r.URL.Path, p) {
+					continue
+				}
+			} else if rt.suffix != "" {
+				// * 后缀匹配：请求路径以字面后缀结尾即命中（放在 exact 之前，
+				// 后缀规则整体取代前缀/精确匹配）。
+				if !strings.HasSuffix(r.URL.Path, rt.suffix) {
 					continue
 				}
 			} else if rt.exact {

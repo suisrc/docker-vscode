@@ -223,7 +223,7 @@ func VscodeNlsHandle(w http.ResponseWriter, r *http.Request, prePath, svcHome, b
 		codeServer := filepath.Join(binHome, "bin", "code-server")
 		installCmd := codeServer + " --install-extension " + vsixPath + " --server-data-dir " + svcHome + " --accept-server-license-terms"
 		log.Printf("[nls] installing extension: %s", installCmd)
-		if err := RunServiceStartup(installCmd); err != nil {
+		if err := RunServiceStartup(svcHome, installCmd); err != nil {
 			http.Error(w, "failed to install language-pack: "+err.Error(), http.StatusInternalServerError)
 			return
 		}
