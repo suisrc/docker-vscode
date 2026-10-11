@@ -191,8 +191,8 @@ func AuthMiddleware(next http.Handler, cfg Config, setCookie func(http.ResponseW
 			next.ServeHTTP(w, r)
 			return
 		}
-		// path_public config: explicit |-separated list of auth-exempt
-		// paths (prefix match), e.g. /api/v1/public|/remote/v4.
+		// 免 authz 清单（由 [proxies] 的 ! 前缀路由派生，path_public 键已
+		// 取消；仅前缀路由支持——!+* / 正则 / 全域名在配置期告警并忽略 !）。
 		for _, p := range cfg.PathPublic {
 			if strings.HasPrefix(r.URL.Path, p) {
 				next.ServeHTTP(w, r)

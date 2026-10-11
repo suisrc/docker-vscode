@@ -92,6 +92,13 @@ func main() {
 	// 可选 pprof（KVS_PPROF=1 | <port> | <addr>），默认关闭。
 	pkg.StartPProfIfEnabled()
 
+	// svc 托管 pid 表（{home}/kvs-svc.json）：启动时清点上一代 kvs 的遗孤——
+	// 进程被 kill -9 / 旧版本未拦 SIGHUP 等非优雅退出留下的子进程会一直占着
+	// 服务端口，并把后续每次启动都「骗」成外部服务。带 MANAGED 标记且已被
+	// init 收养（PPID=1）的按孤儿击杀，其余不动。
+	pkg.Services().SetHomeDir(cfg.Home)
+	pkg.Services().SweepOrphans()
+
 	// Build (prefix → handler) routes for each backend. Hosted svc:// services
 	// get their own lazy preparation flow through the service manager (loading
 	// page while download/extract/start is in progress).
@@ -704,9 +711,12 @@ func main() {
 
 	servers := pkg.BuildServers(cfg.Port, cfg.UseSSL, finalHandler)
 
-	// Graceful shutdown on SIGINT/SIGTERM.
+	// Graceful shutdown on SIGINT/SIGTERM/SIGHUP: SIGHUP covers terminal
+	// close / SSH disconnect — the default action would kill kvs instantly
+	// without the cleanup below, orphaning managed service subprocesses
+	// (they live in their own Setsid session and survive).
 	sigCh := make(chan os.Signal, 1)
-	signal.Notify(sigCh, syscall.SIGINT, syscall.SIGTERM)
+	signal.Notify(sigCh, syscall.SIGINT, syscall.SIGTERM, syscall.SIGHUP)
 
 	// Start HTTP servers first so the loading page is available during preparation.
 	for _, srv := range servers {

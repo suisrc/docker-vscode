@@ -34,7 +34,7 @@
 | `pkg/jsonhead.go` | 只读 JSON 顶层头部的零分配扫描器（中继 data 帧快路径判定） |
 | `pkg/stats.go` | 运行计数（`/__stats`）与可选 pprof（`KVS_PPROF`） |
 | `pkg/*_test.go` | 单元测试与微基准：帧读写/unmask/JSON 头部扫描；隧道（写停滞致命、慢读者存活、空闲判定、流水线首帧端到端、后端不可达回退）；反代响应路径 benchmark（`transport_test.go`） |
-| `pkg/proc.go` | 子进程 Setsid 脱离、终止时前台进程组恢复；`Start/Restart` 携带工作目录（svc 传 `sc.Home`，子进程 cwd=服务 home，启动日志带 dir） |
+| `pkg/proc.go` | 子进程 Setsid 脱离、终止时前台进程组恢复；`Start/Restart` 携带工作目录（svc 传 `sc.Home`，子进程 cwd=服务 home，启动日志带 dir）；stdout 截取管道（`SetStdoutLine`+`pumpStdout`：逐行 tee→pattern 命中截 token→退化 `io.Copy` 直通，30s 窗口）；`Pid()` 访问器供托管表登记 |
 | `pkg/s3mirror.go` | `mirror`/`syncto` 的 S3 同步实现（owner 开发中，勿擅自重构） |
 | `pkg/help.go` | help 文本——新增配置项/环境变量必须同步 |
 | `pkg/` 资产 | `manager.html` `login.html` `loading.html` `logout.vsc.js` `kvs.ini` `favicon.ico`，`go:embed` 进二进制 |
@@ -47,7 +47,7 @@
 
 ### 3.2 路由与后端协议
 
-路由表：`[proxies.<name>]` 命名多表（`[proxies]` 无名表），`-n :name` 选择，默认取文件中第一张表。每行一个路由，按文件顺序匹配。前缀标记：普通前缀；`^`（正则）；`*` 开头（后缀匹配：dispatch 按 HasSuffix，`b.Suffix` 存去 `*` 的字面后缀、Source 保留完整写法，裸 `*` 告警跳过；逐元素标记，与逗号展开、`[k=v]` 门禁正交；后缀只是路由过滤、不改写路径——`ccRest` 原样转发完整请求路径，否则头部丢失会让上游落到错误资源）；`http(s)://`、`ws(s)://` 开头（全域名）；前缀收尾 `[k=v]`（单条件 query 门禁：`splitQueryGate` 在标记剥离后、逗号展开前提取为 `Backend.QueryKey/QueryVal` 两个字符串，请求侧由 main 分发循环短路比较——解码值精确相等，不满足跳过该路由；括号内容含逗号或没有 `=` 时整体按字面路径，正则字符类如 `[0-9]` 不受影响）。
+路由表：`[proxies.<name>]` 命名多表（`[proxies]` 无名表），`-n :name` 选择，默认取文件中第一张表。每行一个路由，按文件顺序匹配。前缀标记：普通前缀；`^`（正则）；`*` 开头（后缀匹配：dispatch 按 HasSuffix，`b.Suffix` 存去 `*` 的字面后缀、Source 保留完整写法，裸 `*` 告警跳过；逐元素标记，与逗号展开、`[k=v]` 门禁正交；后缀只是路由过滤、不改写路径——`ccRest` 原样转发完整请求路径，否则头部丢失会让上游落到错误资源）；`http(s)://`、`ws(s)://` 开头（全域名）；前缀收尾 `[k=v]`（单条件 query 门禁：`splitQueryGate` 在标记剥离后、逗号展开前提取为 `Backend.QueryKey/QueryVal` 两个字符串，请求侧由 main 分发循环短路比较——解码值精确相等，不满足跳过该路由；括号内容含逗号或没有 `=` 时整体按字面路径，正则字符类如 `[0-9]` 不受影响）；`!` 开头（免 authz：`Backend.AuthFree`，`collectAuthFree` 派生进 `cfg.PathPublic` 取代 path_public 键；仅前缀路由——`!`+`*` 后缀/正则/全域名告警并忽略 `!`，仍要求鉴权）。
 
 后端 scheme 全集（readme 仅列用户常用项）：
 
@@ -65,6 +65,10 @@
 多托管服务（svc://）：LoadInitConfig 先扫选中表的 `svc://<name>` 引用（主服务=第一个引用），**只解析被引用的服务段**（未引用的 `[service.<name>]` 段保持休眠：不反推环境变量、不解析版本、不注册），被引用段按依赖序解析并**反向赋值** `KVS_SVC_<NAME>_*` 环境变量（HOME 默认 `{KVS_HOME}/<name>`；ADDR 回填；HOST/PORT 由 http 地址、SOCK 由 unix 地址反推；VERSION/VERHASH 解析后回填；BIN_HOME 回填；段末处理 envs_default——系统环境变量为空时用默认值填充，默认值可引用全部已反推变量），然后才展开路由值——路由里 `{KVS_SVC_ZCODE_BIN_HOME}` 这类引用由此生效。每个 svc:// 服务有独立的 ServiceState（loading 页）与 Process（Setsid 子进程组），启动命令在配置加载期已完成 `{KVS_SVC_<NAME>_*}` 展开，子进程继承完整进程环境；`/__restart?svc=<name>`（缺省=主服务）停进程+stop_shell+清 unix socket 并重置该服务状态；kvs 退出时 `StopAll()` 只杀 kvs 托管的进程。版本覆盖 `SetOverrideVersion(svc, v)` 按服务记录。
 
 service 生命周期（service.go `PrepareService(sc)`）：探活（`healthz` 键=`#@<code>` 后缀要求精确状态码、无后缀只要求可达；unix 探活失败会清理残留 socket 文件）→ 已存活=外部服务（只代理不托管启停）→ `bin_home` 非空跳过下载 → 解析下载地址（`download` 优先，否则 `download_info`+`download_field_url`）→ 跟随重定向取扩展名（缓存文件名后缀）→ 下载到 `{cache_dir}/version/{service}/{version}_{version_hash}.{ext}`（按服务名分目录，避免不同服务同版本冲突） → 解压到 `bin_home` → 执行 `once_shell`（`{bin_home}/__once__` 标记）+`init_shell`；`stop_shell` 仅 kvs 托管的后端退出时执行。`command` 与 once/init/stop shell、actions 的工作目录一律是 `sc.Home`（`Process.Start`/`RunServiceStartup` 落实；空 dir 才继承 kvs cwd，agent 宿主如此）。
+
+upstream_* 上游增强（service.go，生命周期=子进程）：`upstream_token="<日志行前缀>[<query参数名>]"`（`splitUpstreamTokenSpec` 解析，非法告警停用）→ `StartProc` 给 `Process.SetStdoutLine` 挂捕获闭包（`pumpStdout` tee 扫描 30s 窗口，命中即 `sc.SetUpstreamToken`：原子存 + `os.Setenv(KVS_SVC_<NAME>_UPSTREAM_TOKEN)`，配置重载时从 env 回填 keep-last）→ `Backend.svc` 挂 sc，http/unix 反代 transport 经 `upstreamAwareTransport` 包 `svcUpstreamTransport`：每请求 `applySvcUpstream`（headrs 先删后赋、`Host` 特判 `req.Host`、值 `expandValue` 每请求展开——token 换代引用即时同步；cookies 删同名透传异名追加配置对），401 且无 body 方法时以 `[key]` 参数名带 token 重试一次（重试绕过包装器故天然只一次，原 401 响应体关闭或归还；日志打明文 token 供核对）；WS 升级路径经 `wsUpstream.rewrite`→`applySvcUpstream` 带头但不重试。
+
+svc 托管 pid 表（service.go，不单纯依赖父子关系的那本账）：`StartProc` 给子进程注入 `KVS_SVC_<NAME>_MANAGED=1` env 并把 pid 记入 `pids`（`map[string]int`，持久化 `{home}/kvs-svc.json`，`SetHomeDir` 加载）。**杀完再扫一遍**：`StopOne`/`StopAll` 正常终止后 `ensureDead` 核对登记 pid——仍存活补 SIGKILL、env 无标记（pid 已被回收）只销账不杀；启动时 `SweepOrphans` 自愈上一代遗孤：存活 + MANAGED 标记 + PPID=1（被 init 收养=父 kvs 非优雅死亡）三条件齐才杀，PPID≠1 视为另一存活实例的孩子不动——否则孤儿会一直占端口把后续启动「骗」成外部服务（7531 事件）。
 
 ### 3.2.1 WebSocket 升级快路径（pkg/wsproxy.go）
 
@@ -104,7 +108,7 @@ ws~ 路由前缀匹配与退避：`ExactPathMatch` = `ws~` 且目标非隧道类
 
 ### 3.3 Cookie 认证（main.go / server.go）
 
-两阶段。**请求阶段拦截**（`login_token` 非空时生效）：所有非 `/__` 前缀路径校验 Cookie，内置端点与 `/__cache/` 始终放行；常数时间比较防时序攻击。**响应阶段重定向**（需 `login_authz=true`）：后端返回 401/403 → 替换为登录页；`/__logout` 清除 Cookie。注意：`login_token` 为空时请求阶段无拦截，`login_authz` 仅在后端自身返回 401/403 时生效。`login_timeout`：
+两阶段。**请求阶段拦截**（`login_token` 非空时生效）：所有非 `/__` 前缀路径校验 Cookie，内置端点、`/__cache/` 与免 authz 路由清单（`[proxies]` 的 `!` 前缀路由派生，仅前缀；`path_public` 键已取消）始终放行；常数时间比较防时序攻击。**响应阶段重定向**（需 `login_authz=true`）：后端返回 401/403 → 替换为登录页；`/__logout` 清除 Cookie。注意：`login_token` 为空时请求阶段无拦截，`login_authz` 仅在后端自身返回 401/403 时生效。`login_timeout`：
 
 | 值 | Cookie 格式 | 校验 | 过期 |
 |---|---|---|---|

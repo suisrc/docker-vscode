@@ -60,6 +60,10 @@ Route formats ([proxies.<name>] section / -n argument):
   */code.webmanifest=https://up     leading *: suffix match — the path must end with the
                                     rest (bare * is rejected); suffix routes never
                                     rewrite the path, the full request path is forwarded
+  !cc~/path=…                       leading !: auth-exempt route — no login cookie
+                                    required (replaces the path_public key); prefix
+                                    routes only — with */regex/full-domain the ! is
+                                    ignored with a warning (auth still required)
   /__healthz=text://OK:@now         health check endpoint
 
 Config file sections:

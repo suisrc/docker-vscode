@@ -86,6 +86,7 @@ type wsUpstream struct {
 	target *url.URL // http/https/ws/wss 目标；unix 后端为合成 http://unix（仅作改写标签）
 	hdrs   map[string]string
 	mods   func(*http.Response) error // login_authz 的响应修饰链（非 101 响应同标准路径一致）
+	svc    *ServiceConfig             // svc:// 后端的服务配置：升级请求也套用 upstream_headrs/cookies（401 token 重试不适用于裸连接隧道）
 }
 
 // describe 返回日志用的目标描述。
@@ -97,9 +98,11 @@ func (u *wsUpstream) describe() string {
 }
 
 // rewrite 把入站请求改写成发往后端的请求（与 ReverseProxy 的 Director 同规则，
-// 含 -/+ 路径模式；unix 后端经合成 target 走同一条路径）。
+// 含 -/+ 路径模式；unix 后端经合成 target 走同一条路径），svc:// 后端再套用
+// 服务的 upstream 头/Cookie（请求此时已是私有 clone，可原地改）。
 func (u *wsUpstream) rewrite(req *http.Request) {
 	rewriteProxyRequest(req, u.b, u.target, u.hdrs)
+	applySvcUpstream(u.svc, req)
 }
 
 // dial 打开一条到后端的裸连接（https/wss 目标在裸 conn 上包一层 TLS）。

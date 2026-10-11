@@ -1,7 +1,9 @@
 package pkg
 
 import (
+	"bufio"
 	"errors"
+	"io"
 	"log"
 	"os"
 	"os/exec"
@@ -65,6 +67,10 @@ type Process struct {
 	// dir is the working directory of the last successful start, kept
 	// alongside cmds for Restart.
 	dir string
+	// stdoutLine, installed via SetStdoutLine before Start, inspects each
+	// stdout line during the capture phase and reports completion. nil =
+	// stdout goes straight to kvs's stdout (no pipe, previous behaviour).
+	stdoutLine func(line string) bool
 	// proc is the currently tracked child. nil = never started or
 	// cleared by Stop/Restart; NOT cleared when the child exits on its
 	// own - Running() reads proc.done for liveness.
@@ -88,6 +94,15 @@ func (e *Process) Start(name, dir, cmds string) error {
 		return errors.New("process is running")
 	}
 	return e.startLocked(name, dir, cmds)
+}
+
+// SetStdoutLine installs (or clears, nil) the stdout capture hook. Must be
+// called before Start; every Start re-arms the capture (fresh pipe + fresh
+// scan window) so a restarted subprocess re-captures from its own logs.
+func (e *Process) SetStdoutLine(fn func(line string) bool) {
+	e.lock.Lock()
+	defer e.lock.Unlock()
+	e.stdoutLine = fn
 }
 
 // aliveLocked reports whether the tracked child is still alive
@@ -135,16 +150,36 @@ func (e *Process) startLocked(name, dir, cmds string) error {
 	if dir != "" {
 		cmd.Dir = dir
 	}
+	// stdout 截取：管道 + 逐行扫描（tee，不吞日志），捕获完成后退化直通。
+	// 未配置时保持直写 os.Stdout 的原路径不变。
+	var pr, pw *os.File
+	if e.stdoutLine != nil {
+		var err error
+		if pr, pw, err = os.Pipe(); err != nil {
+			return err
+		}
+		cmd.Stdout = pw
+	} else {
+		cmd.Stdout = os.Stdout
+	}
 	// Inherit stdout/stderr so backend logs interleave with kvs logs.
-	cmd.Stdout = os.Stdout
 	cmd.Stderr = os.Stderr
 	// New session: detaches the backend from kvs's controlling terminal,
 	// so it cannot tcsetpgrp-steal the foreground and swallow Ctrl+C.
 	// Implies a fresh pgid, so -pgid signaling in Stop still works.
 	cmd.SysProcAttr = &syscall.SysProcAttr{Setsid: true}
 	if err := cmd.Start(); err != nil {
+		if pr != nil {
+			pr.Close()
+			pw.Close()
+		}
 		log.Printf("[%s] start process: %v", name, err)
 		return err
+	}
+	if pw != nil {
+		// 父进程侧关闭写端：子进程退出（其 fd 全部关闭）后 pump 才能读到 EOF。
+		pw.Close()
+		go e.pumpStdout(pr)
 	}
 	if name != "" {
 		e.Name = name
@@ -180,6 +215,42 @@ func (e *Process) startLocked(name, dir, cmds string) error {
 	e.cmds = cmds
 	e.dir = dir
 	return nil
+}
+
+// stdoutCaptureTimeout bounds the token capture window: past it, matching
+// stops and stdout degrades to plain relay (the subprocess's own logs keep
+// flowing either way).
+var stdoutCaptureTimeout = 30 * time.Second
+
+// pumpStdout relays the child's stdout to kvs's stdout. While the capture
+// hook is armed it inspects every line first — tee, nothing is swallowed —
+// and once the hook reports success or the capture window closes, the
+// remaining bytes (including whatever the line reader already buffered) are
+// copied verbatim. The goroutine ends on EOF, i.e. when the child exits.
+func (e *Process) pumpStdout(pr *os.File) {
+	defer pr.Close()
+	e.lock.Lock()
+	fn := e.stdoutLine
+	e.lock.Unlock()
+
+	r := bufio.NewReaderSize(pr, 64*1024)
+	captured := false
+	deadline := time.Now().Add(stdoutCaptureTimeout)
+	for fn != nil && !captured {
+		line, err := r.ReadString('\n')
+		if line != "" {
+			// 先匹配后转发：截取期日志照常外发，token 行也可见。
+			if time.Now().Before(deadline) && fn(strings.TrimRight(line, "\r\n")) {
+				captured = true
+			}
+			os.Stdout.WriteString(line)
+		}
+		if err != nil {
+			break // EOF（子进程退出）或读错误：余量直通后结束
+		}
+	}
+	// 截取完成或流结束：剩余字节（含 reader 缓冲）原样直通主 stdout。
+	io.Copy(os.Stdout, r)
 }
 
 // Restart replaces the current child. With cmds == "" the command and
@@ -323,4 +394,16 @@ func (e *Process) Running() bool {
 	e.lock.Lock()
 	defer e.lock.Unlock()
 	return e.aliveLocked()
+}
+
+// Pid returns the last started child's pid (0 = never started or cleared by
+// Stop). The number stays meaningful after an abrupt child exit; callers
+// verify liveness themselves.
+func (e *Process) Pid() int {
+	e.lock.Lock()
+	defer e.lock.Unlock()
+	if e.proc != nil && e.proc.cmd != nil && e.proc.cmd.Process != nil {
+		return e.proc.cmd.Process.Pid
+	}
+	return 0
 }

@@ -41,7 +41,7 @@ package pkg
 // relay 了），缺段则放行、由 ready 帧回告 worker 写回配置；未配置则收下即忽略。
 // client 侧永远只按第一段路由，第三段不作门禁。掉线隧道的占用保留 10 分钟（期间
 // client 得 503 而非 403，worker 重连顶回即恢复）。本协议没有 cookie 概念，tkn
-// 就是凭证：login_authz 开启时把挂载前缀加进 path_public，或让各方 tkn 等于网关
+// 就是凭证：login_authz 开启时给挂载路由加 ! 前缀（免 authz），或让各方 tkn 等于网关
 // login token。
 
 import (

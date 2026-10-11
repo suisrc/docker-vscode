@@ -2,6 +2,7 @@ package pkg
 
 import (
 	"archive/tar"
+	"bytes"
 	"compress/gzip"
 	"encoding/json"
 	"fmt"
@@ -13,9 +14,11 @@ import (
 	"os"
 	"os/exec"
 	"path/filepath"
+	"sort"
 	"strconv"
 	"strings"
 	"sync"
+	"syscall"
 	"time"
 )
 
@@ -766,10 +769,12 @@ type managedService struct {
 type ServiceManager struct {
 	mu       sync.Mutex
 	svcs     map[string]*managedService
-	cacheDir string // download cache root ({cache_dir}/version/…)
+	cacheDir string         // download cache root ({cache_dir}/version/…)
+	pidFile  string         // {home}/kvs-svc.json — 托管 pid 持久化（""=仅内存）
+	pids     map[string]int // 托管子进程表 name → pid（不单纯依赖父子关系的那本账）
 }
 
-var gServices = &ServiceManager{svcs: map[string]*managedService{}}
+var gServices = &ServiceManager{svcs: map[string]*managedService{}, pids: map[string]int{}}
 
 // Services returns the process-wide service manager.
 func Services() *ServiceManager { return gServices }
@@ -779,6 +784,192 @@ func (m *ServiceManager) SetCacheDir(dir string) {
 	m.mu.Lock()
 	m.cacheDir = dir
 	m.mu.Unlock()
+}
+
+// SetHomeDir sets the service home root and loads the persisted managed-pid
+// registry ({home}/kvs-svc.json).
+func (m *ServiceManager) SetHomeDir(dir string) {
+	m.mu.Lock()
+	defer m.mu.Unlock()
+	if dir == "" {
+		return
+	}
+	m.pidFile = filepath.Join(dir, "kvs-svc.json")
+	if b, err := os.ReadFile(m.pidFile); err == nil {
+		var pids map[string]int
+		if json.Unmarshal(b, &pids) == nil {
+			m.pids = pids
+		}
+	}
+	if m.pids == nil {
+		m.pids = map[string]int{}
+	}
+}
+
+// savePidsLocked persists the registry (best effort). Callers hold m.mu.
+func (m *ServiceManager) savePidsLocked() {
+	if m.pidFile == "" {
+		return
+	}
+	if b, err := json.Marshal(m.pids); err == nil {
+		_ = os.MkdirAll(filepath.Dir(m.pidFile), 0o755) // home 可能尚未创建
+		_ = os.WriteFile(m.pidFile, b, 0o644)
+	}
+}
+
+// registerPid records a freshly started child in the managed-pid registry.
+func (m *ServiceManager) registerPid(name string, pid int) {
+	if pid <= 0 {
+		return
+	}
+	m.mu.Lock()
+	defer m.mu.Unlock()
+	if m.pids == nil {
+		m.pids = map[string]int{}
+	}
+	m.pids[name] = pid
+	m.savePidsLocked()
+}
+
+// forgetPid removes a registry entry (child stopped or entry went stale).
+func (m *ServiceManager) forgetPid(name string) {
+	m.mu.Lock()
+	defer m.mu.Unlock()
+	if _, ok := m.pids[name]; !ok {
+		return
+	}
+	delete(m.pids, name)
+	m.savePidsLocked()
+}
+
+// procAlive reports whether the pid exists.
+func procAlive(pid int) bool {
+	p, err := os.FindProcess(pid) // unix: always succeeds
+	if err != nil {
+		return false
+	}
+	return p.Signal(syscall.Signal(0)) == nil
+}
+
+// procEnvHas reports whether /proc/<pid>/environ carries the "want" entry —
+// guards the pid registry against pid recycling (an unrelated process reusing
+// a recorded pid lacks our MANAGED marker).
+func procEnvHas(pid int, want string) bool {
+	b, err := os.ReadFile("/proc/" + strconv.Itoa(pid) + "/environ")
+	if err != nil {
+		return false
+	}
+	for _, kv := range bytes.Split(b, []byte{0}) {
+		if string(kv) == want {
+			return true
+		}
+	}
+	return false
+}
+
+// procPPID returns the parent pid of pid (-1 when unreadable). Parses
+// /proc/<pid>/stat after the last ')' so a comm containing spaces or parens
+// is safe.
+func procPPID(pid int) int {
+	b, err := os.ReadFile("/proc/" + strconv.Itoa(pid) + "/stat")
+	if err != nil {
+		return -1
+	}
+	s := string(b)
+	if i := strings.LastIndexByte(s, ')'); i >= 0 && i+2 < len(s) {
+		fields := strings.Fields(s[i+2:])
+		if len(fields) >= 2 {
+			if ppid, err := strconv.Atoi(fields[1]); err == nil {
+				return ppid
+			}
+		}
+	}
+	return -1
+}
+
+// ensureDead verifies a managed child is really gone after the normal
+// termination sequence and escalates to SIGKILL otherwise — the "正常杀完再
+// 遍历托管表补一遍" pass. A recorded pid whose process no longer carries the
+// MANAGED marker (recycled) is spared and merely dropped from the registry.
+func (m *ServiceManager) ensureDead(name string, pid int) {
+	if pid <= 0 || !procAlive(pid) {
+		m.forgetPid(name)
+		return
+	}
+	if !procEnvHas(pid, svcEnvKey(name, "MANAGED")+"=1") {
+		log.Printf("[service %s] recorded pid %d was recycled, dropping registry entry", name, pid)
+		m.forgetPid(name)
+		return
+	}
+	log.Printf("[service %s] child %d survived termination, sending SIGKILL", name, pid)
+	if p, err := os.FindProcess(pid); err == nil {
+		_ = p.Signal(syscall.SIGKILL)
+	}
+	deadline := time.Now().Add(terminateTimeout)
+	for procAlive(pid) && time.Now().Before(deadline) {
+		time.Sleep(50 * time.Millisecond)
+	}
+	if procAlive(pid) {
+		log.Printf("ERROR: [service %s] child %d still alive after SIGKILL", name, pid)
+	}
+	m.forgetPid(name)
+}
+
+// SweepOrphans cleans up managed children of a PREVIOUS kvs generation (boot
+// self-healing): a registry pid that is still alive, carries the MANAGED
+// marker AND has been reparented to init (PPID=1 — its kvs died without
+// cleanup) is an orphan and gets killed; missing marker means the pid was
+// recycled (drop the entry); PPID≠1 means another live kvs instance owns the
+// child (leave it alone). Without this sweep the orphan holds the service
+// port forever and every future kvs classifies it as an external service.
+func (m *ServiceManager) SweepOrphans() {
+	m.mu.Lock()
+	entries := make([]pidEntry, 0, len(m.pids))
+	for name, pid := range m.pids {
+		entries = append(entries, pidEntry{name, pid})
+	}
+	m.mu.Unlock()
+	for _, e := range entries {
+		switch {
+		case !procAlive(e.pid):
+			m.forgetPid(e.name) // 已退出：销账
+		case procPPID(e.pid) != 1:
+			// 父进程还在：另一个存活 kvs 实例的孩子，不动。
+		case !procEnvHas(e.pid, svcEnvKey(e.name, "MANAGED")+"=1"):
+			m.forgetPid(e.name) // pid 已被无关进程回收
+		default:
+			log.Printf("[service %s] killing orphan from a previous kvs generation (pid %d)", e.name, e.pid)
+			killPID(e.pid)
+			m.forgetPid(e.name)
+		}
+	}
+}
+
+// pidEntry is one managed-pid registry record.
+type pidEntry struct {
+	name string
+	pid  int
+}
+
+// killPID terminates a foreign-tracked process: SIGTERM first, SIGKILL after
+// a grace window.
+func killPID(pid int) {
+	if p, err := os.FindProcess(pid); err == nil {
+		_ = p.Signal(syscall.SIGTERM)
+	}
+	deadline := time.Now().Add(2 * time.Second)
+	for procAlive(pid) && time.Now().Before(deadline) {
+		time.Sleep(50 * time.Millisecond)
+	}
+	if procAlive(pid) {
+		if p, err := os.FindProcess(pid); err == nil {
+			_ = p.Signal(syscall.SIGKILL)
+		}
+	}
+	deadline = time.Now().Add(terminateTimeout)
+	for procAlive(pid) && time.Now().Before(deadline) {
+		time.Sleep(50 * time.Millisecond)
+	}
 }
 
 // CacheDir returns the download cache root (empty → /cache, matching cc~).
@@ -834,6 +1025,9 @@ func (m *ServiceManager) State(name string) *ServiceState {
 // command (and the optional agent bridge args) were already expanded at
 // config-load time; the subprocess additionally inherits the whole kvs
 // environment, including every reverse-assigned KVS_SVC_<NAME>_* variable.
+// When upstream_token is configured, the stdout capture hook is armed for
+// THIS start: the token is re-captured from the subprocess's own logs on
+// every start/restart/version switch.
 // No-op when the command is empty or the previous child is still running.
 func (m *ServiceManager) StartProc(sc *ServiceConfig) error {
 	m.mu.Lock()
@@ -848,7 +1042,163 @@ func (m *ServiceManager) StartProc(sc *ServiceConfig) error {
 	if ms.proc.Running() {
 		return fmt.Errorf("service %q process is running", sc.Name)
 	}
-	return ms.proc.Start(sc.Name, sc.Home, sc.Command+sc.VscAgentArgs)
+	if sc.UpstreamTokenKey != "" {
+		ms.proc.SetStdoutLine(func(line string) bool {
+			if !strings.HasPrefix(line, sc.UpstreamTokenPattern) {
+				return false
+			}
+			tok := strings.TrimSpace(line[len(sc.UpstreamTokenPattern):])
+			if tok == "" {
+				return false
+			}
+			sc.SetUpstreamToken(tok)
+			log.Printf("[service %s] upstream token captured (query %s=…)", sc.Name, sc.UpstreamTokenKey)
+			return true
+		})
+	} else {
+		ms.proc.SetStdoutLine(nil)
+	}
+	// 注入托管标记：补刀与孤儿自愈都用 /proc/<pid>/environ 核对它，防止
+	// pid 被回收后误杀无关进程。
+	os.Setenv(svcEnvKey(sc.Name, "MANAGED"), "1")
+	err := ms.proc.Start(sc.Name, sc.Home, sc.Command+sc.VscAgentArgs)
+	if err == nil {
+		m.registerPid(sc.Name, ms.proc.Pid())
+	}
+	return err
+}
+
+// serviceHasUpstream reports whether the service configures any upstream_*
+// behavior (headers / cookies / token capture) worth a transport wrapper.
+func serviceHasUpstream(sc *ServiceConfig) bool {
+	return sc != nil && (sc.UpstreamTokenKey != "" || len(sc.UpstreamHeaders) > 0 || len(sc.UpstreamCookies) > 0)
+}
+
+// svcUpstreamTransport wraps a service's proxy transport with the upstream_*
+// behaviors: per-request header/cookie injection (upstream_headrs /
+// upstream_cookies) and the once-only 401 retry that appends the captured
+// token as an upstream query param (param name from upstream_token's [key]
+// marker). The retry bypasses the wrapper, so it fires at most once by
+// construction.
+type svcUpstreamTransport struct {
+	base http.RoundTripper
+	sc   *ServiceConfig
+}
+
+func (t *svcUpstreamTransport) RoundTrip(req *http.Request) (*http.Response, error) {
+	out := t.applyUpstream(req)
+	resp, err := t.base.RoundTrip(out)
+	if err != nil || resp.StatusCode != http.StatusUnauthorized {
+		return resp, err
+	}
+	// 401 → 带 token 的 query 重试一次。仅无 body 的方法（GET/HEAD/DELETE/
+	// OPTIONS，流式 body 不可安全重放）；token 未截到或未配置 [key] 时原样透出。
+	tok := t.sc.UpstreamToken()
+	if tok == "" || t.sc.UpstreamTokenKey == "" || !bodylessMethod(req) {
+		return resp, nil
+	}
+	// token 明文入日志：运维需要核对截取值与上游期望是否一致。
+	log.Printf("[service %s] upstream 401 on %s %s, retrying with %s=%s", t.sc.Name, req.Method, req.URL.Path, t.sc.UpstreamTokenKey, tok)
+	retry := out.Clone(out.Context())
+	q := retry.URL.Query()
+	q.Set(t.sc.UpstreamTokenKey, tok)
+	retry.URL.RawQuery = q.Encode()
+	return t.base.RoundTrip(retry)
+}
+
+// bodylessMethod reports whether a request can be safely replayed once.
+func bodylessMethod(req *http.Request) bool {
+	switch req.Method {
+	case http.MethodGet, http.MethodHead, http.MethodDelete, http.MethodOptions:
+		return req.Body == nil || req.Body == http.NoBody
+	}
+	return false
+}
+
+// applyUpstream clones req and applies the service's upstream templates onto
+// the clone. Values are expanded per request ({ENV}) so a freshly captured
+// upstream token flows into every reference immediately — nothing is
+// snapshotted across subprocess generations.
+func (t *svcUpstreamTransport) applyUpstream(req *http.Request) *http.Request {
+	if len(t.sc.UpstreamHeaders) == 0 && len(t.sc.UpstreamCookies) == 0 {
+		return req
+	}
+	out := req.Clone(req.Context())
+	applySvcUpstream(t.sc, out)
+	return out
+}
+
+// applySvcUpstream applies the service's upstream_headrs / upstream_cookies
+// onto req in place. Used by the upgrade tunnel path (the request is already
+// a private clone there) and by svcUpstreamTransport. "Host" is special-cased
+// to the request's Host field — net/http ignores a Host entry in the header
+// map; "" deletes the header (or resets Host to the URL default).
+func applySvcUpstream(sc *ServiceConfig, req *http.Request) {
+	if sc == nil {
+		return
+	}
+	for k, tmpl := range sc.UpstreamHeaders {
+		v := expandValue(tmpl)
+		if strings.EqualFold(k, "Host") {
+			req.Host = v
+			continue
+		}
+		if v == "" {
+			req.Header.Del(k)
+			continue
+		}
+		req.Header.Set(k, v)
+	}
+	applyUpstreamCookies(req.Header, sc.UpstreamCookies)
+}
+
+// applyUpstreamCookies rewrites the Cookie header: every pair whose name is
+// configured is removed (a "" value means removal only), differently-named
+// pairs pass through untouched, and the configured pairs are appended last
+// (sorted by name for determinism).
+func applyUpstreamCookies(h http.Header, cfg map[string]string) {
+	if len(cfg) == 0 {
+		return
+	}
+	type cookiePair struct{ name, value string }
+	adds := make([]cookiePair, 0, len(cfg))
+	for name, tmpl := range cfg {
+		adds = append(adds, cookiePair{name, expandValue(tmpl)})
+	}
+	sort.Slice(adds, func(i, j int) bool { return adds[i].name < adds[j].name })
+	var kept []string
+	for _, raw := range h.Values("Cookie") {
+		for _, pair := range strings.Split(raw, ";") {
+			pair = strings.TrimSpace(pair)
+			if pair == "" {
+				continue
+			}
+			name := pair
+			if i := strings.IndexByte(pair, '='); i >= 0 {
+				name = pair[:i]
+			}
+			drop := false
+			for _, a := range adds {
+				if a.name == name {
+					drop = true
+					break
+				}
+			}
+			if !drop {
+				kept = append(kept, pair)
+			}
+		}
+	}
+	for _, a := range adds {
+		if a.value != "" {
+			kept = append(kept, a.name+"="+a.value)
+		}
+	}
+	if len(kept) > 0 {
+		h.Set("Cookie", strings.Join(kept, "; "))
+	} else {
+		h.Del("Cookie")
+	}
 }
 
 // StopOne terminates a kvs-managed service subprocess, runs stop_shell and
@@ -863,10 +1213,13 @@ func (m *ServiceManager) StopOne(name string, runStopShell bool) bool {
 		return false
 	}
 	stopped := false
+	pid := ms.proc.Pid()
 	if ms.proc.Running() {
 		ms.proc.Stop()
 		stopped = true
 	}
+	// 正常终止后对托管 pid 再核实补一遍（仍存活 → SIGKILL），然后销账。
+	m.ensureDead(name, pid)
 	sc := ms.cfg
 	if stopped && runStopShell && sc != nil && sc.StopShell != "" {
 		log.Printf("[service %s] running stop_shell: %s", name, sc.StopShell)
@@ -895,5 +1248,15 @@ func (m *ServiceManager) StopAll() {
 	m.mu.Unlock()
 	for _, name := range names {
 		m.StopOne(name, true)
+	}
+	// 托管表终扫：逐个停止后仍存活的记录补最后一刀（一般应为空，防漏网）。
+	m.mu.Lock()
+	entries := make([]pidEntry, 0, len(m.pids))
+	for name, pid := range m.pids {
+		entries = append(entries, pidEntry{name, pid})
+	}
+	m.mu.Unlock()
+	for _, e := range entries {
+		m.ensureDead(e.name, e.pid)
 	}
 }

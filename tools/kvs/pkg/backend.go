@@ -112,10 +112,13 @@ func parseBackends(entries [][2]string) []Backend {
 		}
 
 		// Strip prefix markers (in any order, so "cc~ws~/" etc. combine).
-		var isCache, isWSock bool
+		var isCache, isWSock, authFree bool
 		for changed := true; changed; {
 			changed = false
 			switch {
+			case strings.HasPrefix(prefix, "!"):
+				prefix = prefix[1:]
+				authFree, changed = true, true
 			case strings.HasPrefix(prefix, "cc~"):
 				prefix = prefix[3:]
 				isCache, changed = true, true
@@ -141,6 +144,7 @@ func parseBackends(entries [][2]string) []Backend {
 				b.IsRegex = true
 				b.IsCache = isCache
 				b.IsWSock = isWSock
+				b.AuthFree = authFree
 				b.QueryKey, b.QueryVal = gateKey, gateVal
 				backends = append(backends, *b)
 			}
@@ -176,6 +180,7 @@ func parseBackends(entries [][2]string) []Backend {
 				}
 				b.IsCache = isCache
 				b.IsWSock = isWSock
+				b.AuthFree = authFree
 				b.QueryKey, b.QueryVal = gateKey, gateVal
 				b.Suffix = suffix
 				// <verhash>/<version> route template: the prefix is matched
@@ -368,7 +373,7 @@ func CreateBackendHandler(b Backend, cacheHeaders map[string]string, loginAuthz 
 			Director: func(req *http.Request) {
 				rewriteProxyRequest(req, b, targetURL, cacheHeaders)
 			},
-			Transport:     sharedProxyTransport(),
+			Transport:     upstreamAwareTransport(sharedProxyTransport(), b),
 			FlushInterval: proxyFlushInterval,
 			BufferPool:    sharedProxyBufferPool,
 		}
@@ -377,7 +382,7 @@ func CreateBackendHandler(b Backend, cacheHeaders map[string]string, loginAuthz 
 		}
 		// Upgrade requests take the raw-conn tunnel (pkg/wsproxy.go); every
 		// other request keeps using the standard ReverseProxy.
-		up := &wsUpstream{b: b, target: targetURL, hdrs: cacheHeaders, mods: rp.ModifyResponse}
+		up := &wsUpstream{b: b, target: targetURL, hdrs: cacheHeaders, mods: rp.ModifyResponse, svc: b.svc}
 		fast := wsUpgradeHandler(up, rp)
 		if b.IsCache {
 			// A cc~ route must never swallow an upgrade (the cache path uses a
@@ -396,14 +401,14 @@ func CreateBackendHandler(b Backend, cacheHeaders map[string]string, loginAuthz 
 			Director: func(req *http.Request) {
 				rewriteProxyRequest(req, b, unixSyntheticTarget, cacheHeaders)
 			},
-			Transport:     unixProxyTransport(socketPath),
+			Transport:     upstreamAwareTransport(unixProxyTransport(socketPath), b),
 			FlushInterval: proxyFlushInterval,
 			BufferPool:    sharedProxyBufferPool,
 		}
 		if loginAuthz {
 			rp.ModifyResponse = cacheResponseModifier(svcName)
 		}
-		up := &wsUpstream{b: b, target: unixSyntheticTarget, hdrs: cacheHeaders, mods: rp.ModifyResponse}
+		up := &wsUpstream{b: b, target: unixSyntheticTarget, hdrs: cacheHeaders, mods: rp.ModifyResponse, svc: b.svc}
 		fast := wsUpgradeHandler(up, rp)
 		if b.IsCache {
 			return upgradeAwareHandler(fast, HandleCCBackend(b))
@@ -469,6 +474,7 @@ func CreateBackendHandler(b Backend, cacheHeaders map[string]string, loginAuthz 
 		nb.Scheme, nb.Target, nb.RawURL = scheme, target, sc.Address
 		nb.IsService = false // lifecycle handled by the service manager
 		nb.ServiceName = svcName
+		nb.svc = sc
 		log.Printf("backend %s → svc://%s (hosted service, address %s)", mount, name, sc.Address)
 		return CreateBackendHandler(nb, cacheHeaders, loginAuthz)
 
@@ -776,6 +782,16 @@ func rewriteProxyRequest(req *http.Request, b Backend, targetURL *url.URL, cache
 		req.URL.RawQuery = targetURL.RawQuery
 	}
 	applyCacheHeaders(req, cacheHeaders)
+}
+
+// upstreamAwareTransport wraps the proxy transport with the service's
+// upstream_* behaviors (header/cookie injection, 401 token retry) when the
+// backend carries a resolved ServiceConfig — plain transports otherwise.
+func upstreamAwareTransport(base http.RoundTripper, b Backend) http.RoundTripper {
+	if serviceHasUpstream(b.svc) {
+		return &svcUpstreamTransport{base: base, sc: b.svc}
+	}
+	return base
 }
 
 // upgradeAwareHandler splits upgrade requests from plain ones: WebSocket

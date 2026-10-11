@@ -13,6 +13,7 @@ import (
 	"strconv"
 	"strings"
 	"sync"
+	"sync/atomic"
 	"time"
 )
 
@@ -94,7 +95,7 @@ type Config struct {
 	TokenTimeout  int               // token_timeout (seconds); default: 300
 	UseSSL        bool              // use_ssl — enable HTTPS with a self-signed cert
 	Headers       map[string]string // [headers] section: Xxx=Val → set/override; Xxx= → delete
-	PathPublic    []string          // path_public — |-separated paths reachable without auth
+	PathPublic    []string          // 免 authz 路径前缀清单：来自 [proxies] 里 ! 前缀路由（path_public 键已取消）
 
 	// 反向代理调优（全部可省略；实现见 pkg/transport.go 与 pkg/wsproxy.go）
 	ProxyIdleConnsPerHost   int    // proxy_idle_conns_per_host — 每后端空闲连接上限，默认 32
@@ -155,7 +156,37 @@ type ServiceConfig struct {
 	Actions    map[string]string // per-service actions table (actions = {name: cmd} JSON)
 	ActionsRaw string            // raw actions JSON before expansion
 
+	// upstream_* — 发往上游的增强，生命周期跟随子进程：token 每次 Start 从
+	// stdout 重新截取；headers/cookies 的值保留模板、每请求展开（所以
+	// {KVS_SVC_<NAME>_UPSTREAM_TOKEN} 换代后引用立即同步为新值）。
+	UpstreamTokenSpec    string // upstream_token 原始值 "<pattern>[<key>]"
+	UpstreamTokenPattern string // 展开后的日志行前缀（到 token 位置为止）
+	UpstreamTokenKey     string // [key] 标记的上游 query 参数名（空=未启用截取）
+	UpstreamHeadersRaw   string // upstream_headrs 原始 JSON（"" 表示删除该头）
+	UpstreamCookiesRaw   string // upstream_cookies 原始 JSON（"" 表示只删除同名 cookie）
+	UpstreamHeaders      map[string]string
+	UpstreamCookies      map[string]string
+
+	upstreamToken atomic.Value // string — 最近一次 stdout 截取的 token
+
 	EnvsDefaultRaw string // raw envs_default JSON: env name → default value (filled when the system var is empty)
+}
+
+// UpstreamToken returns the token captured from the service subprocess stdout
+// ("" = none yet). Read per request by the upstream transport.
+func (sc *ServiceConfig) UpstreamToken() string {
+	if v := sc.upstreamToken.Load(); v != nil {
+		return v.(string)
+	}
+	return ""
+}
+
+// SetUpstreamToken stores a freshly captured token and exports it as
+// KVS_SVC_<NAME>_UPSTREAM_TOKEN, so upstream_headers/cookies templates that
+// reference it expand to the new value from the next request on.
+func (sc *ServiceConfig) SetUpstreamToken(tok string) {
+	sc.upstreamToken.Store(tok)
+	os.Setenv(svcEnvKey(sc.Name, "UPSTREAM_TOKEN"), tok)
 }
 
 // envSuffix returns the environment-variable name fragment for a service:
@@ -193,6 +224,12 @@ type Backend struct {
 	QueryKey    string // 前缀尾部 [k=v] query 门禁的参数名（""=无门禁）
 	QueryVal    string // 门禁参数必须等于的解码字面值；单条件设计：两个字段零分配，dispatch 一次比较
 	Suffix      string // "*" 后缀匹配：去 * 后的字面后缀（如 */code.webmanifest → /code.webmanifest；""=非后缀路由）；Source 保留含 * 的完整写法；路由过滤用，请求路径原样转发不改写
+	AuthFree    bool   // 路由 ! 前缀：免 authz——登记进 PathPublic（仅前缀路由；!+* / 正则 / 全域名组合告警并忽略 !，仍要求鉴权）
+
+	// svc 指向 svc:// 后端解析出的 ServiceConfig（其余 scheme 为 nil），代理
+	// transport 与升级路径据此套用服务的 upstream_* 行为（头/Cookie 注入、
+	// 401 token 重试）。非配置项，由 CreateBackendHandler 的 svc case 填充。
+	svc *ServiceConfig
 }
 
 // iniFile holds parsed key-value pairs from kvs.ini.
@@ -1096,18 +1133,32 @@ func LoadInitConfig() Config {
 	cfg.WSIdleTimeout = parseIntDefault(expandValue(strProp(ini, "ws_idle_timeout", "")), 0)
 	cfg.ReadTimeout = parseIntDefault(expandValue(strProp(ini, "read_timeout", "")), 60)
 	cfg.TunnelID = strings.TrimSpace(expandValue(strProp(ini, "tunnel_id", "")))
-	// path_public — |-separated list of paths reachable without auth
-	// (e.g. /api/v1/public|/remote/v4). Non-empty entries are kept as-is;
-	// prefix matching is applied by the auth middleware.
-	if raw := expandValue(strProp(ini, "path_public", "")); raw != "" {
-		for _, p := range strings.Split(raw, "|") {
-			if p = strings.TrimSpace(p); p != "" {
-				cfg.PathPublic = append(cfg.PathPublic, p)
-			}
-		}
-	}
+
+	// 免 authz 清单由路由派生（path_public 配置键已取消）：[proxies] 里 !
+	// 前缀的路由，前缀/后缀分别登记。collectAuthFree 见下。
+	collectAuthFree(&cfg)
 
 	return cfg
+}
+
+// collectAuthFree derives the auth-exempt list from the !-prefixed routes of
+// the proxy table (path_public key removed). PREFIX routes only: combining !
+// with a suffix (*), regex or full-domain route is rejected with a warning
+// and the marker is ignored — the route keeps requiring auth.
+func collectAuthFree(cfg *Config) {
+	for _, b := range cfg.Proxies {
+		if !b.AuthFree {
+			continue
+		}
+		switch {
+		case b.Suffix != "":
+			log.Printf("WARNING: backend %q: auth-free marker (!) does not support suffix routes, exemption ignored (auth still required)", b.RawURL)
+		case b.IsRegex || strings.HasPrefix(b.Source, "http://") || strings.HasPrefix(b.Source, "https://"):
+			log.Printf("WARNING: backend %q: auth-free marker (!) does not support regex/full-domain routes, exemption ignored (auth still required)", b.RawURL)
+		default:
+			cfg.PathPublic = append(cfg.PathPublic, b.Source)
+		}
+	}
 }
 
 // setRaw stores a raw section value on the service (lower-cased key, as the
@@ -1144,6 +1195,13 @@ func (sc *ServiceConfig) setRaw(key, value string) {
 		sc.InitShell = value
 	case "stop_shell":
 		sc.StopShell = value
+	case "upstream_token":
+		sc.UpstreamTokenSpec = value
+	case "upstream_headrs", "upstream_headers":
+		// headrs 为用户既有的键名拼写，upstream_headers 一并接受。
+		sc.UpstreamHeadersRaw = value
+	case "upstream_cookies":
+		sc.UpstreamCookiesRaw = value
 	case "command":
 		sc.Command = value
 	case "vsc_agents_cmd":
@@ -1365,4 +1423,61 @@ func (c *Config) resolveService(sc *ServiceConfig) {
 			}
 		}
 	}
+
+	// 10. upstream_* — 上游增强（子进程生命周期）。headers/cookies 只解析 JSON
+	// 结构，值保留模板、每请求展开（token 占位符随截取即时生效）；token 的
+	// pattern 现在展开（ADDR/HOST 此时已定），[key] 非法即告警停用。env 里的
+	// 上一代 token 回填进 sc：配置重载不丢 token（子进程还活着，token 仍有效）。
+	sc.UpstreamHeaders = parseUpstreamMap(sc.Name, "upstream_headrs", sc.UpstreamHeadersRaw)
+	sc.UpstreamCookies = parseUpstreamMap(sc.Name, "upstream_cookies", sc.UpstreamCookiesRaw)
+	sc.UpstreamTokenPattern, sc.UpstreamTokenKey = splitUpstreamTokenSpec(expandValue(sc.UpstreamTokenSpec))
+	if sc.UpstreamTokenSpec != "" && sc.UpstreamTokenKey == "" {
+		log.Printf("WARNING: [service %s] upstream_token %q: expected \"<log prefix>[<query key>]\" with an identifier in [], capture disabled", sc.Name, sc.UpstreamTokenSpec)
+	}
+	if t := os.Getenv(envKey("UPSTREAM_TOKEN")); t != "" {
+		sc.upstreamToken.Store(t)
+	}
+}
+
+// splitUpstreamTokenSpec parses an upstream_token value "<pattern>[<key>]":
+// the bracketed suffix names the upstream query param the captured token is
+// appended as, the prefix is the log-line pattern matched (the marker also
+// shows where the token sits in the line). Bracket form avoids the &-ambiguity
+// of multi-param query strings in the pattern. Returns empty strings when the
+// spec is malformed (caller warns) — an empty pattern is rejected too, since
+// it would match every log line.
+func splitUpstreamTokenSpec(spec string) (pattern, key string) {
+	if !strings.HasSuffix(spec, "]") {
+		return "", ""
+	}
+	i := strings.LastIndexByte(spec, '[')
+	if i <= 0 {
+		return "", ""
+	}
+	key = spec[i+1 : len(spec)-1]
+	if key == "" {
+		return "", ""
+	}
+	for _, c := range key {
+		if !(c == '_' || c >= 'a' && c <= 'z' || c >= 'A' && c <= 'Z' || c >= '0' && c <= '9') {
+			return "", ""
+		}
+	}
+	return spec[:i], key
+}
+
+// parseUpstreamMap parses an upstream_headrs/upstream_cookies JSON object
+// (string values only; "" means "delete"). Parse errors disable the feature
+// with a warning instead of failing the whole config load.
+func parseUpstreamMap(name, label, raw string) map[string]string {
+	raw = strings.TrimSpace(raw)
+	if raw == "" || raw == "{}" {
+		return nil
+	}
+	m := map[string]string{}
+	if err := json.Unmarshal([]byte(raw), &m); err != nil {
+		log.Printf("WARNING: [service %s] %s: invalid JSON (%v), upstream injection disabled", name, label, err)
+		return nil
+	}
+	return m
 }

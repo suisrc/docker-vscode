@@ -266,3 +266,49 @@ func TestGatedRouteDispatch(t *testing.T) {
 		}
 	}
 }
+
+// TestParseBackendsAuthFree ! 标记：最外层剥离，AuthFree 生效且 Source 干净，
+// 可与 cc~/ws~ 及 [k=v] 门禁组合。
+func TestParseBackendsAuthFree(t *testing.T) {
+	bs := parseBackends([][2]string{
+		{"!cc~/remote/v4", "https://zcode.z.ai/"},
+		{"!ws~/tunnels/ws", "relay://vscode"},
+		{"!/plain", "text://X"},
+		{"!/a/,/b", "text://X"},
+		{"/noauth", "text://X"},
+	})
+	if len(bs) != 6 {
+		t.Fatalf("backends = %d, want 6", len(bs))
+	}
+	for i, want := range []struct {
+		authFree bool
+		source   string
+	}{
+		{true, "/remote/v4"},
+		{true, "/tunnels/ws"},
+		{true, "/plain"},
+		{true, "/a/"},
+		{true, "/b"},
+		{false, "/noauth"},
+	} {
+		if bs[i].AuthFree != want.authFree || bs[i].Source != want.source {
+			t.Errorf("bs[%d] = (AuthFree %v, Source %q), want (%v, %q)", i, bs[i].AuthFree, bs[i].Source, want.authFree, want.source)
+		}
+	}
+}
+
+// TestCollectAuthFree 免 authz 清单派生：仅前缀路由登记；!+* 后缀 / 正则 /
+// 全域名告警并忽略 !（仍要求鉴权）；无 ! 标记不登记。
+func TestCollectAuthFree(t *testing.T) {
+	cfg := &Config{Proxies: []Backend{
+		{Source: "/remote/v4", AuthFree: true},
+		{Source: "*/code.webmanifest", Suffix: "/code.webmanifest", AuthFree: true},
+		{Source: "^/x[0-9]", IsRegex: true, AuthFree: true},
+		{Source: "http://exp.com/api/", AuthFree: true},
+		{Source: "/login-needed"},
+	}}
+	collectAuthFree(cfg)
+	if len(cfg.PathPublic) != 1 || cfg.PathPublic[0] != "/remote/v4" {
+		t.Errorf("PathPublic = %v, want [/remote/v4]", cfg.PathPublic)
+	}
+}

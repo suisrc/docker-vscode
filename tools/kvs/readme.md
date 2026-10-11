@@ -56,7 +56,7 @@ kvs syncto s3:/vsc/zcode /zcode   # 下载：S3 → 本地（对象或前缀递�
 
 每行一个路由 `prefix = url`，**按文件顺序匹配**。一个配置文件可定义多张命名路由表：`[proxies]`（无名表）与 `[proxies.<name>]`，`-n :<name>` 选择其一，默认用第一张表。
 
-前缀标记：普通 `/path/` 前缀匹配；`^pattern` 正则；`*` 开头为后缀匹配（请求路径以 `*` 后的字面后缀结尾即命中；裸 `*` 匹配所有路径，告警跳过；后缀只是路由过滤、不改写路径，cc~ 后缀路由把完整请求路径转发给上游）；`http(s)://`、`ws(s)://` 开头为全域名匹配；`cc~/`、`ws~/` 性能标记见下文；前缀收尾的 `[k=v]` 是**单条件 query 门禁**——路径命中后还要求请求带上这一对参数（按解码后的值精确相等，缺参/不等即视为未命中），继续尝试后续路由（同前缀的无门禁路由即兜底）。只支持一个条件（效率取舍）；门禁可与 `cc~/ws~/^` 组合，对该行逗号展开的全部前缀生效；括号内容含逗号或没有 `=`（如正则字符类 `[0-9]`）就整体按字面路径处理。例：`/remote/vscode[akey=vscode-remote]=https://vscode.dev/` 只放行 `?akey=vscode-remote` 的请求（query 原样转发到后端）。
+前缀标记：普通 `/path/` 前缀匹配；`^pattern` 正则；`*` 开头为后缀匹配（请求路径以 `*` 后的字面后缀结尾即命中；裸 `*` 匹配所有路径，告警跳过；后缀只是路由过滤、不改写路径，cc~ 后缀路由把完整请求路径转发给上游）；`!` 开头为**免 authz 路由**（取代 `path_public` 配置键，按路径前缀放行；仅支持前缀路由——`!` 与 `*` 后缀、正则、全域名组合会告警并忽略 `!`，仍要求鉴权）；`http(s)://`、`ws(s)://` 开头为全域名匹配；`cc~/`、`ws~/` 性能标记见下文；前缀收尾的 `[k=v]` 是**单条件 query 门禁**——路径命中后还要求请求带上这一对参数（按解码后的值精确相等，缺参/不等即视为未命中），继续尝试后续路由（同前缀的无门禁路由即兜底）。只支持一个条件（效率取舍）；门禁可与 `cc~/ws~/^` 组合，对该行逗号展开的全部前缀生效；括号内容含逗号或没有 `=`（如正则字符类 `[0-9]`）就整体按字面路径处理。例：`/remote/vscode[akey=vscode-remote]=https://vscode.dev/` 只放行 `?akey=vscode-remote` 的请求（query 原样转发到后端）。
 
 | scheme | 说明 |
 |---|---|
@@ -70,6 +70,8 @@ kvs syncto s3:/vsc/zcode /zcode   # 下载：S3 → 本地（对象或前缀递�
 ### 托管服务 `[service.<name>]` 段
 
 `svc://<name>` 路由触发对应服务段的解析与生命周期管理（**未被选中表 `svc://` 引用的 `[service.<name>]` 段保持休眠，完全不解析**）：`healthz`（`#@<code>` 后缀要求精确状态码，否则只要求网络可达）探活 → 版本解析（`version` / `version_latest_url` / `version_hash_url`，支持 `/__restart?v=` 覆盖）→ 下载（`download`）→ 解压（`bin_home`）→ `once_shell`/`init_shell` → `command` 启动；kvs 退出或 `/__restart` 时执行 `stop_shell`。`command` 与 `once_shell`/`init_shell`/`stop_shell`、`actions` 都在服务 `home` 目录中执行（相对路径按 `home` 解析，不落在 kvs 的启动目录）。外部已运行的服务（探活通过）只代理、不托管。
+
+发往上游的增强（生命周期跟随子进程）：`upstream_token="<日志行前缀>[<query参数名>]"` 从子进程 stdout 截取 token（每次启动重新截取，截到导出 `KVS_SVC_<NAME>_UPSTREAM_TOKEN`；反代遇上游 401 用该参数名带 token 重试一次，仅 GET/HEAD/DELETE/OPTIONS）；`upstream_headrs`（JSON）每请求先删同名头再赋值，`""` 表示删除，`Host` 特判写 Host 字段；`upstream_cookies`（JSON）改写发往上游的 Cookie 头（删同名、透传异名、追加配置对）。头/Cookie 值支持 `{ENV}` 展开，`{KVS_SVC_<NAME>_UPSTREAM_TOKEN}` 引用随 token 重新截取即时同步。
 
 每服务一组环境变量（`<NAME>` 为服务名大写，**由 kvs 反向赋值**，可在路由与后续配置中引用）：
 
