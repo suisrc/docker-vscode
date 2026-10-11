@@ -1,19 +1,18 @@
 #!/bin/bash
 # ============================================================================
-# dsk-dbus - D-Bus 系统守护进程 (根据 ${USER:-} 运行时态运行)
+# dsk-dbus - D-Bus system bus (全容器唯一, 与登录用户 USER 无关)
+#
+# system bus 必须以 root 启动: dbus-daemon 依据 /usr/share/dbus-1/system.conf
+# 的 <user>messagebus</user> 自动降权到 messagebus 用户运行。
+# 不能以普通用户启动 system bus —— 服务激活(需 setuid 到各服务用户)、
+# pid 文件、at_console 策略全部失效 (对齐上游 svc-dbus)。
+#
+# session bus 由 dsk-desktop 用 dbus-run-session 创建 (对齐上游 startwm.sh
+# 的 dbus-launch --exit-with-session), selkies/pulseaudio 不需要 session bus。
 # ============================================================================
 
-# 运行时用户态: 默认 root, 可通过环境变量 USER 覆盖 (root 或自定义用户名)
-USER="${USER:-root}"
-
 mkdir -p /run/dbus
-if [ "$USER" != "root" ]; then
-    chown "${USER}:${USER}" /run/dbus
-fi
+chown messagebus:messagebus /run/dbus
 rm -f /run/dbus/pid
 
-if [ "$USER" = "root" ]; then
-    exec dbus-daemon --system --nofork --nosyslog
-else
-    exec su -s /bin/bash "${USER}" -c "dbus-daemon --system --nofork --nosyslog"
-fi
+exec dbus-daemon --system --nofork --nosyslog

@@ -1,0 +1,80 @@
+# ============================================================================
+# Dockerfile.edge - 单应用模式演示镜像 (Microsoft Edge 占用整个桌面)
+#
+# 演示 "一个系统只为一个应用服务" (调研结论的落地):
+#   基础设施不变 (dbus system bus / pulseaudio / Xvfb / selkies / kvs gateway),
+#   dsk-desktop 不再启动 XFCE, 而是 DSK_APP 分支: 极简 WM (openbox) + 唯一应用
+#   + openbox rc.xml 强制最大化 —— 对齐上游 baseimage-selkies 单应用镜像
+#   (SELKIES_DESKTOP=false, autostart + <maximized>yes</maximized>):
+#
+#     上游单应用镜像 (如 linuxserver/firefox)      本镜像
+#     -------------------------------------     --------------------------------
+#     /defaults/autostart_wayland = app          ENV DSK_APP="microsoft-edge-stable ..."
+#     openbox / labwc + autostart                dsk-desktop: openbox + ${DSK_APP}
+#     <maximized>yes</maximized>                 openbox rc.xml 应用规则 (动态生成)
+#     dbus-launch --exit-with-session            dbus-run-session (同机制)
+#
+#   生命周期: 应用退出 -> openbox 退出 -> session bus 销毁 -> dsk-desktop 退出
+#   -> kas autorestart 重新拉起, 基础设施 (dbus/audio/xorg/selkies) 不重启。
+#
+# 构建 (需先按 Dockerfile.xfce 重建 xfce 层, openbox 是本次新增包):
+#   docker build -f Dockerfile.edge -t webtop:edge-3.5.5 .
+#
+# 切换回桌面模式: 运行时去掉 DSK_APP 环境变量 (docker run -e DSK_APP=) 即启动 XFCE
+# ============================================================================
+
+# kas / kvs 构建阶段 (与 Dockerfile.desk 一致)
+FROM golang:1.26-trixie AS builder
+
+RUN apt-get update && apt-get install -y git
+COPY tools/kvs/ /kvs/
+RUN cd /kvs/ && CGO_ENABLED=0 go build -ldflags="-s -w" -o kvs .
+COPY tools/kas/ /kas/
+RUN cd /kas/ && CGO_ENABLED=0 go build -ldflags="-s -w" -o kas .
+RUN mkdir /app/ && mv /kvs/kvs /kas/kas /app/
+
+
+ARG BASE_IMAGE_TAG=xfce-3.5.5
+# ${BASE_IMAGE_TAG}: Dockerfile.xfce 构建的 xfce 层
+FROM ghcr.io/suisrc/webtop:${BASE_IMAGE_TAG}
+# ================================================================
+
+ENV DEBIAN_FRONTEND=noninteractive \
+    DISPLAY=:1 \
+    TITLE="Edge" \
+    DSK_APP="microsoft-edge-stable --start-maximized --no-first-run --no-default-browser-check" \
+    KAS_WEBTOP="1" \
+    KAS_SSHD="0" \
+    KAS_VSCODE="0" \
+    PASSWORD="" \
+    PASSROOT="" \
+    GIT_USER_NAME="" \
+    GIT_USER_EMAIL="" \
+    GOROOT="/usr/local/golang" \
+    GOPATH="/root/.go" \
+    PATH="/usr/local/golang/bin:/root/.go/bin:${PATH}" \
+    USER="root"
+# 单应用开关说明: DSK_APP 为空 -> XFCE 桌面; 非空 -> 只启动该应用
+
+COPY --from=builder  /app/  /usr/bin/
+
+COPY script/webtop.kas.ini /etc/kas.ini
+COPY rootfs/ /
+COPY usrsrv/ /usr/srv/
+
+# 安装 Microsoft Edge (仓库惯例: add-msedge 直连 MS pool 拉 .deb, 不加 apt 源,
+# wrapper 注入 --no-sandbox; fix-mchina 先切国内 apt 源)
+# 注意:
+#   - mkdir /root/Desktop: add-msedge 会 cp desktop 文件到 ~/Desktop, 该目录
+#     只在运行时由 dsk-ainit 创建, 构建时必须先建
+#   - apt-get update: xfce 层已清空 apt lists, Edge 的依赖 (fonts-liberation /
+#     libcups2 / libu2f-udev / xdg-utils 等) 不在 xfce 层中, 无 lists 则
+#     apt install .deb 依赖解析失败
+RUN mkdir -p /root/Desktop && \
+    fix-mchina && apt-get update && add-msedge && \
+    apt-get autoremove && apt-get clean && \
+    rm -rf /tmp/* /var/tmp/* /var/lib/apt/lists/*
+
+ENTRYPOINT ["/usr/bin/kas", "-c"]
+
+# EXPOSE 7090

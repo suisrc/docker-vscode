@@ -1,48 +1,31 @@
 #!/bin/bash
+# ============================================================================
 # dsk-audio - PulseAudio 音频守护进程
-# 根据 ${USER:-} 运行时态运行，sink 创建由 dsk-selkies 负责
+# null sink (output/input) 随守护进程加载; device.description 属性是
+# WebRTC 枚举音频设备的必要条件, 缺少会导致 OverconstrainedError
+# ============================================================================
 
-# 运行时用户态: 默认 root, 可通过环境变量 USER 覆盖 (root 或自定义用户名)
-USER="${USER:-root}"
-if [ "$USER" = "root" ]; then
-    HOME_DIR="/root"
-else
-    HOME_DIR="/home/${USER}"
-fi
+. /usr/srv/dsk-lib.sh
 
 # 确保目标用户存在
-USER_UID=$(id -u "${USER}" 2>/dev/null) || {
-    echo "[dsk-audio] 错误: ${USER} 用户不存在" >&2
+if [ "${DSK_USER}" != "root" ] && ! id "${DSK_USER}" >/dev/null 2>&1; then
+    echo "[dsk-audio] 错误: ${DSK_USER} 用户不存在" >&2
     exit 1
-}
+fi
 
-PULSE_RUNTIME_PATH=/run/user/${USER_UID}/pulse
-export PULSE_RUNTIME_PATH
-
-# 确保 pulse 运行时目录存在
-mkdir -p "${PULSE_RUNTIME_PATH}"
+dsk_prepare_runtime
 
 # 清理可能残留的 pulseaudio 实例（防止 "Address already in use" 和 D-Bus 冲突）
-if [ "$USER" = "root" ]; then
-    PULSE_RUNTIME_PATH="${PULSE_RUNTIME_PATH}" pulseaudio --kill 2>/dev/null || true
-else
-    su -s /bin/bash "${USER}" -c "PULSE_RUNTIME_PATH=${PULSE_RUNTIME_PATH} pulseaudio --kill" 2>/dev/null || true
-fi
-rm -f "${PULSE_RUNTIME_PATH}/pid" 2>/dev/null
-rm -f "${PULSE_RUNTIME_PATH}/native" 2>/dev/null
+run_as_user pulseaudio --kill 2>/dev/null || true
+rm -f "${PULSE_RUNTIME_PATH}/pid" "${PULSE_RUNTIME_PATH}/native"
 
-if [ "$USER" != "root" ]; then
-    chown -R "${USER}:${USER}" /run/user/${USER_UID} 2>/dev/null || true
-fi
-
-# 确保 pulse 用户配置目录存在（用于 cookie 文件）
-mkdir -p "${HOME_DIR}/.config/pulse"
-if [ "$USER" != "root" ]; then
-    chown -R "${USER}:${USER}" "${HOME_DIR}/.config/pulse" 2>/dev/null || true
+# pulse 运行时目录与用户 cookie 目录
+mkdir -p "${PULSE_RUNTIME_PATH}" "${DSK_HOME}/.config/pulse"
+if [ "${DSK_USER}" != "root" ]; then
+    chown -R "${DSK_USER}:" "${DSK_RUNTIME_DIR}" "${DSK_HOME}/.config/pulse" 2>/dev/null || true
 fi
 
 # kas 会捕获 stdout/stderr 到日志文件，不要丢弃
-# device.description 属性是 WebRTC 枚举音频设备的必要条件，缺少会导致 OverconstrainedError
 PULSE_ARGS=(
     -n
     --log-level=2
@@ -53,10 +36,4 @@ PULSE_ARGS=(
     -L 'module-null-sink sink_name=input sink_properties=device.description=input'
 )
 
-if [ "$USER" = "root" ]; then
-    exec env PULSE_RUNTIME_PATH="${PULSE_RUNTIME_PATH}" /usr/bin/pulseaudio "${PULSE_ARGS[@]}"
-else
-    # 为 su -c 构建可安全传递的命令字符串（内层 shell 需要引号保护含空格的参数）
-    printf -v CMD_STR '%q ' /usr/bin/pulseaudio "${PULSE_ARGS[@]}"
-    exec su -s /bin/bash "${USER}" -c "PULSE_RUNTIME_PATH=${PULSE_RUNTIME_PATH} ${CMD_STR}"
-fi
+exec_as_user /usr/bin/pulseaudio "${PULSE_ARGS[@]}"

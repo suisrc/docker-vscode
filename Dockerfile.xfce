@@ -2,20 +2,62 @@
 # Dockerfile - 基于当前系统构建 webtop 桌面环境
 #
 # 镜像链:
-#   base:     ghcr.io/suisrc/webtop:base-3.5.3
+#   base:     ghcr.io/suisrc/webtop:base-3.5.5
 #   xfce:     base + X11/XFCE + selkies(from linuxserver/webtop:debian-xfce)
+#
+# 显示模式: 纯 X11 —— Xvfb 即 X server, 与上游 webtop debian-xfce 一致,
+#           Xwayland 在该模式下不参与 (Xwayland 仅供 labwc/wayland 模式桥接
+#           X11 应用, 见下面预装说明)
+#
+# selkies 获取方式: 不编译, COPY --from 上游镜像; 上游 tag 建议在构建时固定
+#   digest (docker build --build-context webtop=docker.io/linuxserver/webtop:debian-xfce@sha256:...)
+#   保证可复现
 # ============================================================================
 
 FROM ghcr.io/suisrc/webtop:base-3.5.5
 
+# 运行时默认环境 (COPY --from 不继承上游镜像的 ENV, 需在此显式声明)
+# - SELKIES_ENCODER: 编码器优先级, 与上游 baseimage-selkies 一致
+# - SELKIES_ENABLE_BASIC_AUTH=false / SELKIES_ALLOWED_ORIGINS=*:
+#     认证由 kvs gateway (KVS_LOGIN_TOKEN) 负责, selkies 仅监听 localhost
+# - SELKIES_INTERPOSER / SELKIES_WEBCAM_INTERPOSER:
+#     虚拟手柄/摄像头桥接库 (本文件第 3 步拷入), selkies 拉起应用时注入
+ENV DISPLAY=:1 \
+    XCURSOR_THEME=breeze_cursors \
+    SELKIES_ENCODER="h264enc,h265enc,vp8enc,vp9enc,av1enc,jpeg" \
+    SELKIES_ENABLE_BASIC_AUTH=false \
+    SELKIES_ALLOWED_ORIGINS="*" \
+    SELKIES_INTERPOSER=/usr/lib/selkies_input_interposer.so \
+    SELKIES_WEBCAM_INTERPOSER=/usr/lib/selkies_v4l2_interposer.so
+
 # ========================================================================
 # 1. 安装 X11/XFCE/桌面栈（base 中不包含）
+#    包清单对齐 linuxserver/docker-webtop debian-xfce:
+#    - at-spi2-core:   GTK 无障碍总线 (at-spi2-registryd), selkies 桌面依赖
+#    - xfce4-notifyd:  通知守护进程, 替代 dunst —— 上游明确删除 dunst 的
+#                      dbus service, 避免两个通知服务争抢
+#                      org.freedesktop.Notifications
+#    - gvfs/tumbler/thunar-archive-plugin/xarchiver/ristretto/atril:
+#                      thunar 的回收站/挂载、缩略图、压缩包、图片/文档预览
+#    - xdg-user-dirs / xdg-utils / pavucontrol / xfce4-screenshooter
+#                      (xdg-utils: xdg-open/xdg-settings, 上游 baseimage 必装,
+#                      亦为浏览器类 .deb 的硬依赖)
+#    - xwayland + labwc: 预装备用 —— 未来单应用 Wayland 模式
+#                      (PIXELFLUX_WAYLAND=true, labwc 提供合成器、Xwayland
+#                      桥接 X11 应用), 当前 X11 模式不接线
+#    - openbox:         单应用模式的极简 WM (dsk-desktop 的 DSK_APP 分支),
+#                      对齐上游 baseimage-selkies 单应用镜像 (X11 fallback
+#                      用 openbox)
 # ========================================================================
 RUN apt-get update && DEBIAN_FRONTEND=noninteractive \
     apt-get install --no-install-recommends -y \
         dbus \
         dbus-x11 \
         xvfb \
+        xwayland \
+        labwc \
+        openbox \
+        at-spi2-core \
         breeze-cursor-theme \
         libatk1.0-0 \
         libatk-bridge2.0-0 \
@@ -73,7 +115,17 @@ RUN apt-get update && DEBIAN_FRONTEND=noninteractive \
         xfconf \
         xfdesktop4 \
         xfwm4 \
-        dunst \
+        xfce4-notifyd \
+        xfce4-screenshooter \
+        gvfs \
+        tumbler \
+        thunar-archive-plugin \
+        xarchiver \
+        ristretto \
+        atril \
+        xdg-user-dirs \
+        xdg-utils \
+        pavucontrol \
         wl-clipboard \
         xsel && \
     apt-get autoclean && \
@@ -81,6 +133,9 @@ RUN apt-get update && DEBIAN_FRONTEND=noninteractive \
 
 # ========================================================================
 # 2. 从 linuxserver/webtop:debian-xfce 拷贝 selkies（不重新编译）
+#    /lsiopy:            selkies + pixelflux + pcmflux 的 python venv
+#    /usr/share/selkies: 各 dashboard 前端构建产物
+#    /defaults:          XFCE 默认配置 (dsk-ainit 消费 /defaults/xfce)
 # ========================================================================
 COPY --from=docker.io/linuxserver/webtop:debian-xfce \
     /lsiopy /lsiopy
@@ -89,3 +144,11 @@ COPY --from=docker.io/linuxserver/webtop:debian-xfce \
 COPY --from=docker.io/linuxserver/webtop:debian-xfce \
     /defaults /defaults
 
+# ========================================================================
+# 3. 输入/摄像头 interposer（上游 baseimage-selkies 编译产物, webtop 镜像继承）
+#    配合上方 SELKIES_INTERPOSER / SELKIES_WEBCAM_INTERPOSER 使用
+# ========================================================================
+COPY --from=docker.io/linuxserver/webtop:debian-xfce \
+    /usr/lib/selkies_*.so /usr/lib/
+COPY --from=docker.io/linuxserver/webtop:debian-xfce \
+    /opt/lib/ /opt/lib/

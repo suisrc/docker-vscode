@@ -4,17 +4,11 @@
 #
 # 路由：
 #   /websocket   -> http://127.0.0.1:8081  (^前缀标记为服务后端, 支持WebSocket)
-#   /files       -> file://${HOME_DIR}/Desktop/
+#   /files       -> file://${DSK_HOME}/Desktop/
 #   /            -> file:///usr/share/selkies/web/  (放最后)
 # ============================================================================
 
-# 运行时用户态: 默认 root, 可通过环境变量 USER 覆盖 (root 或自定义用户名)
-USER="${USER:-root}"
-if [ "$USER" = "root" ]; then
-    HOME_DIR="/root"
-else
-    HOME_DIR="/home/${USER}"
-fi
+. /usr/srv/dsk-lib.sh
 
 # 等待 selkies 就绪 (端口 8081)
 echo "等待 selkies 服务就绪..."
@@ -24,7 +18,7 @@ for i in $(seq 1 30); do
 done
 echo "selkies 已就绪，启动 gateway 代理..."
 
-export BACKEND_URL="/websocket=http://127.0.0.1:8081;/files=file://${HOME_DIR}/Desktop/;/=file:///usr/share/selkies/web/"
+export BACKEND_URL="/websocket=http://127.0.0.1:8081;/files=file://${DSK_HOME}/Desktop/;/=file:///usr/share/selkies/web/"
 
 KVS_PORT=${KVS_WEBTOP_PORT:-7090} KVS_LOGIN_TOKEN="${PASSWORD:-webtop}" KVS_COOKIE_TOKEN_KEY=webtop-tkn \
 exec kvs -n "${BACKEND_URL}"
