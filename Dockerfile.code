@@ -1,4 +1,4 @@
-FROM golang:1.26-trixie as builder
+FROM golang:1.27-trixie as builder
 
 RUN apt-get update && apt-get install -y git
 COPY tools/kvs/ /kvs/
@@ -10,7 +10,7 @@ RUN mkdir /app/ && mv /kvs/kvs /kas/kas /app/
 
 # ARG BASE_IMAGE_TAG
 # FROM ghcr.io/suisrc/webtop:base-${BASE_IMAGE_TAG}
-FROM ghcr.io/suisrc/webtop:base-3.5.5
+FROM ghcr.io/suisrc/webtop:base-4.0.0
 
 # set environment variables
 ENV KAS_SSHD="0" \
