@@ -4,7 +4,7 @@ RUN apt-get update && apt-get install -y git
 COPY tools/kss/ /kss/
 RUN cd /ssh/ && CGO_ENABLED=0 go build -ldflags="-s -w" -o kss .
 
-FROM debian:trixie-slim
+FROM kalilinux/kali-rolling
 # ================================================================
 # KEYS_FOLDER, LISTEN_ADDR, TARGET_ADDR
 USER root

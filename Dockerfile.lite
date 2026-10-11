@@ -7,7 +7,7 @@ COPY tools/kas/ /kas/
 RUN cd /kas/ && CGO_ENABLED=0 go build -ldflags="-s -w" -o kas .
 RUN mkdir /app/ && mv /kvs/kvs /kas/kas /app/
 
-FROM debian:trixie-slim
+FROM kalilinux/kali-rolling
 
 RUN apt update && DEBIAN_FRONTEND=noninteractive \
     apt install --no-install-recommends -y \
