@@ -31,6 +31,7 @@ zcodex:
 	KVS_HOME=/wsc/go/github/ws01/docker-vscode/temp KVS_COOKIE_TOKEN_KEY=vscode-tkn KVS_QUERY_TOKEN_KEY=tkn \
 	KVS_SVC_ZCODE_VERSION=zcode KVS_CACHE_PATH=/__cache/ \
 	ZCODE_WEB_REMOTE_CONTROL_RELAY_WS_URL=ws://127.0.0.1:7188/remote/ws \
+	KVS_SVC_VSCODE_HOME=/wsc/go/github/ws01/docker-vscode/temp/vscode \
 	go run main.go -n :zcodex
 
 zcode:
@@ -38,6 +39,11 @@ zcode:
 	ZCODE_DESKTOP_USER_DATA_DIR=/wsc/go/github/ws01/docker-vscode/temp/zcode \
 	ZCODE_WEB_REMOTE_CONTROL_RELAY_WS_URL=ws://127.0.0.1:7188/remote/ws \
 	DISPLAY=:1 /opt/ZCode/zcode --no-sandbox
+
+dshweb:
+	KVS_DEBUG=1 KVS_PORT=7189 KVS_LOGIN_AUTHZ=true KVS_LOGIN_TOKEN=123456 \
+	KVS_HOME=/wsc/go/github/ws01/docker-vscode/temp KVS_COOKIE_TOKEN_KEY=vscode-tkn KVS_QUERY_TOKEN_KEY=tkn \
+	go run main.go -n :dshweb
 
 # export KVS_MIRROR_S3_ACCESS=
 # export KVS_MIRROR_S3_SECRET=
